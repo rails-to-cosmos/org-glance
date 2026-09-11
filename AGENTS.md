@@ -33,17 +33,19 @@ evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
 
 1. WAL is append-only; duplicates resolve by physical position (last wins); `seq` is
    storage-only — never ordering, never re-stamped.
-2. Store writes are atomic temp-then-rename; MANIFEST swap is the commit point;
-   compaction commits MANIFEST before truncating the open segment.
+2. Store writes are atomic temp-then-rename (`org-glance--atomic-write`, `.eld` sidecars
+   included); MANIFEST swap is the commit point; compaction commits MANIFEST before
+   truncating the open segment.
 3. A valid MANIFEST is byte-stable — rebuilt only when broken.
 4. Schema tables (`org-glance-headline-metadata:fields`, `org-glance-filter:table`) are
    the single source of truth; append new metadata fields at the end only (row order =
    JSON key order). A list-valued field MUST encode to a JSON vector (`--append`'s
-   `json-serialize` runs outside the error-demoted hook); the load-time guard checks slot
-   ORDER, never encode kinds.
+   `json-serialize` runs outside the error-demoted hook); the load-time guard
+   (`--check-fields`) checks slot ORDER, known FROM facts and vector ENCODE kinds.
 5. Blobs are canonical; indexes are derived and rebuildable; metadata computes before any
    write, blob lands before its WAL record. The content hash ignores the id/hash
-   properties and the LOGBOOK drawers. The property index is a pure cache — hash-guarded
+   properties and the log drawers, and so does every derived fact (properties, links,
+   relations). The property index is a pure cache — hash-guarded
    with O(N) blob fallback, dropped by reindex, never trusted in a durable write. The
    `org-glance-material:` body link is canonical; `relations` AND `links` metadata are
    projections, never written independently. Occurrence snapshots are canonical content,
@@ -103,11 +105,14 @@ evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
 20. Overview headings are self-sufficient, metadata-only: state, priority, one planning
     line, id drawer, interval line, relations, plain links — zero blob parses; agenda +
     link-following need no materialization.
-21. Reserved properties (`org-glance-material-hidden-properties`) are managed keys:
-    concealed in material buffers, hand edits reverted on save with a warning; the revert
-    touches only the heading drawer (disjoint from the crypt seal).
-22. Material saves rewrite user content only through announced normalize hooks
-    (reserved-property revert, case-twin tag collapse — each warns — and the crypt seal).
+21. Managed drawer keys (`org-glance-material-hidden-properties`, fixed per buffer at open)
+    live in the FILE, never in the material buffer: removed at open and after every revert
+    (`--strip-reserved`), spliced back into every write by `write-region-annotate-functions`
+    — the buffer never changes to restore them. A material buffer reverts with its modes
+    preserved (`--revert`); a mode re-run kills the stash the next write needs.
+22. Material saves rewrite user content only through announced normalize hooks (a
+    hand-typed managed line dropped, case-twin tag collapse — each warns — and the crypt
+    seal).
 23. LLM session state (running/exited/stopped, buffer names, titles) derives live at fill
     from the provider's recorded sessions for this graph overlaid with live `*llm:…*`
     buffers — never persisted, never a full-graph scan. Enforcing code lives in the
@@ -122,9 +127,9 @@ evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
     takes a lone candidate at any depth, and breaks exhausted-path ties by target.
 26. Plugins (`org-glance-plugins`) load error-demoted, self-register their UI
     remove-then-append, and never unload.
-27. `after-save-hook` depth order is load-bearing: `material:sync` (0) runs BEFORE
-    `--decrypt-buffer` (90) and `--hide-reserved-properties` (100), so the WAL and every
-    index see SEALED bytes — the mechanism behind inv 14.
+27. `after-save-hook` depth order is load-bearing: `material:sync` (0) re-parses the FILE
+    before `--decrypt-buffer` (90) unseals the buffer, so the WAL and every index see
+    SEALED bytes — the mechanism behind inv 14.
 28. Crypt block rewrites iterate blocks LAST-to-FIRST; forward iteration invalidates later
     blocks' recorded positions after any length change.
 29. `--from-element` strips org's `ARCHIVE` marker from the parsed tag set; it is
@@ -204,6 +209,9 @@ O(N²) idiom, a rhetorical tic in prose.
   the line under it, is deleted on sight.
 - Docstrings are proper English and checkdoc-valid (public API, shown by `C-h f`): a
   complete imperative first line, arg names in CAPS, facts intact. Terse, but complete.
+- A docstring states the contract — what it returns, refuses, mutates, and in what order
+  — and points at the invariant that owns a rule; reasoning and history live in `docs/`.
+  Section titles (`;;; Title`) stay bare: they are outline structure.
 - Never the "negation-reveal" pattern ("not X, but Y" / "it's not just A, it's
   B") in any generated text — docs, comments, commit messages, prose. State the
   point directly.

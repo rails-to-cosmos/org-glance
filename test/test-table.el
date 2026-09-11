@@ -47,9 +47,8 @@
   "Fixture face for the org-todo-keyword-faces fallback test.")
 
 (ert-deftest org-glance-test:table-state-color-from-org-faces ()
-  "A state absent from the table palette takes its colour from the user's
-`org-todo-keyword-faces' -- colour string, plist, or face symbol -- before
-falling back to the default."
+  "A state missing from the table palette takes its `org-todo-keyword-faces'
+colour (string, plist or face) before the default."
   (let ((org-todo-keyword-faces '(("DELEGATED" . "orchid")
                                   ("BLOCKED" . (:foreground "tomato" :weight bold))
                                   ("REVIEW" . org-glance-test--review-face))))
@@ -72,8 +71,7 @@ falling back to the default."
                              (alist-get 'columns spec)))))))
 
 (ert-deftest org-glance-test:table-todo-line ()
-  "The spec carries a `#+TODO:'-style subtitle of the graph's states -- active,
-then `|', then done -- coloured; exposed as the `table-view' subtitle."
+  "The spec's subtitle is a coloured `#+TODO:' line: active states, `|', done."
   (let ((org-todo-keywords '((sequence "TODO" "NEXT" "|" "DONE")))
         (org-done-keywords '("DONE")))
     (org-glance-test:with-graph graph
@@ -171,8 +169,7 @@ on it; a headline related to nothing errors instead."
                 #'org-glance-overview:relations))))
 
 (ert-deftest org-glance-test:table-remove-column-by-name ()
-  "`C-c -' removes a column chosen by name; the mandatory Title is never
-offered, and the removal persists per tag."
+  "`C-c -' removes a named column, never offering Title, and persists per tag."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "a" "* TODO A :work:"))
     (org-glance-test:with-table (graph '(:tags ("work")))
@@ -189,9 +186,8 @@ offered, and the removal persists per tag."
       (should-not (member "tags" (org-glance-test:table-col-keys))))))
 
 (ert-deftest org-glance-test:table-refresh-resets-filter ()
-  "`g\' returns the table to the filter it was opened with: the `/\' substring
-filter and a narrow-to-marked view are both dropped, while the view\'s own
-filter still governs which rows exist.  An action-triggered reload keeps them."
+  "`g' drops the `/' substring filter and narrow-to-marked, keeping the view's
+own filter; an action-triggered reload keeps them."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
       (org-glance-test:headline "a1" "* TODO Alpha :work:")
@@ -259,8 +255,7 @@ filter still governs which rows exist.  An action-triggered reload keeps them."
             (should (member "home" tags)))))))
 
 (ert-deftest org-glance-test:table-crypt-toggle ()
-  "`#' encrypts the headline at point, then decrypts it: the stored blob and the
-`encrypted?' projection flip each way."
+  "`#' toggles the row's encryption: its blob and `encrypted?' flip each way."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "c1" "* TODO Alpha" "body"))
     (org-glance-test:with-table (graph)
@@ -278,8 +273,7 @@ filter still governs which rows exist.  An action-triggered reload keeps them."
             (should (equal "" (org-glance-test:meta-cell graph id 'encrypted))))))))
 
 (ert-deftest org-glance-test:table-crypt-rekey ()
-  "`C-u #' on an encrypted row re-keys it: it stays encrypted and decrypts with
-the new password."
+  "`C-u #' re-keys an encrypted row; it stays encrypted under the new password."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-headline:encrypt
                                  (org-glance-test:headline "c2" "* TODO Alpha" "body") "old"))
@@ -336,16 +330,14 @@ the new password."
         (should (equal "state" (alist-get 'key (car (alist-get 'columns table-view--spec))))))))
 
 (ert-deftest org-glance-test:table-visit-default-directory ()
-  "The table buffer's `default-directory' is the graph ROOT (matching the
-corresponding overview), not wherever the non-file buffer was spawned."
+  "The table's `default-directory' is the graph ROOT, as the overview's is."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "d1" "* TODO Alpha"))
     (org-glance-test:with-table (graph)
         (should (file-equal-p default-directory (org-glance-graph:directory graph))))))
 
 (ert-deftest org-glance-test:table-renders-org-link-in-title ()
-  "A headline title carrying an Org link renders as a followable description in
-the table (`table-view' link support), not as raw `[[...]]' markup."
+  "A title's Org link renders as its followable description, hiding the markup."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
       (org-glance-test:headline "k1" "* TODO Read [[https://example.com][The Book]]"))
@@ -360,16 +352,13 @@ the table (`table-view' link support), not as raw `[[...]]' markup."
       (should (key-binding (kbd "C-c C-o"))))))             ; follow key is bound
 
 (ert-deftest org-glance-test:table-fill-frame ()
-  "With `org-glance-view-fill-frame' non-nil, visiting a table fills the frame
-\(deletes the other windows); nil leaves the layout untouched."
+  "Visiting a table fills the frame iff `org-glance-view-fill-frame' is set."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "f1" "* TODO A"))
     (org-glance-test:assert-fills-frame (org-glance-table:visit graph))))
 
 (ert-deftest org-glance-test:view-fill-frame-guards-undisplayed ()
-  "`org-glance-view:fill-frame' is a no-op when the current buffer is not the one
-shown in the selected window -- so it never deletes windows around an unrelated
-buffer (a view opened programmatically, or a test that stubs the buffer switch)."
+  "`fill-frame' is a no-op unless the selected window shows the current buffer."
   (let ((org-glance-view-fill-frame t))
     (save-window-excursion
       (delete-other-windows) (split-window)             ; two windows
@@ -378,8 +367,7 @@ buffer (a view opened programmatically, or a test that stubs the buffer switch).
         (should (= 2 (length (window-list))))))))        ; untouched
 
 (ert-deftest org-glance-test:view-fill-frame-skips-when-in-view ()
-  "`fill-frame' fills a fresh open but is a no-op when ALREADY-IN-VIEW, so
-re-filtering / toggling from within a view keeps a deliberate split."
+  "`fill-frame' fills on a fresh open and is a no-op when ALREADY-IN-VIEW."
   (let ((org-glance-view-fill-frame t) (buf (generate-new-buffer " *ff-test*")))
     (unwind-protect
         (save-window-excursion
@@ -396,8 +384,7 @@ re-filtering / toggling from within a view keeps a deliberate split."
       (kill-buffer buf))))
 
 (ert-deftest org-glance-test:table-revisit-from-view-keeps-layout ()
-  "Re-visiting the table from WITHIN a graph view keeps a deliberate split -- only
-the first open (from outside a view) fills the frame."
+  "A table re-visit from WITHIN a view keeps the split; a fresh open fills."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "f1" "* TODO A"))
     (let ((org-glance-view-fill-frame t) (buf nil))
@@ -414,8 +401,7 @@ the first open (from outside a view) fills the frame."
           (when (buffer-live-p buf) (kill-buffer buf)))))))
 
 (ert-deftest org-glance-test:view-fill-frame-survives-delete-error ()
-  "A `delete-other-windows' signal never breaks opening the view -- caught even
-under `debug-on-error' (so a quirky side/atomic window arrangement is harmless)."
+  "`fill-frame' swallows `delete-other-windows' errors under `debug-on-error'."
   (let ((org-glance-view-fill-frame t) (debug-on-error t) reached)
     (save-window-excursion
       (with-temp-buffer
@@ -426,9 +412,8 @@ under `debug-on-error' (so a quirky side/atomic window arrangement is harmless).
           (should reached))))))            ; reached the erroring delete, then swallowed it
 
 (ert-deftest org-glance-test:table-visit-default-sort ()
-  "The table opens sorted by the spec default (state, active-first) regardless of
-graph insertion order -- guards `org-glance-table--apply-default-sort' against
-`table-view''s seed-but-don't-apply default-sort semantics."
+  "The table opens sorted by state, active first, whatever the insertion order.
+`table-view' only seeds its default sort; org-glance applies it."
   (org-glance-test:with-graph graph
     ;; add DONE first, so load order (d, t) differs from the sorted order (t, d)
     (org-glance-graph:add graph
@@ -459,8 +444,7 @@ graph insertion order -- guards `org-glance-table--apply-default-sort' against
         (should (equal "*mat-am1*" (buffer-name opened)))))))   ; correct id opened
 
 (ert-deftest org-glance-test:table-m-marks-not-materializes ()
-  "In the table `m' toggles the row mark (`table-view-mark-toggle'), not
-materialize (which stays on RET) -- org-glance no longer binds `m'."
+  "`m' toggles the row mark via `table-view'; RET keeps materializing."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
                           (org-glance-test:headline "a" "* TODO Alpha")
@@ -474,8 +458,7 @@ materialize (which stays on RET) -- org-glance no longer binds `m'."
         (should (member "a" table-view--marks)))))
 
 (ert-deftest org-glance-test:table-todo-preserves-point ()
-  "Changing state keeps point where it was instead of jumping to the top: when the
-row leaves the view (DONE under an active filter) point stays on the same line."
+  "A state change keeps point on its line, even when the row leaves the view."
   (org-glance-test:with-todo-done
     (org-glance-test:with-graph graph
       (org-glance-graph:add graph
@@ -491,8 +474,7 @@ row leaves the view (DONE under an active filter) point stays on the same line."
             (should-not (table-view--goto-id "r2"))))))) ; r2 indeed gone
 
 (ert-deftest org-glance-test:table-refresh-preserves-point ()
-  "`g' (refresh) keeps point on the same row even when the sort reorders it -- the
-re-fill + re-sort restore by line, so without re-anchoring point drifts."
+  "`g' keeps point on its row even when the sort moves it."
   (let ((org-todo-keywords '((sequence "TODO" "DONE"))))
     (org-glance-test:with-graph graph
       (org-glance-graph:add graph
@@ -506,8 +488,7 @@ re-fill + re-sort restore by line, so without re-anchoring point drifts."
           (should (equal "z1" (get-text-property (point) 'table-view-id)))))))  ; still on z1
 
 (ert-deftest org-glance-test:table-action-todo ()
-  "The `todo' action advances the row's state (`C-c C-t' via change-todo-live);
-after the (no-note) commit the reloaded table shows the new state on the row."
+  "The `todo' action advances the row's state and the reloaded row shows it."
   (org-glance-test:with-todo-done
     (org-glance-test:with-graph graph
       (org-glance-graph:add graph (org-glance-test:headline "td1" "* TODO Alpha"))
@@ -519,8 +500,7 @@ after the (no-note) commit the reloaded table shows the new state on the row."
             (should (equal "DONE" (alist-get 'state (alist-get 'cells row)))))))))
 
 (ert-deftest org-glance-test:table-bulk-state-prompt-is-org-native ()
-  "The bulk prompt is org's own fast selection, initialized with the tag's
-cycle -- the selector sees exactly the `#+TODO:' keywords `C-c C-t' would."
+  "The bulk prompt is org's fast selection over the tag's `#+TODO:' keywords."
   (org-glance-test:with-graph graph
     (with-temp-directory cfg
       (let ((org-glance-tag-config-dir cfg)
@@ -574,11 +554,9 @@ cycle -- the selector sees exactly the `#+TODO:' keywords `C-c C-t' would."
           (should (equal "TODO" (org-glance-test:field graph "p4" state)))))))
 
 (ert-deftest org-glance-test:table-bulk-todo-logs-and-keeps-point ()
-  "The reported scenario end-to-end: bulk `C-c C-t' under timestamp logging sets
-every marked row WITH its LOGBOOK entry, clears the marks, keeps point on the row
-it was on -- and never errors on a dangling log marker.  (`org-glance-table:visit'
-is used directly, without stubbing `pop-to-buffer', so `org-add-log-note's own
-buffer switching -- which the flush relies on -- runs for real.)"
+  "Bulk `C-c C-t' under timestamp logging logs EVERY marked row, clears marks,
+keeps point, and never dangles a log marker.  Deliberately unstubbed: the flush
+relies on `org-add-log-note' switching buffers for real."
   (let ((org-todo-keywords '((sequence "TODO" "DONE(!)")))   ; `!' logs a timestamp
         (org-log-into-drawer nil) (this-command 'org-glance-test-bulk))
     (org-glance-test:with-graph graph
@@ -643,8 +621,8 @@ buffer switching -- which the flush relies on -- runs for real.)"
       (should (= 2 (length table-view--rows))))))
 
 (ert-deftest org-glance-test:table-edit-cell ()
-  "`i' edits the cell at point: state routes to the todo flow, title and
-priority and property columns take a string prompt, derived columns refuse."
+  "`i' edits the cell at point: state and tags route to their flows, title,
+priority and property columns prompt for a string, derived columns refuse."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
       (org-glance-test:headline-props "a" "* TODO [#B] Alpha :work:"
@@ -682,7 +660,7 @@ priority and property columns take a string prompt, derived columns refuse."
       (should (equal "dark" (org-glance-property-index:property graph "a" "ROAST"))))))
 
 (ert-deftest org-glance-test:table-property-column-persists-per-tag ()
-  "An added property column is saved per tag and restored (with values) on re-visit."
+  "An added property column persists per tag, restored with values on re-visit."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
       (org-glance-test:headline-props "bk1" "* TODO The Hobbit :book:" '(("AUTHOR" . "Tolkien"))))
@@ -718,8 +696,7 @@ priority and property columns take a string prompt, derived columns refuse."
       (should-not (member "AUTHOR" (org-glance-test:table-col-keys))))))
 
 (ert-deftest org-glance-test:table-cc-plus-adds-column ()
-  "`C-c +' adds a property column; the bare `+' captures even with a prefix
-arg, since columns moved off the `C-u' prefix onto `C-c +' / `C-c -'."
+  "`C-c +' adds a property column; bare `+' captures, even with a prefix arg."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
       (org-glance-test:headline-props "x1" "* TODO X :book:" '(("AUTHOR" . "Ann"))))
@@ -736,8 +713,7 @@ arg, since columns moved off the `C-u' prefix onto `C-c +' / `C-c -'."
             (should captured))))))
 
 (ert-deftest org-glance-test:table-minus-untags ()
-  "A bare `-' always drops the view's tag -- with a prefix arg too, since
-column removal moved to `C-c -'."
+  "Bare `-' drops the view's tag, even with a prefix arg."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
       (org-glance-test:headline "x1" "* TODO X :book:"))
@@ -781,8 +757,7 @@ column removal moved to `C-c -'."
       (should (member "tags" (org-glance-test:table-col-keys))))))
 
 (ert-deftest org-glance-test:table-bare-minus-removes-view-tag ()
-  "A bare `-' drops the view's tag off the headline at point: it leaves the view
-but stays live in the graph (mirror of the bare `+' capture)."
+  "Bare `-' drops the view's tag: the row leaves the view, live in the graph."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
       (org-glance-test:headline "bk1" "* TODO The Hobbit :book:"))
@@ -808,8 +783,7 @@ but stays live in the graph (mirror of the bare `+' capture)."
           (should-not (member "read" offered))))))
 
 (ert-deftest org-glance-test:table-repeated-column-and-history ()
-  "The Rep column marks repeater-carrying rows (↻ cell); `l' routes to the
-shared picker."
+  "The Rep column shows ↻ on repeating rows; `l' routes to the shared picker."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
       (org-glance-test:headline "rep" "* TODO daily" "SCHEDULED: <2026-06-07 Sun +1d>")
@@ -894,8 +868,7 @@ the anchor id, so another anchor keeps the default layout."
       (should (member "tags" (org-glance-test:table-col-keys))))))
 
 (ert-deftest org-glance-test:ref-layout-ignores-untagged-schema ()
-  "A scope-less reference view shows default columns -- never the shared
-untagged (\":none:\") per-tag schema entry."
+  "A scope-less reference view ignores the untagged \":none:\" schema entry."
   (org-glance-test:with-graph graph
     (org-glance-test:ref-fixture graph)
     (org-glance-table--schema-put graph nil :hidden '("tags"))   ; the all-view entry
@@ -905,8 +878,7 @@ untagged (\":none:\") per-tag schema entry."
       (should-not (member "tags" (org-glance-test:table-col-keys))))))
 
 (ert-deftest org-glance-test:ref-layout-modified-nudge ()
-  "A layout change in a reference view nudges (once per change) that
-`C-c C-c' applies it; nothing is written."
+  "A reference-view layout change nudges `C-c C-c' once and writes nothing."
   (org-glance-test:with-graph graph
     (org-glance-test:ref-fixture graph)
     (org-glance-test:with-table (graph '(:id-any ("r1")) '(:anchor "c1" :dir relations))
@@ -932,9 +904,7 @@ untagged (\":none:\") per-tag schema entry."
                               :hidden)))))
 
 (ert-deftest org-glance-test:ref-layout-hides-relation-column ()
-  "Removing the relation view's own `Relation' column is persisted like any
-built-in: `:hidden' diffs against the view's column set, which includes it, so
-the removal survives `C-c C-c' instead of silently reappearing."
+  "Removing the relation view's `Relation' column survives `C-c C-c'."
   (org-glance-test:with-graph graph
     (org-glance-test:ref-fixture graph)
     (org-glance-test:with-table (graph '(:id-any ("r1")) '(:anchor "c1" :dir relations))
@@ -946,9 +916,8 @@ the removal survives `C-c C-c' instead of silently reappearing."
       (should-not (member "relation" (org-glance-test:table-col-keys))))))
 
 (ert-deftest org-glance-test:ref-layout-pair-scope-and-tag-order ()
-  "A tag-pair entry restores for ANY matching anchor, and never leaks into the
-mirrored pair: the key is ANCHOR-tag > ROW-tag, so the same two tags viewed
-from the other side is a different scope."
+  "A tag-pair entry restores for ANY matching anchor and never for the mirrored
+pair: the key is ANCHOR-tag > ROW-tag (invariant 18)."
   (org-glance-test:with-graph graph
     (org-glance-test:ref-fixture graph)
     (org-glance-test:with-table (graph '(:id-any ("r1")) '(:anchor "c1" :dir relations))
@@ -1012,8 +981,8 @@ from the other side is a different scope."
       (should (equal "light" (org-glance-test:table-cell "r1" "ROAST"))))))
 
 (ert-deftest org-glance-test:table-reload-keeps-cell ()
-  "`g' (and every action's reload) returns point to the same CELL, not to
-column 0.  (The row-left-the-view fallback is `table-todo-preserves-point'.)"
+  "`g' and every action's reload return point to the same CELL (invariant 24).
+The row-left-the-view fallback is `table-todo-preserves-point'."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
       (org-glance-test:headline "a" "* TODO Alpha :work:")
@@ -1038,9 +1007,8 @@ column 0.  (The row-left-the-view fallback is `table-todo-preserves-point'.)"
     (should (equal '(nil "work") captured))))
 
 (ert-deftest org-glance-test:table-action-upserts-one-row ()
-  "A single-row action updates THAT row from fresh metadata instead of
-re-deriving every row from the graph, and drops the row when the headline
-leaves the view (deleted, or no longer matching the filter)."
+  "A single-row action upserts THAT row from fresh metadata, never re-deriving
+the rest, and drops it once deleted or no longer matching the filter."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
       (org-glance-test:headline "a1" "* TODO Alpha :work:")

@@ -6,7 +6,7 @@
 
 ;; Author: Dmitry Akatov <dmitry.akatov@protonmail.com>
 ;; Created: 29 September, 2018
-;; Version: 1.40.0.0.20260903.0
+;; Version: 1.41.0.0.20260911.0
 ;; Package-Requires: ((emacs "29.1") (org) (aes) (dash) (f) (s) (transient) (cond-let "0") (table-view "0"))
 ;; Keywords: org-mode, outlines, data, database, store, projections
 ;; Homepage: https://github.com/rails-to-cosmos/org-glance
@@ -67,24 +67,19 @@
 
 (defcustom org-glance-plugins nil
   "Optional org-glance plugins to load at init, as feature-name suffixes.
-`org-glance-init' requires `org-glance-<name>' for each entry, error-demoted
--- a broken or missing plugin warns and is skipped, never breaking init.
-Loading a plugin library manually with `require' works identically; this
-list is a convenience.  Available: `llm'."
+`org-glance-init' requires `org-glance-<name>' for each; a failing one warns
+and is skipped.  A manual `require' works identically.  Available: `llm'."
   :group 'org-glance
   :type '(repeat symbol))
 
 (cl-defun org-glance-plugin-feature (plugin)
-  "The library feature PLUGIN names: `org-glance-<plugin>'.
-The one spelling of the plugin naming ABI -- the loader, the enable command and
-the transient's System heading all resolve a plugin through it."
+  "Return the library feature PLUGIN names, `org-glance-<plugin>'.
+The plugin naming ABI is spelled here once; every plugin lookup uses it."
   (intern (format "org-glance-%s" plugin)))
 
 (cl-defun org-glance--read-plugin (prompt candidates empty &optional require-match)
-  "Completing-read one of CANDIDATES (symbols) under PROMPT; return a symbol.
-Signals EMPTY when CANDIDATES is nil -- with nothing to offer there is no
-prompt to raise -- and rejects empty input, which would intern the empty
-symbol and report on `org-glance-'."
+  "Read one of CANDIDATES (symbols) under PROMPT; return a symbol.
+Signal EMPTY as a `user-error' when CANDIDATES is nil, and reject empty input."
   (unless candidates (user-error "%s" empty))
   (let ((choice (completing-read prompt (mapcar #'symbol-name candidates)
                                  nil require-match)))
@@ -93,8 +88,7 @@ symbol and report on `org-glance-'."
 
 (cl-defun org-glance--plugins-persist (plugin verb &optional note)
   "Save `org-glance-plugins' and report PLUGIN's new state as VERB, plus NOTE.
-Batch skips `customize-save-variable' (it would write the user's custom file
-from a test run), so the policy lives here rather than in each mutator."
+Batch skips both the save and NOTE."
   (unless noninteractive
     (customize-save-variable 'org-glance-plugins org-glance-plugins))
   (message "org-glance: plugin `%s' %s%s" plugin verb
@@ -102,22 +96,14 @@ from a test run), so the policy lives here rather than in each mutator."
 
 (defconst org-glance-plugins-available '(llm)
   "Known org-glance plugins, offered by `org-glance-plugin-enable'.
-Each ships as its OWN package (`org-glance-<name>'), so core never carries
-its dependencies: the package manager installs the package, org-glance
-enables it.")
+Each ships as its own package, `org-glance-<name>'.")
 
 ;;;###autoload
 (cl-defun org-glance-plugin-enable (plugin)
-  "Load PLUGIN now and remember it in `org-glance-plugins' (`I').
-Prompts from the entries of `org-glance-plugins-available' still absent from
-`org-glance-plugins'; free input allows an external plugin.  With every known
-plugin already enabled there is nothing to offer, so it reports that and stops.
-
-Installing the package is the package manager's job (`:ensure t', straight,
-elpaca, ...); this enables what is already on `load-path' and says so when the
-library is missing.  Loads immediately -- errors are LOUD here, unlike the
-demoted init-time loader -- and persists via `customize-save-variable' outside
-batch."
+  "Load PLUGIN now and save it in `org-glance-plugins' (`I').
+Interactively, offer the `org-glance-plugins-available' entries not yet
+enabled (free input names an external plugin), or report that none remain.
+Load errors are LOUD; a library absent from `load-path' is a `user-error'."
   (interactive
    (list (org-glance--read-plugin
           "Enable plugin: "
@@ -135,10 +121,8 @@ batch."
 ;;;###autoload
 (cl-defun org-glance-plugin-disable (plugin)
   "Drop PLUGIN from `org-glance-plugins' and persist the change (`U').
-Prompts from the enabled plugins (required match).  The package stays installed
-and its library stays loaded for this session -- plugins never unload
-(invariant 26) -- so its keys and transient rows remain until Emacs restarts;
-the next init skips it."
+Prompt from the enabled plugins.  Its library, keys and transient rows stay
+until restart (invariant 26); the next init skips it."
   (interactive
    (list (org-glance--read-plugin "Disable plugin: " org-glance-plugins
                                   "No plugins are enabled" t)))
@@ -146,11 +130,8 @@ the next init skips it."
   (org-glance--plugins-persist plugin "disabled" "(its code stays until restart)"))
 
 (cl-defun org-glance--load-plugins ()
-  "Require every `org-glance-plugins' entry, each error-demoted.
-A broken or missing plugin must never break init (invariants 9, 26).  A plain
-`condition-case' demotes even under `debug-on-error'; `with-demoted-errors'
-re-raises there, so under ERT or user debugging a plugin's load error would
-abort init.  `require's NOERROR keeps an absent plugin silent."
+  "Require every `org-glance-plugins' entry, each error-demoted (invariant 26).
+Use `condition-case': `with-demoted-errors' re-raises under `debug-on-error'."
   (dolist (plugin org-glance-plugins)
     (condition-case err
         (require (org-glance-plugin-feature plugin) nil t)
@@ -158,9 +139,8 @@ abort init.  `require's NOERROR keeps an absent plugin silent."
 
 ;;;###autoload
 (cl-defun org-glance-init (&optional (directory org-glance-directory))
-  "Initialize org-glance in DIRECTORY: bring up the graph store and, when legacy
-metadata is detected, warn that `M-x org-glance-migrate' can convert it.
-Loads `org-glance-plugins' first, so plugin hooks see the graph open."
+  "Initialize org-glance in DIRECTORY after loading `org-glance-plugins'.
+Open its graph store and warn when legacy metadata awaits `org-glance-migrate'."
   (load-library "org-element.el")  ;; temp fix https://github.com/doomemacs/doomemacs/issues/7347
   (org-glance--load-plugins)
   (unless (f-exists? directory)
@@ -184,8 +164,7 @@ Loads `org-glance-plugins' first, so plugin hooks see the graph open."
            collect file))
 
 (cl-defun org-glance-migrate--overview-file? (file)
-  "Non-nil if FILE is a v1 `org-glance-overview' file (a read-only clone store).
-Detected by its prop-line `mode: org-glance-overview' marker."
+  "Non-nil if FILE is a v1 `org-glance-overview' clone, per its prop-line."
   (with-temp-buffer
     (insert-file-contents file nil 0 256)
     (goto-char (point-min))
@@ -197,9 +176,7 @@ Detected by its prop-line `mode: org-glance-overview' marker."
   (f-join (org-glance-graph:store-path graph) "migration.jsonl"))
 
 (cl-defun org-glance-migrate--migrated-sources (graph)
-  "Hash-table set of source files already migrated into GRAPH's store.
-Keys are paths relative to the graph directory, read from the journal; an empty
-table when nothing has been migrated yet."
+  "Return a hash set of GRAPH's migrated sources, keyed by relative path."
   (let ((path (org-glance-migrate--journal-path graph))
         (done (make-hash-table :test 'equal)))
     (when (f-exists? path)
@@ -210,25 +187,15 @@ table when nothing has been migrated yet."
     done))
 
 (cl-defun org-glance-migrate--record-source (graph relpath)
-  "Durably append RELPATH to GRAPH's migration journal.
-The file is created on first append; its directory (the store root) already
-exists, having been created when the graph was constructed."
+  "Durably append RELPATH to GRAPH's migration journal."
   (f-append-text (concat (json-serialize (list :source relpath)) "\n")
                  'utf-8 (org-glance-migrate--journal-path graph)))
 
 (cl-defun org-glance-migrate--ingest-file (graph file seen)
   "Ingest ORG_GLANCE_ID-bearing headlines from source FILE into GRAPH.
-SEEN is an id->content-hash table of records already in the store; a headline
-whose id+hash is already present is skipped (so a re-run, or a redo of a file
-interrupted mid-ingest, never appends a duplicate record), and SEEN is updated
-in place as headlines are added.  Return the number of headlines actually added.
-
-Read-only parse in a temp buffer -- never `find-file' the source.
-`delay-mode-hooks' (via `org-glance--org-mode') suppresses
-`after-change-major-mode-hook', which is what `global-undo-tree-mode' (and other
-globalized minor modes) hook into; combined with the temp buffer, undo-tree
-never activates, no undo is recorded and no `.~undo-tree~' files are written.
-Also skips per-file `org-mode-hook'."
+SEEN maps id to content hash of stored records: a matching headline is skipped,
+an added one recorded in place.  Return the number of headlines added.
+Parse in a temp buffer (invariant 12), so no mode hook or undo-tree runs."
   (let ((added 0))
     (with-temp-buffer
       (insert-file-contents file)
@@ -243,15 +210,10 @@ Also skips per-file `org-mode-hook'."
     added))
 
 (cl-defun org-glance-migrate (&optional (directory org-glance-directory))
-  "Rebuild the graph in DIRECTORY from legacy v1 content.
-Scan canonical (non-overview) org files for headlines carrying ORG_GLANCE_ID and
-add them to the graph preserving ids.  Idempotent and resumable: progress is
-journaled per source file, so already-migrated sources are skipped and no
-headline is ever ingested twice (see `org-glance-migrate--migrated-sources').
-Only on a fully clean pass (no source skipped) are the legacy `*.metadata.el'
-indices backed up to `*.metadata.el.bak' (never deleted); a partial or
-interrupted run leaves them in place so it stays detectable and resumable.
-Return the number of headlines ingested this run."
+  "Rebuild DIRECTORY's graph from legacy v1 content; return the count added.
+Ingest the ORG_GLANCE_ID headlines of the non-overview org sources, keeping ids.
+Idempotent and resumable: a journaled source is skipped.  Only a pass that
+skips no source renames each legacy `*.metadata.el' to `*.metadata.el.bak'."
   (interactive)
   (let* ((graph (org-glance-graph directory))
          (done (org-glance-migrate--migrated-sources graph))
@@ -271,8 +233,7 @@ Return the number of headlines ingested this run."
     (cl-loop for file in pending
              for i from 1
              for relpath = (f-relative file directory)
-             ;; A skipped file is NOT journaled, so a later run retries it;
-             ;; an overview clone IS journaled and never ingested.
+             ;; Only a skipped file goes unjournaled, so a later run retries it.
              do (condition-case err
                     (progn
                       (unless (org-glance-migrate--overview-file? file)
@@ -299,10 +260,8 @@ Return the number of headlines ingested this run."
     count))
 
 (cl-defun org-glance-reindex (&optional (directory org-glance-directory))
-  "Re-derive metadata for all headlines in DIRECTORY's graph from their stored
-content.  Run once after upgrading to backfill newly-added projection fields
-(e.g. the `linked?'/`propertized?' flags used to filter `org-glance-open'
-and `org-glance-extract')."
+  "Re-derive metadata for every headline in DIRECTORY's graph from its content.
+Run it after an upgrade to backfill new fields; it also drops derived caches."
   (interactive)
   (let* ((graph (org-glance-graph directory))
          (n (org-glance-graph:reindex graph)))
@@ -316,9 +275,9 @@ and `org-glance-extract')."
     n))
 
 (cl-defun org-glance-graph-compact (&optional (directory org-glance-directory))
-  "Compact DIRECTORY's metadata store: merge sealed segments into one, drop
-superseded records and tombstones, and reclaim the content of deleted headlines.
-Safe to run anytime; a no-op on an already-compact store."
+  "Compact DIRECTORY's metadata store; a no-op when already compact.
+Merge sealed segments into one, drop superseded records and tombstones, and
+reclaim deleted headlines' content.  Safe to run anytime."
   (interactive)
   (let* ((graph (org-glance-graph directory))
          (n (org-glance-graph:compact graph)))
@@ -327,14 +286,11 @@ Safe to run anytime; a no-op on an already-compact store."
     n))
 
 (defvar org-glance-migrate--warned nil
-  "Non-nil once the legacy-metadata warning has fired this session.
-Keeps `org-glance-migrate-maybe' from re-warning on a repeated init.")
+  "Non-nil once `org-glance-migrate-maybe' has warned this session.")
 
 (cl-defun org-glance-migrate-maybe (&optional (directory org-glance-directory))
-  "If legacy v1 metadata is present in DIRECTORY, warn that it can be converted.
-Never migrates automatically and never prompts -- the legacy store is left
-untouched.  Emits the warning at most once per session; `M-x org-glance-migrate'
-performs the conversion whenever the user chooses.  Always returns nil."
+  "Warn once per session when DIRECTORY has legacy v1 metadata; return nil.
+Never migrate or prompt; `M-x org-glance-migrate' converts."
   (when (and (not org-glance-migrate--warned)
              (org-glance-legacy-metadata-files directory))
     (setq org-glance-migrate--warned t)
@@ -358,8 +314,7 @@ performs the conversion whenever the user chooses.  Always returns nil."
   :group 'faces)
 
 (cl-defun org-glance-link:complete-material ()
-  "Org link completion for the canonical edge type: pick a headline, return
-an `org-glance-material:ID' link string."
+  "Complete an `org-glance-material:ID' link by picking a headline."
   (org-glance-ensure-init)
   (org-glance--edge->link-path
    (org-glance-headline-metadata:id
@@ -399,8 +354,7 @@ an `org-glance-material:ID' link string."
 
 (defun org-glance-link:material (path &optional _)
   "Materialize the headline PATH refers to; a `?kind=' suffix is ignored.
-The kind annotates the edge (stored in the `relations' metadata).
-One handler serves both edge link types (material + legacy visit)."
+Serves both the material and the legacy visit link types."
   (org-glance-ensure-init)
   (switch-to-buffer
    (org-glance-material:open org-glance-graph (car (split-string path "[?]")))))
@@ -414,10 +368,9 @@ One handler serves both edge link types (material + legacy visit)."
 
 (defun org-glance-link:overview (path &optional _)
   "Open the overview PATH describes: \"TAG[?KEY=VALUE&...]\".
-A bare TAG merges the ambient `org-glance-filter-spec' exactly like the
-`org-glance-overview' command; a `?'-qualified PATH is explicit — exactly the
-filter it states, no ambient merge.  Both land in
-`org-glance-overview-default-view'.  See `org-glance-filter:from-link-path'."
+A bare TAG merges the ambient `org-glance-filter-spec' as `org-glance-overview'
+does; a `?'-qualified PATH applies exactly its own filter.  Either lands in
+`org-glance-overview-default-view'."
   (org-glance-ensure-init)
   (let ((spec (org-glance-filter:from-link-path path)))
     (if (string-match-p "[?]" path)

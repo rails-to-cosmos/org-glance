@@ -14,15 +14,13 @@
   "Graph sizes to benchmark; the 100k tier is opt-in (OG_BENCH_LARGE=1).")
 
 (defconst org-glance-bench:batch 500
-  "Headlines per `org-glance-graph:add' batch while building.
-Small enough that a build crosses `org-glance-graph-segment-max-bytes'
-repeatedly, so insert timings include the seal path.")
+  "Headlines per build batch; small enough that insert timings include seals.")
 
 (defconst org-glance-bench:sample 1000
   "Random-id sample size for the warm `get-headline' benchmark.")
 
 (cl-defun org-glance-bench--headline (i)
-  "A synthetic headline I with a drawer property and a body line."
+  "Return synthetic headline I with a drawer property and a linked body line."
   (org-glance-test:headline-props
    (format "bench-%06d" i)
    (format "* TODO Benchmark headline %d :bench:" i)
@@ -45,12 +43,11 @@ Return the elapsed seconds."
                  (if note (format "   %s" note) ""))))
 
 (cl-defun org-glance-bench--segments (graph)
-  "GRAPH's current segment count: sealed + the open one."
+  "Return GRAPH's segment count, sealed plus the open one."
   (1+ (length (org-glance-graph--sealed-segments graph))))
 
 (cl-defun org-glance-bench:run ()
-  "Run every benchmark tier and print the table to stdout.
-Progress chatter (`reindex') is inhibited so the table stays readable."
+  "Run every benchmark tier and print the table to stdout, messages inhibited."
   (let ((inhibit-message t))
     (dolist (n org-glance-bench:sizes)
     (org-glance-test:with-graph graph

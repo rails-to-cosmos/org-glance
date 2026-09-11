@@ -37,9 +37,7 @@
   (setq org-glance-filter-spec nil))
 
 (defun org-glance-transient--view-mode ()
-  "Current overview display mode as a short string: \"table\" or \"org\".
-Display only -- the toggle and its label branch on
-`org-glance-overview--default-table?' directly."
+  "Return the overview display mode for display only: \"table\" or \"org\"."
   (if (org-glance-overview--default-table?) "table" "org"))
 
 (defun org-glance-transient--overview-description (&rest _)
@@ -66,10 +64,8 @@ this one update in place."
   (message "Overview default view: %s" (org-glance-transient--view-mode)))
 
 (defun org-glance-transient--plugins-description (&rest _)
-  "The System group heading, naming the enabled plugins.
-A plugin whose library failed to load is marked: the init loader is
-error-demoted (invariant 9), so a broken or missing one stays enabled yet
-absent, and this heading is where that shows."
+  "Return the System group heading, naming the enabled plugins.
+Mark each one whose library is not loaded (the loader is demoted, invariant 9)."
   (concat "System   plugins: "
           (if org-glance-plugins
               (mapconcat (lambda (plugin)

@@ -24,8 +24,8 @@
     (should (string= "bar" (org-glance-headline:get-user-property "foo" headline)))))
 
 (ert-deftest org-glance-test:headline-node-properties ()
-  "`node-property' reads the `:PROPERTIES:' drawer (case-insensitively); a body
-`KEY: value' pair is NOT a node property (that is `get-user-property')."
+  "`node-property' reads the `:PROPERTIES:' drawer case-insensitively.
+Body `KEY: value' pairs belong to `get-user-property'."
   (let ((headline (org-glance-headline--from-lines
                     "* TODO Book :read:"
                     ":PROPERTIES:"
@@ -47,8 +47,8 @@
                     (length (org-glance--buffer-links)))))))
 
 (ert-deftest org-glance-test:headline-encryption ()
-  "Encrypt wraps the body in one sealed crypt block; decrypt keeps the markers
-\(plaintext body), decrypt+unwrap restores the original bytes."
+  "Encrypt seals the body in one crypt block; decrypt keeps its markers.
+Decrypt with unwrap restores the original bytes."
   (let* ((orig (org-glance-headline--from-lines "* TODO Hello, world!" "foo bar"))
          (password "password")
          (encrypted (org-glance-headline:encrypt orig password))
@@ -65,9 +65,8 @@
                      (org-glance-headline:contents orig)))))
 
 (ert-deftest org-glance-test:headline-crypt-blocks-mixed ()
-  "Several crypt blocks seal independently; plaintext between them stays public,
-so an encrypted headline keeps honest `linked?' metadata.  Rekey (decrypt ->
-encrypt) preserves the block structure; decrypt+unwrap restores the original."
+  "Crypt blocks seal independently; text between stays public (invariant 14).
+`linked?' stays honest; rekey keeps both blocks; unwrap restores the original."
   (let* ((orig (org-glance-headline--from-lines
                 "* TODO Mixed"
                 "public intro [[https://example.com][site]]"
@@ -145,8 +144,7 @@ encrypt) preserves the block structure; decrypt+unwrap restores the original."
       (should (string= (funcall accessor h) "<2025-01-10 Fri>")))))
 
 (ert-deftest org-glance-test:headline-content-facts-matches-thunks ()
-  "The metadata build's single-pass `--content-facts' is byte-identical to forcing
-the -hash/-links/-properties/-encrypted thunks separately, across headline shapes."
+  "`--content-facts' equals the separately forced thunks across shapes."
   (dolist (lines '(("* TODO Plain" ":PROPERTIES:" ":ORG_GLANCE_ID: a" ":END:")
                    ("* TODO Linked [[https://x][d]]" ":PROPERTIES:" ":ORG_GLANCE_ID: b" ":END:"
                     "See [[file:y.org][y]] and [[id:z][z]].")
@@ -165,9 +163,8 @@ the -hash/-links/-properties/-encrypted thunks separately, across headline shape
       (should (eq    (plist-get facts :encrypted)   (and (org-glance-headline:encrypted? h) t))))))
 
 (ert-deftest org-glance-test:headline-hash-ignores-logbook ()
-  "Clock lines and drawer notes never move the content hash: the LOGBOOK is
-bookkeeping nothing derived reads, so hashing it would churn the hash-guarded
-property index on every clock-in/out.  Real content still changes it."
+  "Clock lines and drawer notes never move the content hash (invariant 5).
+Real content still changes it."
   (let* ((bare (org-glance-test:headline "h" "* TODO Task" "body"))
          (logged (org-glance-test:headline
                   "h" "* TODO Task"
@@ -195,10 +192,9 @@ property index on every clock-in/out.  Real content still changes it."
                                                 ":MYLOG:" "- note" ":END:" "body")))))))
 
 (ert-deftest org-glance-test:metadata-field-table-guard-fires ()
-  "The load-time guard catches the two linkages the slot-order check misses:
-a keyword FROM naming no real content fact (the field would read nil forever)
-and a list-valued slot with a non-vector ENCODE (which kills EVERY save, since
-`--append\' calls `json-serialize\' outside the error-demoted hook)."
+  "The load-time guard catches the linkages the slot-order check misses.
+A FROM naming no content fact reads nil forever; a list-valued slot lacking a
+vector ENCODE kills every save (invariant 4)."
   (let ((slots (cdr (cl-struct-slot-info 'org-glance-headline-metadata))))
     (should (org-glance-headline-metadata--check-fields
              slots org-glance-headline-metadata:fields))
@@ -219,8 +215,7 @@ and a list-valued slot with a non-vector ENCODE (which kills EVERY save, since
      :type 'error)))
 
 (ert-deftest org-glance-test:content-fact-keys-match-facts ()
-  "`org-glance-headline--content-fact-keys\' is the real vocabulary: the guard
-above trusts it, so it must equal what `--content-facts\' actually returns."
+  "`org-glance-headline--content-fact-keys' matches `--content-facts' output."
   (let* ((facts (org-glance-headline--content-facts
                  (org-glance-test:headline "f" "* TODO F" "body")))
          (keys (cl-loop for (k _v) on facts by #'cddr collect k)))
@@ -229,10 +224,8 @@ above trusts it, so it must equal what `--content-facts\' actually returns."
                          #'string<)))))
 
 (ert-deftest org-glance-test:metadata-build-parses-once ()
-  "Building metadata from a parsed headline is ONE org-mode pass.
-The parse that produced the headline captures the content facts in its own
-buffer; `:metadata' reads that memo instead of standing up a second buffer over
-the same string.  The passes are counted."
+  "Building metadata from a parsed headline takes ONE `org-mode' pass.
+`:metadata' reads the facts the parse memoized; passes are counted."
   (let* ((contents (org-glance-test:org-with-id "* TODO Task :work:" "p1"
                                                 "body [[https://example.com][X]]"))
          (passes 0))
@@ -245,8 +238,7 @@ the same string.  The passes are counted."
         (should (= 1 passes))))))
 
 (ert-deftest org-glance-test:content-facts-memo-is-contents-keyed ()
-  "The facts memo is held against the exact contents string, so a copy that
-rewrites contents recomputes rather than describing the old bytes."
+  "The facts memo is keyed on the exact contents; a rewritten copy recomputes."
   (let* ((contents (org-glance-test:org-with-id "* TODO Task" "p2" "plain body"))
          (headline (org-glance-headline--from-string contents))
          (memoized (org-glance-headline--content-facts headline))
@@ -261,9 +253,7 @@ rewrites contents recomputes rather than describing the old bytes."
                          (plist-get (org-glance-headline--content-facts rewritten) :hash))))))
 
 (ert-deftest org-glance-test:lazy-slots-come-from-the-table ()
-  "The parser fills every lazy slot the contents-derived table declares, so a
-new one cannot be added to the table and forgotten in the constructor -- the
-always-nil-slot class the metadata field guard exists to kill."
+  "The parser fills every lazy slot the contents-derived table declares."
   (let ((headline (org-glance-headline--from-string
                    (org-glance-test:org-with-id "* TODO T" "lz" "body"))))
     (pcase-dolist (`(,slot . ,builder) org-glance-headline--contents-derived-slots)
@@ -271,6 +261,37 @@ always-nil-slot class the metadata field guard exists to kill."
         (should (cl-struct-slot-value 'org-glance-headline slot headline))))
     ;; the nil-builder slot is the parse-time memo, filled separately
     (should (assq '-facts org-glance-headline--contents-derived-slots))))
+
+(ert-deftest org-glance-test:headline-log-drawer-changes-no-derived-fact ()
+  "A LOGBOOK changes no derived fact, exactly as it changes no hash: a CLOCK line
+is no property and a link in a state note is no body link (invariant 5)."
+  (let* ((plain (org-glance-test:headline "k1" "* TODO Kopi Luwak" "body"))
+         (clocked (org-glance-test:headline
+                   "k1" "* TODO Kopi Luwak"
+                   ":LOGBOOK:"
+                   "CLOCK: [2026-09-11 Fri 10:00]--[2026-09-11 Fri 10:30] =>  0:30"
+                   "- Note taken on [2026-09-11 Fri 10:31] \\\\"
+                   "  see [[https://example.com][x]]"
+                   ":END:"
+                   "body")))
+    (should (equal (org-glance-headline:hash plain) (org-glance-headline:hash clocked)))
+    (should (equal (org-glance-headline:properties plain)
+                   (org-glance-headline:properties clocked)))
+    (should (equal (org-glance-headline-metadata:serialize (org-glance-headline:metadata plain))
+                   (org-glance-headline-metadata:serialize (org-glance-headline:metadata clocked))))))
+
+(ert-deftest org-glance-test:with-contents-evaluates-once-in-caller-buffer ()
+  "CONTENTS is evaluated once, in the caller's buffer: a buffer-dependent form
+reads the caller's text, and a side-effecting one runs a single time."
+  (with-temp-buffer
+    (insert "* TODO From the caller")
+    (let ((calls 0))
+      (should (equal "* TODO From the caller"
+                     (org-glance-headline:with-contents
+                         (progn (cl-incf calls)
+                                (buffer-substring-no-properties (point-min) (point-max)))
+                       (buffer-string))))
+      (should (= 1 calls)))))
 
 (provide 'test-headline)
 ;;; test-headline.el ends here

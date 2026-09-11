@@ -12,8 +12,7 @@
       (should (s-ends-with? "foo.metadata.el" (car found))))))
 
 (ert-deftest org-glance-test:migrate ()
-  "Migration ingests id-bearing headlines (id, title, tags and content
-preserved) and backs up the legacy metadata non-destructively."
+  "Migration ingests id-bearing headlines intact and backs up legacy metadata."
   (with-temp-directory dir
     (org-glance-test:write (f-join dir "foo" "foo.org")
                            (org-glance-test:org-with-id "* TODO Hello :foo:" "hello-1" "body text"))
@@ -49,8 +48,7 @@ preserved) and backs up the legacy metadata non-destructively."
     (should (null (org-glance-graph:headlines (org-glance-graph dir))))))
 
 (ert-deftest org-glance-test:migrate-skips-failing-file ()
-  "One file that errors during ingest is logged and skipped; the rest still
-migrate (no whole-batch abort)."
+  "A file that errors during ingest is logged and skipped; the rest migrate."
   (with-temp-directory dir
     (org-glance-test:write (f-join dir "good.org")
                            (org-glance-test:org-with-id "* TODO Good" "good"))
@@ -63,8 +61,7 @@ migrate (no whole-batch abort)."
       (should (null (org-glance-graph:get-headline graph "bad"))))))
 
 (ert-deftest org-glance-test:migrate-idempotent ()
-  "Re-running migration ingests nothing new and appends no duplicate records:
-the second run adds 0 and the store still holds one record per id."
+  "A second migration run ingests 0 and appends no duplicate record."
   (with-temp-directory dir
     (org-glance-test:write (f-join dir "foo" "foo.org")
                            (org-glance-test:org-with-id "* TODO Hello :foo:" "h1" "body"))
@@ -73,8 +70,7 @@ the second run adds 0 and the store still holds one record per id."
     (should (= 1 (length (org-glance-graph:headlines (org-glance-graph dir)))))))
 
 (ert-deftest org-glance-test:migrate-progress-survives-restart ()
-  "Progress is journaled: a later run (fresh graph = an Emacs restart) skips
-already-migrated sources and ingests only newly-appeared ones."
+  "Journaled progress makes a post-restart run ingest only new sources."
   (with-temp-directory dir
     (org-glance-test:write (f-join dir "a.org")
                            (org-glance-test:org-with-id "* TODO A" "a"))
@@ -87,9 +83,8 @@ already-migrated sources and ingests only newly-appeared ones."
       (should (org-glance-headline-metadata? (org-glance-graph:get-headline graph "b"))))))
 
 (ert-deftest org-glance-test:migrate-keeps-metadata-until-clean-pass ()
-  "A skipped source keeps the legacy `.metadata.el' in place (the run is not a
-clean success).  A later run -- with the failure gone -- finishes the remaining
-file and only then backs the index up; the already-done file is not re-ingested."
+  "A skipped source keeps the legacy `.metadata.el' in place.
+A later clean run ingests only the remainder, then backs the index up."
   (with-temp-directory dir
     (org-glance-test:write (f-join dir "good.org")
                            (org-glance-test:org-with-id "* TODO Good" "good"))
@@ -108,8 +103,8 @@ file and only then backs the index up; the already-done file is not re-ingested.
       (should (org-glance-headline-metadata? (org-glance-graph:get-headline graph "bad"))))))
 
 (ert-deftest org-glance-test:migrate-maybe-warns-never-migrates ()
-  "When legacy metadata exists, `migrate-maybe' warns once and never prompts,
-migrates, or touches the legacy store; it always returns nil."
+  "With legacy metadata `migrate-maybe' warns once and returns nil.
+It never prompts, migrates or touches the legacy store."
   (with-temp-directory dir
     (org-glance-test:write (f-join dir "foo" "foo.org")
                            (org-glance-test:org-with-id "* TODO Hello" "h1"))
@@ -128,8 +123,7 @@ migrates, or touches the legacy store; it always returns nil."
     (should (null (org-glance-graph:get-headline (org-glance-graph dir) "h1")))))
 
 (ert-deftest org-glance-test:migrate-maybe-no-legacy-noop ()
-  "With no legacy metadata present, `migrate-maybe' must not warn, prompt, or
-error.  Guards `org-glance-init' in the common (already-migrated) case."
+  "Without legacy metadata `migrate-maybe' never warns, prompts or errors."
   (with-temp-directory dir
     (let ((org-glance-migrate--warned nil))
       (cl-letf (((symbol-function 'yes-or-no-p)

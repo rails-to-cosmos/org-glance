@@ -21,30 +21,22 @@
 (define-key org-glance-capture-mode-map (kbd "@") #'org-glance-capture:refer)
 
 (define-minor-mode org-glance-capture-mode
-  "Minor mode for an org-glance capture buffer.
-Enabled by `org-glance-capture' in the capture buffer only, so `@' references
-a graph headline there without leaking the binding into other org buffers."
+  "Minor mode for an org-glance capture buffer, with `@' for references.
+`org-glance-capture' enables it in its capture buffer only."
   :lighter " glance-capture"
   :keymap org-glance-capture-mode-map)
 
 (cl-defun org-glance-capture:refer (&optional arg)
   "Insert a reference to another graph headline at point, or self-insert `@'.
-Run `org-glance-material:insert-reference' (which see, for the word-boundary
-rules) on the global `org-glance-graph'; the captured headline has no id until
-ingest, so nothing is excluded.  With ARG (`C-u @') also prompt for a kind."
+See `org-glance-material:insert-reference'; ARG (`C-u @') also reads a kind."
   (interactive "P")
   (require 'org-glance-material)
   (org-glance-material:insert-reference org-glance-graph nil :with-kind arg))
 
 (cl-defun org-glance-capture:template (tags &optional (title ""))
-  "`org-capture' template for a new headline with TAGS, pre-filled with TITLE.
-TAGS is a tag symbol or a list of tag symbols.  When TAGS is a SINGLE tag with a
-configuration (see `org-glance-tag-config'), the template is rendered from that
-config's skeleton, and the config's emittable pragmas
-\(`org-glance-tag-config:preamble' -- the `#+TODO:' cycle today) are prepended,
-so the capture buffer cycles the tag states.
-Otherwise the default `* TITLE%?  :tags:' is used, so an unconfigured tag is
-byte-identical to before.  Multi-tag composition is deferred to Phase 2."
+  "Return the `org-capture' template for a headline with TAGS, titled TITLE.
+TAGS is a tag symbol or a list of them.  A single configured tag renders its
+config's skeleton prefixed with its pragmas; others get `* TITLE%?  :tags:'."
   (cl-check-type title string)
   (let* ((tags (org-glance-tag:as-list tags))
          (config (when (= 1 (length tags))
@@ -59,9 +51,8 @@ byte-identical to before.  Multi-tag composition is deferred to Phase 2."
               (mapconcat #'org-glance-tag:to-string tags ":")))))
 
 (cl-defun org-glance-capture:completing-read-tag ()
-  "Prompt for a tag; candidates come from the graph's live headlines.
-New tags are allowed -- the graph discovers tags from captured headlines, so no
-registration step is needed.  Errors on empty input."
+  "Prompt for a tag among the graph's live tags; a new tag is allowed.
+Signal `user-error' on empty input."
   (org-glance-ensure-init)
   (let ((choice (s-trim (completing-read "Tag: " (org-glance-graph:tags org-glance-graph)))))
     (when (string-empty-p choice)
@@ -69,11 +60,8 @@ registration step is needed.  Errors on empty input."
     (org-glance-tag:from-string (org-glance-tag:validate-string choice))))
 
 (cl-defun org-glance-capture--split-preamble (template)
-  "Split TEMPLATE into (PREAMBLE . ENTRY).
-PREAMBLE is file-level keywords (`#+TODO:' etc.) that precede the first heading;
-ENTRY is the org entry starting at the first `*'.  org-capture type `entry'
-requires a valid heading, so file keywords must be written to the target file
-separately."
+  "Split TEMPLATE into (PREAMBLE . ENTRY) at its first heading.
+PREAMBLE holds the file keywords, which an `entry' capture cannot take."
   (if (string-prefix-p "*" template)
       (cons nil template)
     (let ((lines (s-lines template)))
@@ -85,7 +73,8 @@ separately."
 
 ;;;###autoload
 (cl-defun org-glance-capture (tags title &key template finalize)
-  "Capture a headline tagged with TAGS (a symbol or list of symbols)."
+  "Capture a headline titled TITLE, tagged with TAGS (a symbol or list of them).
+TEMPLATE overrides `org-glance-capture:template'; FINALIZE finishes at once."
   (declare (indent 2))
 
   (interactive (list (org-glance-capture:completing-read-tag)

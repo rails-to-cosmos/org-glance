@@ -16,8 +16,7 @@
 
 (ert-deftest org-glance-test:kill-buffer-noconfirm ()
   "`org-glance--kill-buffer-noconfirm' clears the modified flag and returns t.
-Installed buffer-locally on `kill-buffer-query-functions', it turns the built-in
-`Buffer modified; kill anyway?' confirmation into a no-op for a discarded buffer."
+Buffer-local on `kill-buffer-query-functions', it skips the kill confirmation."
   (with-temp-buffer
     (insert "scratch")
     (should (buffer-modified-p))
@@ -25,9 +24,7 @@ Installed buffer-locally on `kill-buffer-query-functions', it turns the built-in
     (should-not (buffer-modified-p))))
 
 (ert-deftest org-glance-test:capture-discards-temp-buffer ()
-  "Capture finalize discards its temp buffer, leaving none behind.
-The `kill-buffer-query-functions' guard clears the modified flag first, so the
-discard raises no `Buffer modified; kill anyway?' confirmation."
+  "Capture finalize discards its temp buffer without a kill confirmation."
   (org-glance-test:session
     (org-glance-capture 'test "Hello")
     (org-capture-finalize)
@@ -37,8 +34,7 @@ discard raises no `Buffer modified; kill anyway?' confirmation."
                             (buffer-list)))))
 
 (ert-deftest org-glance-test:capture-tag-prompt-from-graph ()
-  "The interactive tag prompt sources candidates from the graph, allows new
-tags, normalizes case, and rejects empty input."
+  "The tag prompt offers graph tags, allows new ones, downcases, rejects blank."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
                              (org-glance-test:headline "A" "* foo :task:" "")
@@ -60,9 +56,8 @@ tags, normalizes case, and rejects empty input."
     (should-error (org-glance-tag:validate-string bad) :type 'user-error)))
 
 (ert-deftest org-glance-test:tag-invalid-rejected-at-creation ()
-  "Every tag-creation boundary rejects an org-unparsable tag loudly:
-the capture prompt, programmatic capture, and the retag add path.
-Removal stays ungated."
+  "Capture prompt, programmatic capture and retag add reject an unparsable tag.
+Removal stays ungated (invariant 13)."
   (org-glance-test:session
     (org-glance-test:answering ((completing-read "albert-heijn"))
       (should-error (org-glance-capture:completing-read-tag) :type 'user-error))
@@ -76,9 +71,8 @@ Removal stays ungated."
     (should (org-glance-material:retag org-glance-graph "a" "shop" :remove t))))
 
 (ert-deftest org-glance-test:capture-refer-inserts-link ()
-  "In a capture buffer `org-glance-capture-mode' is on and `@' at a body
-boundary inserts a material link to a graph headline; finalize projects it
-into the captured headline's relations metadata (invariant 5)."
+  "Capture buffers enable `org-glance-capture-mode'; `@' there links a headline.
+Finalize projects it into the captured headline's relations (invariant 5)."
   (org-glance-test:session
     (org-glance-graph:add org-glance-graph
                           (org-glance-test:headline "target" "* TODO Target headline"))

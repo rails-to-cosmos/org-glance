@@ -90,11 +90,10 @@ Notable user-facing changes.  Versions date-based
   a new =links= metadata field (non-edge links; edges stay in =relations=).
 - =C-c C-s= / =C-c C-d= in the overview AND table set the row's schedule /
   deadline exactly like org (=C-u= clears); runs org's own planner on the blob.
-- Material buffers conceal bookkeeping drawer lines
-  (=org-glance-material-hidden-properties=, default =ORG_GLANCE_ID= +
-  =ORG_GLANCE_HASH=; overlays only, file content untouched); an all-reserved
-  drawer hides entirely.  Hand edits to these managed keys are reverted on
-  save with a warning.
+- Material buffers keep bookkeeping drawer keys out of the buffer
+  (=org-glance-material-hidden-properties=: =ORG_GLANCE_ID=,
+  =ORG_GLANCE_HASH=, =ORG_GLANCE_CREATION_TIME=) and write them back on every
+  save; a hand-typed copy is dropped with a warning.
 - Relations: =@= in a material buffer inserts an =org-glance-material:ID= link
   to a completing-read headline; =C-u @= adds a =?kind== reference kind that
   also prefixes the link as prose — =roasted by [[…][Manhattan]]= — with only
@@ -262,6 +261,14 @@ Notable user-facing changes.  Versions date-based
   =:active?=, =:done?=, =:tag-string=, =:title-clean=).
 
 ** Fixed
+- Clock entries and state notes no longer count as headline content: =CLOCK:=
+  is no property (=e= stops offering it), and a link in a note is no body link.
+- Materializing with =-d= while the headline is already open and sealed decrypts
+  that buffer; it errored in the view it was run from.
+- Table layouts and other =.eld= sidecars are written atomically: a crash
+  mid-write leaves the previous file whole.
+- =M-x revert-buffer= in a material buffer keeps it materialized: saves still
+  index, crypt stays wired, managed drawer keys stay out of the buffer.
 - An external WRITE no longer resurrects a tombstoned id whose blob still
   lingers before compaction: =org-glance-graph:refresh-external= skips it, the
   tombstone winning (invariant 30).  A WRITE still ingests a genuinely unknown

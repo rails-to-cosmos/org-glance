@@ -2,9 +2,8 @@
 (require 'test-helpers)
 
 (cl-defmacro org-glance-test:with-tag-config (configs &rest body)
-  "Write CONFIGS into a temp config dir, point the override there, run BODY.
-CONFIGS is an alist (TAG-STRING . FILE-CONTENTS); each becomes `<dir>/<tag>.org'.
-Resets the module cache around BODY so reads see exactly CONFIGS."
+  "Run BODY against a temp config dir holding CONFIGS as `<tag>.org' files.
+CONFIGS is an alist (TAG-STRING . CONTENTS); the cache resets around BODY."
   (declare (indent 1))
   `(with-temp-directory dir
      (let ((org-glance-tag-config-dir dir))
@@ -15,7 +14,7 @@ Resets the module cache around BODY so reads see exactly CONFIGS."
          (org-glance-tag-config--invalidate)))))
 
 (cl-defun org-glance-test:one-config (tag contents)
-  "The one-element CONFIGS alist for the `with-tag-config' macro."
+  "Return a one-entry `with-tag-config' alist mapping TAG to CONTENTS."
   (list (cons tag contents)))
 
 (defconst org-glance-test:book-config
@@ -62,8 +61,7 @@ Resets the module cache around BODY so reads see exactly CONFIGS."
   (should (null (org-glance-tag-config:done-keywords ""))))
 
 (ert-deftest org-glance-test:tag-config-render-from-config ()
-  "Render keeps the captured tag + skeleton + prompts, prepends the cycle as a
-`#+TODO:' file keyword, and yields exactly one `%?'."
+  "Render keeps tag, skeleton and prompts, prepends `#+TODO:', yields one `%?'."
   (org-glance-test:with-tag-config (org-glance-test:one-config "book" org-glance-test:book-config)
     (let* ((org-glance-graph nil)
            (template (org-glance-capture:template 'book "Dune")))
@@ -75,8 +73,7 @@ Resets the module cache around BODY so reads see exactly CONFIGS."
       (should (= 1 (s-count-matches "%\\?" template))))))
 
 (ert-deftest org-glance-test:tag-config-render-single-capture-point ()
-  "A `%?' in a KEPT drawer property is the skeleton's own capture point; render
-must NOT append a second one (org-capture honours only the first)."
+  "Render appends no `%?' when a kept drawer property already holds one."
   (org-glance-test:with-tag-config
       (org-glance-test:one-config
        "note"
@@ -86,8 +83,7 @@ must NOT append a second one (org-capture honours only the first)."
       (should (s-contains? ":RECORD:  %?" template)))))
 
 (ert-deftest org-glance-test:tag-config-render-bare-capture-point ()
-  "A minimal `* %?' skeleton with no pragmas renders to the default entry:
-TITLE fills the heading, `%?' survives, no `#+TODO:' preamble is emitted."
+  "A bare `* %?' skeleton renders the default entry without `#+TODO:'."
   (org-glance-test:with-tag-config
       (org-glance-test:one-config
        "task"
@@ -110,8 +106,7 @@ TITLE fills the heading, `%?' survives, no `#+TODO:' preamble is emitted."
     (should (null (org-glance-tag-config:cycle-for-filter nil '(:tags ("task")))))))
 
 (ert-deftest org-glance-test:tag-config-not-in-content-tags ()
-  "A configured tag never appears in the content graph's tag discovery, and
-`class' (the old reserved marker) is gone entirely."
+  "Tag discovery lists neither configured tags nor the retired `class' marker."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "h1" "* TODO A :work:"))
     (org-glance-test:with-tag-config (org-glance-test:one-config "book" org-glance-test:book-config)
@@ -121,7 +116,7 @@ TITLE fills the heading, `%?' survives, no `#+TODO:' preamble is emitted."
       (should (org-glance-tag-config:resolve nil 'book)))))
 
 (ert-deftest org-glance-test:tag-config-overview-todo-header ()
-  "The overview emits `#+TODO:' for a single configured tag, and omits it otherwise."
+  "The overview emits `#+TODO:' only for a single configured tag."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "b1" "* READING Dune :book:"))
     (org-glance-test:with-tag-config (org-glance-test:one-config "book" org-glance-test:book-config)
@@ -132,9 +127,7 @@ TITLE fills the heading, `%?' survives, no `#+TODO:' preamble is emitted."
         (should-not (s-contains? "#+TODO:" text))))))
 
 (ert-deftest org-glance-test:tag-config-materialize-state-roundtrip ()
-  "A per-tag todo state survives materialize -> edit -> save: it must NOT fold into
-the title via a keyword-naive reparse (the blob has no #+TODO; the cycle is bound
-per-tag at sync)."
+  "A per-tag state survives a material save without folding into the title."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "d1" "* TODO Dune :book:"))
     (org-glance-test:with-tag-config (org-glance-test:one-config "book" org-glance-test:book-config-min)
@@ -143,14 +136,13 @@ per-tag at sync)."
           (goto-char (point-min))
           (re-search-forward "TODO")
           (replace-match "READING")
-          (org-glance-material:sync))
+          (org-glance-test:save))
         (let ((m (org-glance-graph:get-headline graph "d1")))
           (should (equal "READING" (org-glance-headline-metadata:state m)))
           (should (equal "Dune" (org-glance-headline-metadata:title m))))))))
 
 (ert-deftest org-glance-test:tag-config-lint ()
-  "The lint flags a leftover :TODO_KEYWORDS:/:TAG: drawer and a missing entry,
-and is silent on a clean per-tag file."
+  "Lint flags leftover :TODO_KEYWORDS:/:TAG: and a missing entry; clean passes."
   (with-temp-buffer
     (insert "#+TITLE: t\n\n:PROPERTIES:\n:TAG: book\n:TODO_KEYWORDS: TODO | DONE\n:END:\n")
     (delay-mode-hooks (org-mode))
@@ -165,15 +157,12 @@ and is silent on a clean per-tag file."
 
 (defconst org-glance-test:book-config-no-prompts
   "#+TITLE: Book\n#+TODO:  TODO READING | READ ABANDONED\n\n* Book\n%?\n"
-  "Book config without `%^{...}' prompts and without sub-headings --
-safe for batch-mode capture tests (no interactive prompts, single headline).")
+  "Book config with no `%^{...}' prompts or sub-headings, for batch capture.")
 
 (ert-deftest org-glance-test:tag-config-capture-book ()
-  "Capturing a book with a configured tag produces a valid headline in the graph.
-Exercises the real `org-glance-capture' -> `org-capture' -> finalize -> ingest
-pipeline end-to-end: the `#+TODO:' preamble must be split from the entry so
-org-capture accepts the template, and the finalized headline must carry the tag,
-the skeleton body, and no config-internal drawer keys."
+  "Capturing a configured-tag book runs `org-capture' end to end into the graph.
+The `#+TODO:' preamble splits from the entry; the headline keeps tag and
+skeleton and drops config-internal drawer keys."
   (org-glance-test:session
     (org-glance-test:with-tag-config (org-glance-test:one-config "book" org-glance-test:book-config-no-prompts)
       (org-glance-capture 'book "Dune" :finalize t)
@@ -209,9 +198,8 @@ the skeleton body, and no config-internal drawer keys."
     (should (equal "* plain :t:" (cdr split)))))
 
 (ert-deftest org-glance-test:tag-config-migrate-legacy ()
-  "Opening a graph with a legacy `config/tags.org' splits it into per-tag files
-\(heading -> #+TITLE, :TODO_KEYWORDS: -> #+TODO, subtree minus those keys ->
-entry) and backs the legacy file up, leaving resolution intact."
+  "Opening a graph splits legacy `config/tags.org' per tag and backs it up.
+Heading -> #+TITLE, :TODO_KEYWORDS: -> #+TODO, rest of the subtree -> entry."
   (org-glance-test:with-graph graph
     (let ((legacy (org-glance-graph:config-file graph "tags.org")))
       (org-glance-test:write
@@ -242,9 +230,8 @@ entry) and backs the legacy file up, leaving resolution intact."
                                      (org-glance-tag-config:resolve graph 'book))))))))
 
 (ert-deftest org-glance-test:tag-config-materialize-knows-keywords ()
-  "Materializing a configured-tag headline makes the blob buffer natively recognise
-the tag's states (READING is a state, not folded into the title) -- so `org-todo'
-and faces work in place, with no `#+TODO:' in the kept-clean blob."
+  "A configured-tag material buffer knows the tag's todo states natively.
+READING parses as a state; `org-todo' works and the blob gains no `#+TODO:'."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "b1" "* READING Dune :book:"))
     (org-glance-test:with-tag-config (org-glance-test:one-config "book" org-glance-test:book-config-min)
@@ -256,8 +243,7 @@ and faces work in place, with no `#+TODO:' in the kept-clean blob."
           (should (member "READING" org-not-done-keywords)))))))
 
 (ert-deftest org-glance-test:tag-config-change-todo-live-cycle ()
-  "`change-todo-live' cycles a configured tag's OWN states (TODO -> READING ->
-READ), persisting each -- not the global TODO/DONE."
+  "`change-todo-live' cycles a configured tag's own states, persisting each."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "b1" "* TODO Dune :book:"))
     (org-glance-test:with-tag-config (org-glance-test:one-config "book" org-glance-test:book-config-min)
@@ -267,10 +253,8 @@ READ), persisting each -- not the global TODO/DONE."
       (should (s-contains? "* READ Dune" (org-glance-graph:get-content graph "b1"))))))
 
 (ert-deftest org-glance-test:tag-config-fields-table ()
-  "The field table is the single source of the pragma set: it stays in step
-with the struct (guarded at load), and both preamble builders derive from it,
-so a new pragma is one row plus one slot instead of a parse line, a capture
-arm and an overview arm."
+  "The field table is the pragma set's single source, in step with the struct.
+The load-time guard rejects a mismatch; both preamble builders derive from it."
   (should (org-glance-tag-config--check-fields
            (cdr (cl-struct-slot-info 'org-glance-tag-config))
            org-glance-tag-config:fields))
@@ -284,8 +268,8 @@ arm and an overview arm."
   (should (equal '((todo . "TODO")) (org-glance-tag-config--pragma-slots t))))
 
 (ert-deftest org-glance-test:tag-config-preamble ()
-  "`:preamble' renders a config's emittable pragmas; `:preamble-for-filter'
-renders only what the filtered tags AGREE on -- one distinct value or nothing."
+  "`:preamble' renders a config's emittable pragmas.
+`:preamble-for-filter' renders a value only when the filtered tags AGREE on it."
   (org-glance-test:with-tag-config
       (list (cons "book" "#+TITLE: Book\n#+TODO: TODO READING | READ\n\n* Book\n")
             (cons "note" "#+TITLE: Note\n#+TODO: TODO READING | READ\n\n* Note\n")

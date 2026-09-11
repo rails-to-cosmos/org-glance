@@ -3,8 +3,7 @@
 (require 'test-helpers)
 
 (ert-deftest org-glance-test:property-index-keys-and-values ()
-  "The index yields per-headline drawer + body properties and the key union,
-dropping org-glance's own ORG_GLANCE_* bookkeeping from the candidate keys."
+  "The index serves drawer and body properties; key union omits ORG_GLANCE_*."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
       (org-glance-test:headline-props "a" "* TODO A" '(("AUTHOR" . "Tolkien") ("GENRE" . "fantasy")))
@@ -27,8 +26,7 @@ dropping org-glance's own ORG_GLANCE_* bookkeeping from the candidate keys."
     (should (equal "New" (org-glance-property-index:property graph "a" "AUTHOR")))))
 
 (ert-deftest org-glance-test:property-index-persists-and-clears ()
-  "`ensure' persists to disk and survives dropping the in-session memo; `clear'
-drops both."
+  "`ensure' persists to disk, surviving a dropped memo; `clear' drops both."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
       (org-glance-test:headline-props "a" "* TODO A" '(("AUTHOR" . "X"))))
@@ -40,8 +38,7 @@ drops both."
     (should-not (f-exists? (org-glance-property-index--file graph)))))
 
 (ert-deftest org-glance-test:table-add-column-completing ()
-  "`C-c +' completing-reads a drawer property the visible headlines carry; the
-column's value-fn reads that property via the index."
+  "`C-c +' offers the visible headlines' drawer properties, read via the index."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
       (org-glance-test:headline-props "a" "* TODO A" '(("AUTHOR" . "Tolkien"))))
@@ -67,8 +64,8 @@ column's value-fn reads that property via the index."
       (should (equal "Tolkien" killed)))))
 
 (ert-deftest org-glance-test:cache-dir-split ()
-  "Derived sidecars live under `cache/' (git-ignored, pruned of legacy);
-user config stays under `config/'."
+  "Derived sidecars live in git-ignored `cache/', user config in `config/'.
+Reopen prunes a legacy `config/' sidecar; reindex drops `cache/'."
   (org-glance-test:with-graph graph
     (should (s-contains? "/cache/" (org-glance-graph:cache-file graph "x.eld")))
     (should (s-contains? "/config/" (org-glance-graph:config-file graph "x.eld")))

@@ -11,8 +11,13 @@ Set in a headline's =:PROPERTIES:= drawer.
 - =ORG_GLANCE_ID= — the headline's stable store key (content-addressed data
   dir, WAL id).  Capture generates it; a headline without it is not tracked.
   Path-safety-checked before it touches the filesystem.  Read by
-  =org-glance-headline:id=.  Concealed (never deleted) in material buffers via
-  =org-glance-material-hidden-properties=.
+  =org-glance-headline:id=.  Managed in material buffers
+  (=org-glance-material-hidden-properties=): absent from the buffer, written back on
+  every save; a hand-typed copy is dropped with a warning.
+- =ORG_GLANCE_CREATION_TIME= — when the headline was captured, as
+  =[YYYY-MM-DD Dow HH:MM]=.  Stamped by =org-glance-graph:capture= on a headline that
+  lacks one (=org-glance-graph--creation-stamp=); read by the =glance= daemon.
+  Stripped before hashing and managed in material buffers like =ORG_GLANCE_ID=.
 - =ORG_GLANCE_PROJECT_DIR= — a project directory for =org-glance-llm= to open its
   session in, instead of the content data dir.  Set/clear from a materialized
   buffer with =C-c d= (=org-glance-material:set-project-dir=); read by
@@ -25,8 +30,8 @@ Set in a headline's =:PROPERTIES:= drawer.
   =org-glance-material--history-depth=.
 - =ORG_GLANCE_HASH= — legacy content-hash property; no current code writes it.
   Stripped before hashing (=org-glance-headline:hash-ignore-properties=),
-  skipped by the tag-config lint, concealed and edit-reverted in material
-  buffers.  Internal — do not set by hand.
+  skipped by the tag-config lint, managed in material buffers.  Internal — do
+  not set by hand.
 
 * Tag-config files
 

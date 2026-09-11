@@ -3,7 +3,7 @@
 (require 'test-helpers)
 
 (ert-deftest org-glance-test:tags-metrics-tracked ()
-  "Adding headlines records per-tag count, states, timestamps and capture counter."
+  "Adding headlines records per-tag count, states, timestamps and captures."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
                           (org-glance-test:headline "a" "* TODO A :x:y:")
@@ -20,7 +20,7 @@
       (should (equal 1 (alist-get "DONE" (plist-get x :states) nil nil #'string=))))))
 
 (ert-deftest org-glance-test:tags-metrics-created-once ()
-  "`:created' is stamped once (first sighting); later events bump count/captures."
+  "`:created' is stamped at first sighting; later adds bump count and captures."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "a" "* A :x:"))
     (let ((created1 (plist-get (cdr (assoc "x" (org-glance-tag-metrics:all graph))) :created)))
@@ -55,8 +55,7 @@
         (should (equal "1" (alist-get 'count (alist-get 'cells xr))))))))
 
 (ert-deftest org-glance-test:tags-retag-remove ()
-  "Removing a tag drops it off each headline: multi-tagged survive, single-tagged
-become untagged but live, and the tag leaves the derived tag set."
+  "Removing a tag strips it everywhere; single-tagged headlines stay live."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
                           (org-glance-test:headline "a" "* TODO A :x:y:")   ; multi
@@ -97,8 +96,7 @@ become untagged but live, and the tag leaves the derived tag set."
     (should-not (get-text-property (string-match "|" s) 'face s))))
 
 (ert-deftest org-glance-test:tags-filter-overlays-ambient ()
-  "The dashboard's per-tag filter overlays the ambient spec (same view as the
-o/table pickers -- archived rows hidden by default here too)."
+  "A dashboard tag filter overlays the ambient spec, as o/table pickers do."
   (should (equal '(:done nil :archived nil :commented nil :tags ("x"))
                  (org-glance-tags--tag-filter "x"))))
 

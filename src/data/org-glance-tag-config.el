@@ -16,9 +16,7 @@
 (require 'org-glance-core)
 
 (defcustom org-glance-tag-config-dir nil
-  "Override directory for the per-tag configuration files.
-Nil (default) means `config/tags/' under the current graph's store.  A string
-sets an explicit directory (used for tests and non-standard layouts)."
+  "Directory of per-tag config files, or nil for the store's `config/tags/'."
   :group 'org-glance
   :type '(choice (const :tag "Default (store config/tags/)" nil) directory))
 
@@ -36,15 +34,11 @@ sets an explicit directory (used for tests and non-standard layouts)."
     (title     "TITLE"    nil)     ; human label; never emitted into a buffer
     (todo      "TODO"     t)       ; the todo cycle: capture + overview emit it
     (template  nil        nil))    ; the body from the first `*'
-  "The per-tag config shape: struct SLOT, `#+PRAGMA:' keyword, EMIT? flag.
-Drives `--parse-file' and both preamble builders, so a new pragma is one row
-plus one struct slot (checked against each other at load).  A nil PRAGMA marks
-a slot read from somewhere other than a file keyword.")
+  "Per-tag config schema rows (SLOT PRAGMA EMIT?), checked against the struct.
+PRAGMA: SLOT's `#+PRAGMA:' keyword, or nil; EMIT?: rendered buffers emit it.")
 
 (cl-defun org-glance-tag-config--check-fields (slots fields)
-  "Signal unless FIELDS lists struct SLOTS in order; else return t.
-A slot the table forgets reads nil forever.  Runs at load over the real pair;
-tests call it with broken ones."
+  "Signal an error unless FIELDS lists struct SLOTS in order; else return t."
   (let ((struct-slots (mapcar #'car slots))
         (table-slots (mapcar #'car fields)))
     (unless (equal struct-slots table-slots)
@@ -57,31 +51,27 @@ tests call it with broken ones."
  org-glance-tag-config:fields)
 
 (cl-defun org-glance-tag-config--pragma-slots (&optional emitting)
-  "Slots parsed from a `#+PRAGMA:' keyword, as (SLOT . PRAGMA) pairs.
-With EMITTING, only those a rendered buffer emits as a file keyword."
+  "Return (SLOT . PRAGMA) for each slot read from a `#+PRAGMA:' keyword.
+With EMITTING, only those a rendered buffer emits."
   (cl-loop for (slot pragma emit) in org-glance-tag-config:fields
            when (and pragma (or (not emitting) emit))
            collect (cons slot pragma)))
 
 (cl-defun org-glance-tag-config:dir (graph)
-  "Resolved config directory of GRAPH (may not exist).
-`org-glance-tag-config-dir' overrides; else `config/tags/' under GRAPH's store.
-Nil when neither is available (uninitialised, no override) -- callers then see
-an empty config set."
+  "Return GRAPH's tag config directory, possibly nonexistent, or nil if none.
+`org-glance-tag-config-dir' overrides the store's `config/tags/'."
   (or (and (stringp org-glance-tag-config-dir) org-glance-tag-config-dir)
       (and (org-glance-graph? graph)
            (org-glance-graph:config-file graph "tags"))))
 
 (cl-defun org-glance-tag-config:file (graph tag)
-  "Path of TAG's config file under GRAPH's config directory, or nil.
-TAG is a tag symbol; the file is `<dir>/<tag>.org'."
+  "Return tag symbol TAG's config file `<dir>/<tag>.org' in GRAPH, or nil."
   (when-let* ((dir (org-glance-tag-config:dir graph)))
     (f-join dir (concat (org-glance-tag:to-string tag) ".org"))))
 
 (cl-defun org-glance-tag-config:source-mtime (graph)
-  "Newest mtime across GRAPH's per-tag config files, or nil when none exist.
-Overview caches compare against this: editing any tag's cycle invalidates
-them like a content change (a directory mtime alone misses in-file edits)."
+  "Return the newest mtime of GRAPH's tag config files, or nil if none exist.
+Overview caches compare against it, so a cycle edit invalidates them."
   (cl-loop for (_name mtime _size) in (org-glance-tag-config--snapshot
                                        (org-glance-tag-config:dir graph))
            with newest = nil
@@ -89,9 +79,7 @@ them like a content change (a directory mtime alone misses in-file edits)."
            finally return newest))
 
 (cl-defun org-glance-tag-config--file-keyword (key)
-  "Value of file keyword KEY (e.g. \"TITLE\", \"TODO\") in the current buffer.
-Returns the trimmed value of the first `#+KEY:' line, or nil when absent or
-blank."
+  "Return the buffer's first `#+KEY:' value trimmed, or nil if absent or blank."
   (save-excursion
     (goto-char (point-min))
     (when (re-search-forward (format "^#\\+%s:[ \t]*\\(.*\\)$" (regexp-quote key)) nil t)
@@ -99,8 +87,7 @@ blank."
         (unless (string-empty-p v) v)))))
 
 (cl-defun org-glance-tag-config--entry ()
-  "The capture entry of the current buffer: text from the first `*' heading to
-EOF (trimmed), or nil when the buffer has no heading."
+  "Return the buffer's capture entry, its first heading to EOF, or nil if none."
   (save-excursion
     (goto-char (point-min))
     (when (re-search-forward "^\\*+ " nil t)
@@ -120,12 +107,11 @@ EOF (trimmed), or nil when the buffer has no heading."
                                  (org-glance-tag-config--file-keyword pragma))))))
 
 (cl-defun org-glance-tag-config--tag-of-file (path)
-  "The tag symbol a config file PATH configures: its basename, sans `.org'."
+  "Return the tag symbol config file PATH configures: its base name."
   (org-glance-tag:from-string (f-base path)))
 
 (cl-defun org-glance-tag-config--parse (dir)
-  "Parse DIR into a tag-symbol -> `org-glance-tag-config' hash (empty if absent).
-Each `<tag>.org' contributes one config keyed by its file name."
+  "Parse DIR's `<tag>.org' files into a tag -> config hash (empty without DIR)."
   (let ((by-tag (make-hash-table :test 'eq)))
     (when (and dir (f-directory? dir))
       (dolist (path (directory-files dir t "\\.org\\'"))
@@ -138,9 +124,7 @@ Each `<tag>.org' contributes one config keyed by its file name."
   "Module cache plist (:dir D :snapshot S :by-tag HASH), or nil (cold).")
 
 (cl-defun org-glance-tag-config--snapshot (dir)
-  "A value identifying DIR's state for cache validity, or nil.
-The sorted (NAME MTIME SIZE) list of its `*.org' files, so an edit, an added or
-a removed config all invalidate."
+  "Return DIR's cache key: its sorted `*.org' files' (NAME MTIME SIZE), or nil."
   (when (and dir (f-directory? dir))
     (cl-loop for path in (sort (directory-files dir t "\\.org\\'") #'string<)
              for attrs = (file-attributes path)
@@ -150,12 +134,11 @@ a removed config all invalidate."
 
 (cl-defun org-glance-tag-config--invalidate ()
   "Drop the in-memory config cache, so the next resolve re-reads the files.
-Called after our own writes (the `-edit' save, the migration), so we never
-depend on mtime granularity for in-process edits."
+Called after in-process writes, which mtime granularity could hide."
   (setq org-glance-tag-config--cache nil))
 
 (cl-defun org-glance-tag-config--by-tag (graph)
-  "GRAPH's cached tag -> config hash, rebuilt iff its dir or snapshot changed."
+  "Return GRAPH's tag -> config hash, re-parsed on a dir or snapshot change."
   (let* ((dir (org-glance-tag-config:dir graph))
          (snapshot (org-glance-tag-config--snapshot dir))
          (cache org-glance-tag-config--cache))
@@ -169,32 +152,29 @@ depend on mtime granularity for in-process edits."
 
 (cl-defun org-glance-tag-config:resolve (graph tag)
   "Resolve TAG to its `org-glance-tag-config' in GRAPH, or nil if it has none.
-A nil result is the identity: TAG captures with the default template and renders
-with the global todo keywords -- the graceful-degradation path."
+Nil means TAG uses the default capture template and global todo keywords."
   (cl-check-type tag org-glance-tag)
   (gethash tag (org-glance-tag-config--by-tag graph)))
 
 (cl-defun org-glance-tag-config:cycle->keywords (cycle)
-  "The `org-todo-keywords' value for a tag CYCLE string: one `:sequence'."
+  "Return the `org-todo-keywords' value for tag CYCLE string: one `sequence'."
   (list (cons 'sequence (split-string cycle))))
 
 (cl-defun org-glance-tag-config:cycle->keywords-or (cycle default)
-  "CYCLE's `org-todo-keywords' form, or DEFAULT when CYCLE is nil."
+  "Return CYCLE's `org-todo-keywords' form, or DEFAULT when CYCLE is nil."
   (if cycle (org-glance-tag-config:cycle->keywords cycle) default))
 
 (cl-defun org-glance-tag-config:done-keywords-for-filter (graph filter)
-  "The done-keyword set FILTER's views should honour in GRAPH.
-The single configured tag's cycle when FILTER names one, else the global
-done set (`org-glance--done-keywords').  Bind to `org-done-keywords' while
-building a `:done' predicate or a badge split."
+  "Return the done keywords FILTER's views honour in GRAPH.
+Those of FILTER's sole configured cycle, else `org-glance--done-keywords'.
+Bind `org-done-keywords' to it to build a `:done' predicate or a badge split."
   (if-let* ((cycle (org-glance-tag-config:cycle-for-filter graph filter)))
       (org-glance-tag-config:done-keywords cycle)
     (org-glance--done-keywords)))
 
 (cl-defun org-glance-tag-config:done-keywords (todo-spec)
-  "The done keywords of TODO-SPEC (everything after the last `|'), or nil.
-Derived by org itself from the verbatim cycle string, so the active/done split
-is exactly the one a `#+TODO:' header produces -- single source of truth."
+  "Return the done keywords of TODO-SPEC, or nil when it is blank.
+Org derives them, so the split matches what a `#+TODO:' header produces."
   (when (org-glance--present-string? todo-spec)
     (with-temp-buffer
       (let ((org-todo-keywords (org-glance-tag-config:cycle->keywords todo-spec)))
@@ -203,9 +183,7 @@ is exactly the one a `#+TODO:' header produces -- single source of truth."
 
 (cl-defun org-glance-tag-config--sole-value (graph filter slot)
   "Return SLOT's value across FILTER's tags in GRAPH, if exactly one exists.
-Nil for 0 or >1 distinct values: merging keyword sequences is order-sensitive
-and corrupts the active/done split, so an ambiguous filter falls back to the
-global default."
+Else nil: merging keyword sequences would corrupt the active/done split."
   (let ((values (cl-remove-duplicates
                  (delq nil (mapcar (lambda (tag)
                                      (when-let* ((c (org-glance-tag-config:resolve graph tag)))
@@ -216,30 +194,26 @@ global default."
       (car values))))
 
 (cl-defun org-glance-tag-config:cycle-for-filter (graph filter)
-  "The single todo cycle configured for FILTER's tags, or nil.
-Returns a cycle only when EXACTLY ONE distinct cycle is configured across the
-filtered tags (`org-glance-tag-config--sole-value')."
+  "Return the sole distinct todo cycle across FILTER's tags in GRAPH, or nil."
   (org-glance-tag-config--sole-value graph filter 'todo))
 
 (cl-defun org-glance-tag-config:preamble (config)
-  "CONFIG's emittable pragmas as `#+KEY: VALUE' lines, or nil.
-The one spelling shared by the capture template and the overview header."
+  "Return CONFIG's emittable pragmas as `#+KEY: VALUE' lines, or nil."
   (org-glance-tag-config--preamble-lines
    (cl-loop for (slot . pragma) in (org-glance-tag-config--pragma-slots t)
             collect (cons pragma (cl-struct-slot-value 'org-glance-tag-config
                                                        slot config)))))
 
 (cl-defun org-glance-tag-config:preamble-for-filter (graph filter)
-  "The `#+KEY: VALUE' lines FILTER's tags agree on in GRAPH, or nil.
-Each pragma is emitted only when the filtered tags configure exactly one
-distinct value for it (`org-glance-tag-config--sole-value')."
+  "Return the `#+KEY: VALUE' lines FILTER's tags in GRAPH agree on, or nil.
+A pragma agrees when it has exactly one distinct value (`--sole-value')."
   (org-glance-tag-config--preamble-lines
    (cl-loop for (slot . pragma) in (org-glance-tag-config--pragma-slots t)
             collect (cons pragma (org-glance-tag-config--sole-value graph filter slot)))))
 
 (cl-defun org-glance-tag-config--preamble-lines (pairs)
-  "PAIRS ((PRAGMA . VALUE)…) as newline-terminated `#+PRAGMA: VALUE' text, or nil.
-Blank values drop out; nil when nothing is left."
+  "Return PAIRS ((PRAGMA . VALUE)...) as `#+PRAGMA: VALUE' lines, or nil.
+Blank values drop out."
   (let ((lines (cl-loop for (pragma . value) in pairs
                         when (org-glance--present-string? value)
                         collect (concat "#+" pragma ": " value "\n"))))
@@ -248,21 +222,14 @@ Blank values drop out; nil when nothing is left."
 (defconst org-glance-tag-config--render-strip
   (append '("TAG" "TODO_KEYWORDS") org-glance-headline:hash-ignore-properties)
   "Drawer keys stripped from a rendered capture instance.
-The current format keeps none of these; they are stripped defensively so a
-migrated or hand-edited entry that retained an old `:TAG:'/`:TODO_KEYWORDS:'
-drawer key still renders clean.  The cycle is applied as a `#+TODO:' FILE
-keyword, never an instance drawer property.")
+Legacy `:TAG:'/`:TODO_KEYWORDS:' keys a migrated or hand-edited entry retained;
+the cycle lives only in a `#+TODO:' file keyword.")
 
 (cl-defun org-glance-tag-config:render (config title tags)
-  "Render an `org-capture' entry template for an instance of CONFIG.
-TITLE pre-fills the entry heading; TAGS are the instance org tags.  The
-config's capture entry (its `%^{...}' prompts, property defaults and body
-skeleton) is preserved verbatim; residual config drawer keys are stripped.
-A `%?' is appended to the heading only when the skeleton carries none BELOW the
-heading (its body OR a kept drawer property) -- a `%?' in the heading itself is
-overwritten by TITLE, so a bare `* %?' correctly yields `* TITLE%?'.  A
-well-formed skeleton therefore yields exactly one (org-capture honours only the
-first)."
+  "Render an `org-capture' template for an instance of CONFIG.
+TITLE replaces the heading text, TAGS its tags, and `--render-strip' keys go;
+the rest stays verbatim.  The heading gets a `%?' unless one sits below it.
+Signal a `user-error' when CONFIG has no capture entry."
   (cl-check-type config org-glance-tag-config)
   (cl-check-type title string)
   (let ((template (org-glance-tag-config:template config))
@@ -289,13 +256,11 @@ first)."
       (s-trim-right (buffer-substring-no-properties (point-min) (point-max))))))
 
 (cl-defun org-glance-tag-config--migrate-on-open (graph)
-  "Split a legacy single-file `config/tags.org' into per-tag files, once.
-`org-glance-graph-after-open-functions' hook (error-demoted by core,
-invariant 9): each level-1 `:TAG:' headline becomes `config/tags/<tag>.org'
--- its heading text is the `#+TITLE:', its `:TODO_KEYWORDS:' the `#+TODO:',
-its subtree minus those keys the capture entry.  An already-authored per-tag
-file is never clobbered.  The legacy file is renamed `tags.org.bak' (kept,
-never deleted -- migration discipline)."
+  "Split GRAPH's legacy `config/tags.org' into per-tag files, once.
+On `org-glance-graph-after-open-functions' (error-demoted, invariant 9), each
+level-1 `:TAG:' headline becomes `<tag>.org': heading text as `#+TITLE:',
+`:TODO_KEYWORDS:' as `#+TODO:', subtree minus both keys as capture entry.
+Existing per-tag files are kept; the legacy file becomes `tags.org.bak'."
   (when-let* ((legacy (org-glance-graph:config-file graph "tags.org"))
               ((f-exists? legacy))
               (dir (org-glance-tag-config:dir graph)))
@@ -339,10 +304,8 @@ never deleted -- migration discipline)."
           #'org-glance-tag-config--migrate-on-open)
 
 (cl-defun org-glance-tag-config--stub (tag)
-  "Default contents for a freshly-created config file of TAG.
-Comments then the org-capture template only -- no active pragmas, so the tag
-inherits every global default.  The comment documents the pragmas one MAY add
-above the heading to override those defaults."
+  "Return the stub contents of a new config file for TAG.
+Comments listing the optional pragmas, none active, then a bare capture entry."
   (let ((name (symbol-name tag)))
     (concat
      "# Config for the `" name "' tag (the file name is the tag).\n"
@@ -361,7 +324,7 @@ above the heading to override those defaults."
      "* %?\n")))
 
 (cl-defun org-glance-tag-config--edit-candidates (graph)
-  "Sorted tags to offer for configuration: GRAPH's live tags + existing configs."
+  "Return the sorted tags to offer for configuration: GRAPH's tags and configs."
   (org-glance--sorted-distinct
    (append (and (org-glance-graph? graph) (org-glance-graph:tags graph))
            (let ((dir (org-glance-tag-config:dir graph)))
@@ -369,10 +332,8 @@ above the heading to override those defaults."
                   (mapcar #'f-base (directory-files dir nil "\\.org\\'")))))))
 
 (cl-defun org-glance-tag-config--lint ()
-  "Advisory lint of the current per-tag config buffer; never blocks the save.
-Flags a residual `:TODO_KEYWORDS:'/`:TAG:' drawer (superseded by `#+TODO:'
-and the file name) and a missing capture entry.  Shows issues via
-`display-warning' and returns them as a list of strings."
+  "Warn about, and return as strings, the current tag config buffer's issues.
+Flags residual `:TODO_KEYWORDS:'/`:TAG:' keys and a missing capture entry."
   (let (issues)
     (save-excursion
       (goto-char (point-min))
@@ -393,15 +354,14 @@ and the file name) and a missing capture entry.  Shows issues via
     issues))
 
 (cl-defun org-glance-tag-config--on-save ()
-  "After-save hook for a config buffer: invalidate the read cache, then lint."
+  "Invalidate the config cache, then lint; buffer-local on `after-save-hook'."
   (org-glance-tag-config--invalidate)
   (org-glance-tag-config--lint))
 
 ;;;###autoload
 (cl-defun org-glance-tag-config-edit (&optional tag)
-  "Open a tag's configuration file for editing, creating a stub if absent.
-Prompts for TAG (completing over live tags + existing configs); `C' in the
-transient."
+  "Open TAG's config file, creating a stub if absent; `C' in the transient.
+With TAG nil, prompt for it among live tags and existing configs."
   (interactive)
   (let* ((graph (and (org-glance-initialized?) org-glance-graph))
          (tag-str (or tag (completing-read "Configure tag: "

@@ -73,8 +73,7 @@
                        (org-glance-test:field graph "emoji" title))))))
 
 (ert-deftest org-glance-test:segments-torn-line-recovery ()
-  "A torn (newline-less, half-JSON) final line is ignored by reads and healed by
-the next append; intact records are unaffected."
+  "Reads skip a torn final line, keeping intact records; the next append heals."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "ok" "* Intact"))
     (let ((open (org-glance-graph:headline-meta-path graph)))
@@ -101,8 +100,7 @@ the next append; intact records are unaffected."
         (should (org-glance-headline-metadata? (org-glance-graph:get-headline graph "x")))))))
 
 (ert-deftest org-glance-test:segments-crashed-compaction-discarded ()
-  "An unreferenced segment next to a NON-empty open (crashed compaction) is
-reaped, not adopted; pre-crash data stays intact."
+  "An orphan segment beside a NON-empty open is reaped; pre-crash data stays."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "keep" "* Keep me"))
     (let ((orphan (org-glance-graph--segment-path graph 9)))
@@ -113,8 +111,8 @@ reaped, not adopted; pre-crash data stays intact."
         (should (org-glance-headline-metadata? (org-glance-graph:get-headline graph "keep")))))))
 
 (ert-deftest org-glance-test:segments-legacy-migration ()
-  "A pre-segmentation store (bare headlines.jsonl, no MANIFEST, no seq) is adopted
-in place: same reads, order preserved, next insert continues cleanly."
+  "A bare legacy headlines.jsonl without MANIFEST or seq is adopted in place.
+Reads and order are unchanged, and the next insert continues cleanly."
   (with-temp-directory dir
     (let ((meta (f-join dir ".org-glance" "meta")))
       (org-glance-test:write
@@ -135,8 +133,7 @@ in place: same reads, order preserved, next insert continues cleanly."
       (should (equal '("l1" "l2" "new") (org-glance-test:ids graph))))))
 
 (ert-deftest org-glance-test:segments-compaction ()
-  "Compaction merges sealed segments to one, drops superseded records and
-tombstones, GCs dead blobs, and keeps live data intact."
+  "Compaction leaves one segment of latest live records and GCs dead blobs."
   (org-glance-test:with-graph graph
     (org-glance-test:with-seal-each-insert
       (org-glance-graph:add graph (org-glance-test:headline "a" "* TODO Alpha" "alpha body"))
@@ -158,9 +155,7 @@ tombstones, GCs dead blobs, and keeps live data intact."
       (should (s-contains? "alpha body v2" (org-glance-graph:get-content graph "a"))))))
 
 (ert-deftest org-glance-test:segments-compaction-preserves-order ()
-  "Compaction folds the open segment in, so an id updated in the open keeps its
-ORIGINAL first-sighting position (regression: leaving the open out re-sighted
-such ids after everything else)."
+  "Compaction folds in the open segment; updated ids keep first-sighting order."
   (org-glance-test:with-graph graph
     (org-glance-test:with-seal-each-insert
       (org-glance-graph:add graph (org-glance-test:headline "a" "* TODO Alpha")) ; seals
@@ -197,10 +192,8 @@ such ids after everything else)."
       (should (= 6 (length (org-glance-graph:headlines graph)))))))
 
 (ert-deftest org-glance-test:segments-crashed-compaction-keeps-tombstone ()
-  "A compaction that crashes at its MANIFEST commit must not resurrect a deleted
-headline whose tombstone's only copy is in the open segment (regression: the
-open was truncated BEFORE the commit, destroying the tombstone while an old
-listed segment still held the headline live)."
+  "A compaction crash at the MANIFEST commit never resurrects a deleted id.
+The tombstone's only copy is in the open segment, which survives (invariant 2)."
   (org-glance-test:with-graph graph
     (org-glance-test:with-seal-each-insert
       (org-glance-graph:add graph (org-glance-test:headline "x" "* TODO Doomed" "body"))  ; seals
@@ -218,8 +211,7 @@ listed segment still held the headline live)."
       (should (org-glance-headline-metadata? (org-glance-graph:get-headline graph "y"))))))
 
 (ert-deftest org-glance-test:segments-crashed-compaction-not-adopted ()
-  "Compaction debris (same `seq' ordinals as listed segments) is never adopted by
-heal, even in the ambiguous empty-open state; the store does not bloat."
+  "Heal never adopts compaction debris, even beside an empty open segment."
   (org-glance-test:with-graph graph
     (org-glance-test:with-seal-each-insert
       (org-glance-graph:add graph (org-glance-test:headline "a" "* Alpha"))   ; seals
@@ -234,8 +226,7 @@ heal, even in the ambiguous empty-open state; the store does not bloat."
         (should (equal '("a" "b") (org-glance-test:ids graph)))))))
 
 (ert-deftest org-glance-test:segments-freshness-signal ()
-  "headline-meta-path's mtime advances on insert, delete, seal, and compact, so
-the overview cache invalidates on every kind of store write."
+  "The `headline-meta-path' mtime advances on insert, delete, seal and compact."
   (org-glance-test:with-graph graph
     (let ((org-glance-graph-segment-max-bytes (* 256 1024))
           (org-glance-graph-compact-segment-count 1000)

@@ -36,7 +36,7 @@
     (should (string= "beta"  (org-glance-test:field graph "b" title)))))
 
 (ert-deftest org-glance-test:graph-latest-wins ()
-  "Re-adding an id appends a record; the most recent one wins (reverse scan)."
+  "Re-adding an id appends a record; the last one wins."
   (org-glance-test:with-graph graph
     (let ((headline (org-glance-test:headline "id1" "* TODO foo")))
       (org-glance-graph:add graph headline)
@@ -54,9 +54,7 @@
     (should (eq 'tombstone (org-glance-graph:get-headline graph "id1")))))
 
 (ert-deftest org-glance-test:graph-utf8-roundtrip ()
-  "Non-ASCII titles survive both read paths.
-Regression: an earlier reverse JSONL reader fed undecoded UTF-8 bytes to
-`json-parse-string', which raised `json-utf8-decode-error'."
+  "Non-ASCII titles survive every read path without `json-utf8-decode-error'."
   (org-glance-test:with-graph graph
     (let ((title "Façade — Facebook’s “data” café"))
       (org-glance-graph:add graph (org-glance-test:headline "u1" (concat "* TODO " title)))
@@ -67,8 +65,7 @@ Regression: an earlier reverse JSONL reader fed undecoded UTF-8 bytes to
                               (org-glance-graph:headline graph "u1")))))))
 
 (ert-deftest org-glance-test:graph-utf8-chunk-boundary ()
-  "Multibyte content spanning a 4096-byte boundary still reads back correctly
-(per-line UTF-8 decode, independent of any read chunking)."
+  "Multibyte content spanning a 4096-byte read chunk reads back intact."
   (org-glance-test:with-graph graph
     (let ((title "café—’“”—naïve—Façade"))
       (dotimes (i 50)
@@ -82,8 +79,7 @@ Regression: an earlier reverse JSONL reader fed undecoded UTF-8 bytes to
                            (org-glance-headline-metadata:title meta))))))))
 
 (ert-deftest org-glance-test:graph-scheduled-roundtrip ()
-  "A scheduled headline serializes (regression: schedule/deadline must be coerced
-to raw strings, not org-element timestamp objects, or `json-serialize' crashes)."
+  "A SCHEDULED timestamp round-trips as a raw string `json-serialize' accepts."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "sid"
                                                              "* TODO sched"
@@ -109,8 +105,7 @@ to raw strings, not org-element timestamp objects, or `json-serialize' crashes).
     (should (org-glance-headline-metadata? (org-glance-graph:get-headline graph "keep-me")))))
 
 (ert-deftest org-glance-test:graph-capture-stamps-creation-time ()
-  "Capturing stamps ORG_GLANCE_CREATION_TIME as an inactive timestamp when it
-is absent, and keeps an existing one."
+  "Capture stamps an inactive ORG_GLANCE_CREATION_TIME only when it is absent."
   (org-glance-test:with-graph graph
     (org-glance-test:capture graph
       "* TODO fresh :a:\n* TODO kept :b:\n:PROPERTIES:\n:ORG_GLANCE_CREATION_TIME: [2020-01-01 Wed 09:00]\n:END:\n")
@@ -144,9 +139,7 @@ is absent, and keeps an existing one."
                          (org-glance-headline:hash restored)))))))
 
 (ert-deftest org-glance-test:graph-content-atomic-write ()
-  "`put-content' overwrites the blob in place and leaves no temp file behind.
-Regression guard for the atomic temp-then-rename write (a torn write must never
-truncate an existing data.org)."
+  "`put-content' overwrites the blob atomically, leaving no temp file behind."
   (org-glance-test:with-graph graph
     (org-glance-graph:put-content graph (org-glance-test:headline "aw1" "* foo" "first body"))
     (org-glance-graph:put-content graph (org-glance-test:headline "aw1" "* foo" "second body"))
@@ -164,7 +157,7 @@ truncate an existing data.org)."
     (should (org-glance-graph:headline-data-path graph "whitepaper-d41d8cd98f00b204"))))
 
 (ert-deftest org-glance-test:graph-flags-roundtrip ()
-  "linked?/propertized? projection flags are computed at add time and round-trip."
+  "The `linked?'/`propertized?' projection flags compute at add and round-trip."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
                              (org-glance-test:headline "f1" "* foo" "[[https://x.example][x]]" "- k: v")
@@ -180,17 +173,14 @@ truncate an existing data.org)."
   "Re-index backfills projection flags onto records written without them."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "r1" "* foo" "[[https://x.example][x]]"))
-    ;; simulate an old record lacking the linked flag (latest wins)
     (org-glance-graph:insert graph (list (list :id "r1" :state "" :title "foo")))
     (should (not (org-glance-test:field graph "r1" linked?)))
     (org-glance-graph:reindex graph)
     (should (org-glance-test:field graph "r1" linked?))))
 
 (ert-deftest org-glance-test:org-mode-forces-tab-width-8 ()
-  "Parsing setup forces tab-width 8 (org requires it) and disables tabs, even
-when the user's default tab-width is 4 -- and metadata still computes.
-Regression for `org-glance-headline:metadata' failing with \"Tab width in Org
-files must be 8\" in Emacsen whose default tab-width is not 8."
+  "`org-glance--org-mode' forces `tab-width' 8, no tabs, under a default of 4.
+`org-glance-headline:metadata' then computes (invariant 12)."
   (let ((orig (default-value 'tab-width)))
     (unwind-protect
         (progn
@@ -204,7 +194,7 @@ files must be 8\" in Emacsen whose default tab-width is not 8."
       (setq-default tab-width orig))))
 
 (ert-deftest org-glance-test:graph-content-missing ()
-  "Reading content for an unknown id yields nil, not an error."
+  "Reading content for an unknown id returns nil without signaling."
   (org-glance-test:with-graph graph
     (should (null (org-glance-graph:get-content graph "nope")))
     (should (null (org-glance-graph:headline graph "nope")))))
@@ -228,12 +218,10 @@ files must be 8\" in Emacsen whose default tab-width is not 8."
                              (org-glance-test:headline "s4" "* Delta"))
     (should (equal '("DONE" "TODO") (org-glance-graph:states graph)))))
 
-;;; In-memory read cache coherence -- the cases a naive memo gets wrong.
+;;; In-memory read cache coherence.
 
 (ert-deftest org-glance-test:graph-cache-same-second-add ()
-  "An add right after a warmed read is visible even if mtime did not advance.
-Guards that an in-process write invalidates the cache directly (never relies on
-filesystem mtime granularity)."
+  "An add right after a warmed read is visible even if mtime did not advance."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "c1" "* TODO A"))
     (should (= 1 (length (org-glance-graph:headlines graph)))) ; warms the cache
@@ -242,10 +230,8 @@ filesystem mtime granularity)."
     (should (org-glance-headline-metadata? (org-glance-graph:get-headline graph "c2")))))
 
 (ert-deftest org-glance-test:graph-cache-external-write ()
-  "A write to the open segment behind the graph's back is still observed.
-Simulates another Emacs: append a record directly (bypassing the mutation API,
-so no in-process invalidation fires); the snapshot check (open mtime+size) must
-trigger a rebuild on the next read."
+  "A record appended to the open segment by another writer is observed.
+No in-process invalidation fires; the store snapshot detects it (invariant 7)."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "e1" "* TODO A"))
     (should (= 1 (length (org-glance-graph:headlines graph)))) ; warms the cache
@@ -257,7 +243,7 @@ trigger a rebuild on the next read."
     (should (org-glance-headline-metadata? (org-glance-graph:get-headline graph "e2")))))
 
 (ert-deftest org-glance-test:graph-cache-delete-then-tombstone ()
-  "After warming the cache, a delete is reflected as a tombstone, not the live row."
+  "A delete after a warmed read shows as a tombstone and leaves the live set."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "d1" "* TODO A"))
     (should (org-glance-headline-metadata? (org-glance-graph:get-headline graph "d1"))) ; warm
@@ -266,8 +252,7 @@ trigger a rebuild on the next read."
     (should (= 0 (length (org-glance-graph:headlines graph))))))
 
 (ert-deftest org-glance-test:graph-cache-compaction-visibility ()
-  "Compaction drops a tombstone, turning `get-headline' from `tombstone' to nil.
-The cache must invalidate on compaction so this observable change is seen."
+  "A warmed cache sees compaction turn `get-headline' from `tombstone' to nil."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "k1" "* TODO A"))
     (org-glance-graph:delete graph "k1")
@@ -276,7 +261,7 @@ The cache must invalidate on compaction so this observable change is seen."
     (should (null (org-glance-graph:get-headline graph "k1")))))
 
 (ert-deftest org-glance-test:graph-cache-insertion-order-after-update ()
-  "Insertion (first-sighting) order survives a cache rebuild after an in-place update."
+  "First-sighting order survives a cache rebuild after an in-place update."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
                              (org-glance-test:headline "o1" "* TODO A")
@@ -289,14 +274,9 @@ The cache must invalidate on compaction so this observable change is seen."
       (should (equal "DONE" (org-glance-headline-metadata:state (cadr metas)))))))
 
 (ert-deftest org-glance-test:graph-cache-external-compaction-mtime-independent ()
-  "An external compaction is detected via the snapshot's segment-NAME dimension,
-even when the open segment's mtime and size are unchanged.  This is the coarse-
-filesystem resurrection hole the adversarial review found: a compaction rewrites
-the open empty (size back to 0) and swaps the live set, so a purely mtime-based
-snapshot could repeat on a 1s-granularity clock and serve a deleted headline.
-A SEPARATE graph struct is the external writer (so the reader's in-process
-invalidation never fires); the open + MANIFEST mtimes are pinned so ONLY the
-sealed-segment name list ([seg-01] -> [seg-02]) distinguishes the two states."
+  "An external compaction is detected by segment names alone (invariant 7).
+A separate writer struct bypasses the reader's invalidation, and the open and
+MANIFEST mtimes are pinned, so only [seg-01] -> [seg-02] differs."
   (org-glance-test:with-graph reader
     (let* ((writer (make-org-glance-graph :directory (org-glance-graph:directory reader)))
            (open (org-glance-graph:headline-meta-path reader))
@@ -331,15 +311,15 @@ sealed-segment name list ([seg-01] -> [seg-02]) distinguishes the two states."
       (should (equal "A" (org-glance-test:field graph "a" title))))))
 
 (cl-defun org-glance-test:tri-state (graph id)
-  "GRAPH's answer for ID as a comparable value: nil, `tombstone', or the state."
+  "Return GRAPH's answer for ID as nil, `tombstone', or the todo state."
   (let ((r (org-glance-graph:get-headline graph id)))
     (cond ((null r) nil)
           ((eq r 'tombstone) 'tombstone)
           (t (org-glance-headline-metadata:state r)))))
 
 (ert-deftest org-glance-test:graph-cache-patched-not-rebuilt ()
-  "An append PATCHES the read cache instead of dropping it: the next read does
-not re-scan the WAL.  Counted -- `--latest-records' is the rebuild."
+  "An append PATCHES the read cache; the next read never re-scans the WAL.
+Rebuilds are counted as `org-glance-graph--latest-records' calls."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "a" "* TODO A"))
     (should (org-glance-graph:headlines graph))          ; warm the cache
@@ -364,10 +344,9 @@ not re-scan the WAL.  Counted -- `--latest-records' is the rebuild."
         (should (= 1 rebuilds))))))
 
 (ert-deftest org-glance-test:graph-cache-patch-matches-rebuild ()
-  "Randomized: after EVERY mutation the patched cache answers exactly like a
-cold rebuild from disk -- same live set, same order, same state, same
-tri-state per id.  A patch bug serves stale or deleted rows silently, so this
-compares the two paths rather than trusting either."
+  "After each random mutation the patched cache answers like a cold rebuild.
+Live set, order, states and per-id tri-state must match; the test compares
+the two paths rather than trusting either."
   (org-glance-test:with-graph graph
     (random "org-glance-cache-fuzz")            ; deterministic sequence
     (let ((ids '("a" "b" "c" "d" "e"))

@@ -28,8 +28,7 @@
       (should (string= "o1" (org-glance-overview:id-at-point))))))
 
 (ert-deftest org-glance-test:overview-materialize-at-point ()
-  "Materializing from the overview opens the headline under point.
-Two headlines, point on the second: the buffer shown carries ITS id."
+  "Materializing from the overview opens the headline under point."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
                           (org-glance-test:headline "o1" "* TODO Alpha")
@@ -55,9 +54,8 @@ Two headlines, point on the second: the buffer shown carries ITS id."
       (should (s-contains? ":ORG_GLANCE_ID: o1" (f-read-text file 'utf-8))))))
 
 (ert-deftest org-glance-test:overview-default-view-dispatch ()
-  "`org-glance-overview' lands in `org-glance-overview-default-view': the table
-dashboard for `org-glance-table', the org-text overview for `org-glance-overview'.
-The legacy `table' / `org' values map the same way."
+  "`org-glance-overview' opens the `org-glance-overview-default-view' view.
+`org-glance-table'/`table' mean table, `org-glance-overview'/`org' org text."
   (dolist (case '((org-glance-table . t) (table . t)
                   (org-glance-overview . nil) (org . nil)))
     (let ((org-glance-overview-default-view (car case)))
@@ -74,9 +72,7 @@ The legacy `table' / `org' values map the same way."
           (with-current-buffer buf (should (bound-and-true-p org-glance-overview-mode))))))))
 
 (ert-deftest org-glance-test:overview-default-directory ()
-  "The overview buffer's `default-directory' is the graph ROOT, not the hidden
-`.org-glance' cache subdir its file lives in -- so directory-relative actions run
-where the user's content is."
+  "The overview's `default-directory' is the graph ROOT, outside its cache dir."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "o1" "* Alpha"))
     (org-glance-test:with-overview (buf graph nil)
@@ -85,8 +81,7 @@ where the user's content is."
         (should-not (file-equal-p default-directory (f-dirname buffer-file-name)))))))
 
 (ert-deftest org-glance-test:overview-fill-frame ()
-  "Visiting an overview fills the frame when `org-glance-view-fill-frame' is
-non-nil, and leaves the window layout alone when nil."
+  "An overview visit fills the frame iff `org-glance-view-fill-frame' is set."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "o1" "* Alpha"))
     (let ((org-glance-graph graph))
@@ -105,10 +100,8 @@ non-nil, and leaves the window layout alone when nil."
         (should-not (s-contains? ":ORG_GLANCE_ID: o2" text))))))
 
 (ert-deftest org-glance-test:overview-filter-by-state ()
-  "`:state'/`:done' filter on todo state; `(:state nil)' differs from omitting it.
-No `org-done-keywords' binding here: the `:done' clause derives the done set
-itself, so the filter is correct even outside an Org buffer (the bug the review
-caught)."
+  "`:state'/`:done' filter by state; `(:state nil)' differs from omitting it.
+`:done' derives the done set itself, so no Org buffer or binding is needed."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
                              (org-glance-test:headline "o1" "* TODO Alpha")
@@ -174,9 +167,8 @@ caught)."
     (should-not (s-contains? "/" key))))
 
 (ert-deftest org-glance-test:overview-spec-key-compact ()
-  "Cache directory names are short hashes of the canonical identity: fixed
-width, lowercase hex, whatever the filter carries.  The readable filter lives
-in the SPEC sidecar."
+  "Cache directory names hash the canonical identity to 12 lowercase hex digits,
+whatever the filter carries; the readable filter lives in the SPEC sidecar."
   (should (string= (org-glance-overview:spec-key 'task)
                    (org-glance-overview:spec-key '(:tags ("task")))))
   (dolist (filter (list '(:tags ("task"))
@@ -186,17 +178,15 @@ in the SPEC sidecar."
                         '(:id "a/../b")))
     (should (string-match-p "\\`[0-9a-f]\\{12\\}\\'"
                             (org-glance-overview:spec-key filter))))
-  ;; value boundaries survive the hash -- the old readable slug conflated these.
+  ;; value boundaries survive the hash.
   (should-not (string= (org-glance-overview:spec-key '(:tags ("a" "b")))
                        (org-glance-overview:spec-key '(:tags ("a,b")))))
   (should-not (string= (org-glance-overview:spec-key '(:id "a" :title "b"))
                        (org-glance-overview:spec-key '(:id "a&title=b")))))
 
 (ert-deftest org-glance-test:overview-cache-collision-rebuilds ()
-  "Two distinct specs that share a directory name never serve each other's
-content: the SPEC sidecar mismatch forces a rebuild, and re-requesting the
-owning spec hits its cache again.  Hash keys make a real collision
-astronomically rare, so one is forced here by pinning `spec-key'."
+  "Specs sharing a directory name never serve each other's content: a SPEC
+sidecar mismatch rebuilds, then the owner hits.  A pinned `spec-key' collides."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "a" "* Alpha"))
     (let ((s1 '(:id "a" :title "b"))
@@ -216,9 +206,7 @@ astronomically rare, so one is forced here by pinning `spec-key'."
           (should (= 1 renders)))))))
 
 (ert-deftest org-glance-test:overview-cache-outdated-header-rebuilds ()
-  "A cache written by an older org-glance (pre-rename `-v2' prop-line) is
-rebuilt even when mtime-fresh -- its prop-line would enable a mode that no
-longer exists."
+  "A cache with a stale `-v2' mode prop-line rebuilds even when mtime-fresh."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "a" "* Alpha"))
     (let ((file (org-glance-overview:cached-file graph '(:tags ("work")))))
@@ -280,7 +268,7 @@ longer exists."
         (should (= 1 renders))))))
 
 (ert-deftest org-glance-test:overview-filtered-uses-separate-dir ()
-  "Filtered overviews live in their own directory; unfiltered stays at overview.org."
+  "Filtered overviews live in their own dir; unfiltered stays at overview.org."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "o1" "* Alpha :work:"))
     (let ((filtered (org-glance-overview:cached-file graph '(:tags ("work")))))
@@ -356,10 +344,8 @@ filter (same dimension replaces), and `clear' returns to the unfiltered view."
     (should (equal '("home" "work") (org-glance-graph:tags graph)))))
 
 (ert-deftest org-glance-test:overview-interactive-tag-filter ()
-  "Invoking the overview interactively prompts for a tag and overlays it on the
-ambient `org-glance-filter-spec' (so the overview honours the global filter);
-empty input means just the ambient filter.  The overlay is the same whichever
-view `org-glance-overview-default-view' selects, so both view-openers are stubbed."
+  "Interactive `org-glance-overview' overlays a prompted tag on the ambient
+`org-glance-filter-spec'; empty input keeps the ambient filter alone."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "o1" "* Alpha :work:"))
     (let* ((org-glance-graph graph)
@@ -386,9 +372,8 @@ view `org-glance-overview-default-view' selects, so both view-openers are stubbe
 ;;; View coherence: save flags stale, display boundary rebuilds (invariant 10).
 
 (ert-deftest org-glance-test:overview-stale-flag-on-save ()
-  "A materialized save FLAGS open overviews stale without rewriting them on the
-hot path: post-sync the buffer carries the stale flag, its content is unchanged,
-and its on-disk cache still holds the OLD render (no eager write)."
+  "A materialized save only FLAGS open overviews stale: buffer text and the
+on-disk cache both keep the OLD render."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
                              (org-glance-test:headline "a1" "* TODO Alpha :work:")
@@ -428,8 +413,7 @@ filtered-out headlines drop, and the stale flag clears."
           (should (s-contains? "TODO Beta" (buffer-string))))))))
 
 (ert-deftest org-glance-test:overview-newly-matching-on-display ()
-  "A save that makes a headline newly match a filtered overview surfaces it at
-the next display boundary."
+  "A filtered overview shows a newly matching headline at its next display."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "a1" "* TODO Alpha"))
     (org-glance-test:with-overview (done graph '(:state "DONE"))
@@ -441,8 +425,7 @@ the next display boundary."
         (should (s-contains? "DONE Alpha" (buffer-string)))))))
 
 (ert-deftest org-glance-test:overview-modified-buffer-not-reverted ()
-  "The data-loss guard: `--refresh-when-stale' never reverts a buffer with unsaved
-edits -- it leaves the edits intact and only flags the view stale."
+  "`--refresh-when-stale' never reverts unsaved edits; the view stays stale."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "a1" "* TODO Alpha"))
     (org-glance-test:with-overview (all graph nil)
@@ -458,8 +441,7 @@ edits -- it leaves the edits intact and only flags the view stale."
         (should org-glance-view--stale)))))
 
 (ert-deftest org-glance-test:overview-stale-buffer-refreshes-on-display ()
-  "The lazy net: an overview made stale by any other store mutation rebuilds
-when it is (re)displayed or selected."
+  "Any store mutation makes an overview rebuild when (re)displayed or selected."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "a1" "* Alpha"))
     (org-glance-test:with-overview (all graph nil)
@@ -480,7 +462,7 @@ when it is (re)displayed or selected."
     (should (eq (lookup-key map (kbd ",")) #'beginning-of-buffer))
     (should (eq (lookup-key map (kbd ".")) #'end-of-buffer))
     (should (eq (lookup-key map (kbd "RET")) #'org-glance-overview:materialize))
-    ;; `m' was dropped as a materialize key; in the table view it marks rows.
+    ;; `m' marks rows in the table view, so the overview leaves it unbound.
     (should-not (lookup-key map (kbd "m")))
     (should (eq (lookup-key map (kbd "j")) #'org-glance-overview:open))
     (should (eq (lookup-key map (kbd "!")) #'org-glance-overview:open))
@@ -506,8 +488,7 @@ when it is (re)displayed or selected."
         (should (s-contains? "Keeper" (buffer-string)))))))
 
 (ert-deftest org-glance-test:overview-planning-keys ()
-  "`C-c C-s' / `C-c C-d' in the overview set planning on the headline at point;
-`C-u' clears through the same interactive frontend."
+  "Overview `C-c C-s'/`C-c C-d' set the headline's planning; `C-u' clears it."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "p1" "* TODO Plan me"))
     (org-glance-test:with-overview (buf graph nil)
@@ -532,9 +513,8 @@ when it is (re)displayed or selected."
                                (org-glance-headline-metadata:deadline meta))))))))
 
 (ert-deftest org-glance-test:overview-self-sufficient-headline ()
-  "The overview heading carries agenda properties (priority cookie, single
-planning line), the relations with pretty kinds + LIVE target titles, and the
-plain body links -- agenda and link-following need no materialization."
+  "An overview heading carries priority, one planning line, relations (pretty
+kinds, LIVE titles) and plain links, needing no materialization (invariant 20)."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
       (org-glance-test:headline "c1" "* TODO [#A] Kebena Decaf :coffee:"

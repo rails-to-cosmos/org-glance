@@ -13,10 +13,8 @@
   (org-glance-graph:config-file graph "tag-metrics.eld"))
 
 (cl-defun org-glance-tag-metrics--read (graph)
-  "GRAPH's tag-metrics map: alist of TAG-STRING -> plist, or nil.
-A git-conflicted sidecar is union-merged (`--merge-maps') via
-`org-glance--heal-eld': config/*.eld gets no WAL union driver, so two machines
-that both captured leave conflict markers here."
+  "Return GRAPH's tag-metrics map, an alist TAG-STRING -> plist, or nil.
+A git-conflicted sidecar heals by union merge (invariant 8)."
   (org-glance--heal-eld
    (org-glance-tag-metrics--file graph)
    (lambda (sides)
@@ -27,11 +25,9 @@ that both captured leave conflict markers here."
   (org-glance--write-eld (org-glance-tag-metrics--file graph) map))
 
 (cl-defun org-glance-tag-metrics--merge-plists (a b)
-  "Union tag metric plists A and B.
-:created keeps the earliest, :modified the latest; :captures/:removals take the
-`max' (counters only increment, so `max' never inflates -- a sum would
-double-count the common base -- but may undercount distinct events, an accepted
-floor for this soft index); any other key prefers B's non-nil value."
+  "Union tag metric plists A and B (invariant 8).
+`:created' keeps the earliest, `:modified' the latest, and the counters the
+`max', which may undercount; any other key prefers B's non-nil value."
   (let ((out (copy-sequence a)))
     (cl-loop for (k v) on b by #'cddr do
              (let ((cur (plist-get out k)))
@@ -47,8 +43,7 @@ floor for this soft index); any other key prefers B's non-nil value."
     out))
 
 (cl-defun org-glance-tag-metrics--merge-maps (maps)
-  "Fold tag-metrics MAPS (each an alist TAG-STRING -> plist) into one union map.
-A tag present in several MAPS has its plists merged by `--merge-plists'."
+  "Fold tag-metrics MAPS (alists TAG-STRING -> plist) into one union map."
   (let (merged)
     (dolist (map maps (nreverse merged))
       (dolist (cell map)
@@ -59,10 +54,9 @@ A tag present in several MAPS has its plists merged by `--merge-plists'."
             (push (cons (car cell) (copy-sequence (cdr cell))) merged)))))))
 
 (cl-defun org-glance-tag-metrics--touch (graph specs)
-  "Record GRAPH's tag events for the just-appended SPECS.
-Live records bump :captures; tombstones (tags resolved from the still-current
-cache) bump :removals; both stamp :created once and :modified now.  Runs on
-`org-glance-graph-before-append-functions'."
+  "Record GRAPH's tag events for SPECS; hooked before each append.
+A live record bumps `:captures', a tombstone `:removals' (its cached tags);
+both stamp `:created' once and `:modified' now."
   (let ((now (current-time))
         (map (org-glance-tag-metrics--read graph))
         (changed nil))
@@ -90,10 +84,7 @@ cache) bump :removals; both stamp :created once and :modified now.  Runs on
 
 (cl-defun org-glance-tag-metrics--heal-on-open (graph)
   "Resolve a git-conflicted tag-metrics sidecar when GRAPH is opened.
-The lazy `--read' heal only fires on the next append (and, inside the demoted
-before-append hook, a declined prompt is swallowed); running it at open too
-resolves a synced-in conflict proactively, like the WAL resolver, under
-`org-glance-conflict-resolution'."
+Heal eagerly, like the WAL resolver, under `org-glance-conflict-resolution'."
   (let ((path (org-glance-tag-metrics--file graph)))
     (when (and (f-exists? path)
                (org-glance--conflict-marked? (f-read-text path 'utf-8)))
@@ -102,10 +93,8 @@ resolves a synced-in conflict proactively, like the WAL resolver, under
 (add-hook 'org-glance-graph-after-open-functions #'org-glance-tag-metrics--heal-on-open)
 
 (cl-defun org-glance-tag-metrics--ensure-created (graph live-tags)
-  "Ensure every tag in LIVE-TAGS has a :created in GRAPH's sidecar; return the map.
-Seed a missing one from the earliest content-blob mtime among its headlines
-(falling back to now) and persist once.  Stats blobs ONLY when something needs
-seeding, so warm calls do no I/O."
+  "Ensure LIVE-TAGS each have a `:created' in GRAPH's sidecar; return the map.
+Seed a missing one from its headlines' earliest blob mtime, else now."
   (let* ((map (org-glance-tag-metrics--read graph))
          (unseeded (cl-remove-if (lambda (tag) (plist-get (cdr (assoc tag map)) :created))
                                  live-tags)))
@@ -133,11 +122,9 @@ seeding, so warm calls do no I/O."
         map))))
 
 (cl-defun org-glance-tag-metrics:all (graph)
-  "Per-tag metrics for GRAPH's live tags.
-Alist of TAG-STRING -> plist (:count N :states ((STATE . N)...) :created TS
-:modified TS :captures N :removals N).  :count and :states are folded fresh from
-the live headlines; the wall-clock facts and counters come from the sidecar,
-seeding :created lazily for tags that predate the metrics index."
+  "Return per-tag metrics for GRAPH's live tags, seeding missing `:created'.
+Alist TAG-STRING -> (:count N :states ((STATE . N)...) :created TS :modified TS
+:captures N :removals N); `:count' and `:states' fold from live headlines."
   (let ((counts (make-hash-table :test 'equal))
         (states (make-hash-table :test 'equal)))
     (dolist (meta (org-glance-graph:headlines graph))

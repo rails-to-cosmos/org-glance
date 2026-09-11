@@ -17,8 +17,7 @@
   "The graph this buffer is a view of; its presence marks an org-glance view.")
 
 (defvar-local org-glance-view--stale nil
-  "Non-nil when this view is behind the store; shown as the `glance:stale'
-lighter.")
+  "Non-nil when this view is behind the store (the `glance:stale' lighter).")
 
 (defvar-local org-glance-view--stale-fn nil
   "Nullary predicate of the current view: non-nil when it is behind the store.")
@@ -35,8 +34,7 @@ lighter.")
 
 (cl-defun org-glance-view:stale-vs-file? (path)
   "Non-nil when the view's fill predates PATH's last change.
-No snapshot yet or PATH missing both count as stale -- when freshness is in
-doubt, rebuild."
+A missing snapshot or PATH counts as stale (invariant 10)."
   (let ((mtime (org-glance--file-mtime path)))
     (or (null org-glance-view--mtime)
         (null mtime)
@@ -50,25 +48,15 @@ doubt, rebuild."
 
 (defcustom org-glance-view-fill-frame t
   "When non-nil, opening an overview or table view fills the frame.
-The view's window becomes the sole one (via `delete-other-windows'), so a
-graph view takes over the frame.  Set to nil to leave the existing window
-layout untouched."
+The view's window becomes the sole one; nil leaves the layout untouched."
   :group 'org-glance
   :type 'boolean)
 
 (cl-defun org-glance-view:fill-frame (&optional already-in-view)
   "Delete the other windows when `org-glance-view-fill-frame' is non-nil.
-Call right after a view buffer has been displayed.  Acts only on a FRESH open:
-  - the buffer must be the one shown in the selected window (a no-op otherwise:
-    a view opened programmatically or in a stubbed test -- so it never deletes
-    windows around an unrelated buffer);
-  - ALREADY-IN-VIEW must be nil.  Pass it non-nil when the visit is a
-    re-navigation from WITHIN a graph view (a filter change, or the `T' toggle),
-    so re-filtering or switching views leaves a deliberate split alone.
-Filling the frame is cosmetic, so a `delete-other-windows' signal (a quirky
-side/atomic window arrangement) is caught -- it must never break opening a view,
-even under `debug-on-error' (hence a plain `condition-case', not
-`with-demoted-errors', which re-raises while debugging)."
+Call right after displaying a view; act only when it is in the selected window
+and ALREADY-IN-VIEW is nil (non-nil for a filter change or `T' in a view).  A
+`delete-other-windows' signal is only messaged, even under `debug-on-error'."
   (when (and org-glance-view-fill-frame
              (not already-in-view)
              (eq (window-buffer) (current-buffer)))
@@ -77,11 +65,9 @@ even under `debug-on-error' (hence a plain `condition-case', not
       (error (message "org-glance: fill-frame skipped: %S" err)))))
 
 (cl-defun org-glance-view:register (graph &key stale-fn reload-fn)
-  "Mark the current buffer a (fresh) view of GRAPH and wire its coherence.
-:STALE-FN is a nullary predicate (non-nil = behind the store); :RELOAD-FN
-re-fills the view from the graph.  Installs the display-boundary refresh on both
-window hooks, so the view pulls itself current whenever it is (re)displayed or
-selected."
+  "Mark the current buffer a fresh view of GRAPH and wire its coherence.
+:STALE-FN is a nullary predicate, non-nil when behind the store; :RELOAD-FN
+re-fills the view.  Refresh on every display or selection (invariant 10)."
   (setq-local org-glance-view--graph graph
               org-glance-view--stale nil
               org-glance-view--stale-fn stale-fn
@@ -102,23 +88,16 @@ selected."
     (force-mode-line-update)))
 
 (cl-defun org-glance-view:mark-graph-stale (graph)
-  "Flag every open view buffer of GRAPH stale.
-A boolean per view -- no disk write, no rebuild, no point movement -- so it is
-safe on the save hot path; each view clears the flag when it next refreshes at a
-display boundary (`org-glance-view--refresh-when-stale') or on `g'.
-`buffer-local-value' filters without entering every live buffer; only the
-matching views are visited."
+  "Flag every open view buffer of GRAPH stale, touching no disk, rows or point.
+Each view clears the flag on its next refresh (display boundary or `g')."
   (dolist (buffer (buffer-list))
     (when (eq (buffer-local-value 'org-glance-view--graph buffer) graph)
       (with-current-buffer buffer (org-glance-view--mark-stale)))))
 
 (cl-defun org-glance-view--refresh-when-stale (&optional window)
   "Re-fill WINDOW's (or the current) view iff it is behind the store.
-The lazy half of coherence: runs at a display boundary, where point is being
-re-established anyway.  A FILE-backed buffer with unsaved edits is never
-reverted -- it is only flagged stale, so no user data is discarded; a non-file
-projection (no `buffer-file-name') reloads freely.  A reload must never break
-the save that flagged it, so its errors are demoted."
+A modified file-backed buffer is only flagged stale (invariant 11); reload
+errors are demoted (invariant 9)."
   (with-current-buffer (if (windowp window) (window-buffer window) (current-buffer))
     (when (and org-glance-view--stale-fn
                (funcall org-glance-view--stale-fn))
@@ -130,9 +109,8 @@ the save that flagged it, so its errors are demoted."
 (cl-pushnew '(org-glance-view--stale " glance:stale") mode-line-misc-info :test #'equal)
 
 (cl-defun org-glance-view:pick-occurrence (graph id)
-  "Completing-read one of ID's occurrence snapshots and open it READ-ONLY.
-Snapshots are immutable history (`org-glance-graph:occurrences'); the buffer is
-named by the headline's title (id when the headline is gone) and the stamp."
+  "Completing-read one of ID's occurrence snapshots in GRAPH; open it read-only.
+The buffer is named by the headline's title (else ID) and the stamp."
   (let ((title (org-glance-graph:title-or-id graph id))
         (occurrences (org-glance-graph:occurrences graph id)))
     (unless occurrences
@@ -150,24 +128,19 @@ named by the headline's title (id when the headline is gone) and the stamp."
       (switch-to-buffer buf))))
 
 (cl-defun org-glance-view:column-at-point ()
-  "Key of the `table-view' column under point, or nil when point is off one.
-The single spelling of the text-property lookup every column-aware command
-\(`i', `C-c -', the single-row upsert) shares."
+  "Return the `table-view' column key under point, or nil."
   (get-text-property (point) 'table-view-col))
 
 (cl-defun org-glance-view:point-context ()
-  "Point's restorable position in a `table-view' buffer: (ID LINE COL).
-Capture it BEFORE a refill, restore with `org-glance-view:restore-point'."
+  "Return point's position in a `table-view' buffer as (ID LINE COL).
+Capture it before a refill; restore with `org-glance-view:restore-point'."
   (list (get-text-property (point) 'table-view-id)
         (line-number-at-pos)
         (org-glance-view:column-at-point)))
 
 (cl-defun org-glance-view:restore-point (id line &optional col)
-  "Return point to row ID, else to screen LINE; COL re-lands on that CELL.
-Every table refill restores the (row, cell) pair -- a bare row restore
-would drop the cursor to column 0, where the next `i' / `C-c -' would act
-on the wrong column.  A row that left the view (now DONE under an active
-filter) falls back to its screen line, org-agenda-style."
+  "Return point to row ID, else to screen LINE; COL re-lands on that cell.
+Every table refill restores the (row, cell) pair (invariant 24)."
   (unless (and id (table-view--goto-id id))
     (goto-char (point-min))
     (forward-line (1- line)))
@@ -175,12 +148,10 @@ filter) falls back to its screen line, org-agenda-style."
 
 (cl-defun org-glance-view:display-table (graph name spec handlers fill-fn
                                                &key stale-fn reload-fn)
-  "Display a `table-view' buffer NAME over GRAPH: the shared visit scaffold.
-SPEC/HANDLERS/FILL-FN go to `table-view-display'; `default-directory' is
+  "Display a `table-view' buffer NAME over GRAPH and return it.
+SPEC, HANDLERS and FILL-FN go to `table-view-display'; `default-directory' is
 GRAPH's root; the seeded sort applies; the frame fills unless entered from
-another view.  With STALE-FN (and RELOAD-FN), register for pull-refresh
-coherence; without, the view has no file-freshness anchor (`g' refreshes).
-Return the buffer."
+another view.  STALE-FN and RELOAD-FN register pull refresh, else `g' only."
   (let* ((from-view (and org-glance-view--graph t))
          (buf (table-view-display name spec handlers fill-fn)))
     (with-current-buffer buf
@@ -196,14 +167,12 @@ Return the buffer."
   "The `user-error' both staleness guards below raise.")
 
 (cl-defun org-glance-view:live-headline (graph id)
-  "Return the live `org-glance-headline' for ID in GRAPH, or `user-error'.
-A view is a cached snapshot that can outlive the graph, so ID may name a
-deleted headline; erroring here keeps nil out of the material layer."
+  "Return the live `org-glance-headline' for ID in GRAPH; `user-error' if gone."
   (or (org-glance-graph:headline graph id)
       (user-error "%s" org-glance-view--stale-message)))
 
 (cl-defun org-glance-view:live-metadata (graph id)
-  "Return the live headline metadata for ID in GRAPH, or `user-error' when gone."
+  "Return the live headline metadata for ID in GRAPH; `user-error' if gone."
   (or (org-glance-graph:live-meta graph id)
       (user-error "%s" org-glance-view--stale-message)))
 

@@ -22,11 +22,7 @@
 (defconst org-glance-headline:hash-ignore-properties (list "ORG_GLANCE_ID" "ORG_GLANCE_HASH" "ORG_GLANCE_CREATION_TIME"))
 
 (defconst org-glance-headline:hash-ignore-drawers (list "LOGBOOK")
-  "Drawer names whose contents never affect the content hash.
-Clock lines and state notes accumulate here while the headline's own text
-stands still, and nothing derived reads them.  Hashing them would churn the
-hash on every clock-in/out, invalidating the property index and every
-projection keyed on it.")
+  "Drawer names whose contents never affect the content hash (invariant 5).")
 
 (cl-defstruct (org-glance-headline (:predicate org-glance-headline?)
                                       (:conc-name org-glance-headline:))
@@ -51,24 +47,27 @@ projection keyed on it.")
   (-node-properties nil :read-only t :type (or list function)))
 
 (cl-defun org-glance--org-mode ()
-  "Enter `org-mode' for parsing org-glance content in the current buffer.
-Skips mode hooks (faster; avoids globalized minor modes like undo-tree) and
-forces `tab-width' to 8 -- which org's parser REQUIRES, and which a fresh buffer
-(inheriting the user's default, often 4) lacks; `org-mode' itself resets it via
-`kill-all-local-variables', so it is set here, after.  Tabs are disabled."
+  "Enter `org-mode' for parsing org-glance content, skipping mode hooks.
+Then set `tab-width' to 8, which org's parser requires and `org-mode' resets,
+and disable `indent-tabs-mode' (invariant 12)."
   (delay-mode-hooks (org-mode))
   (setq tab-width 8 indent-tabs-mode nil))
 
 (cl-defmacro org-glance-headline:with-contents (contents &rest forms)
+  "Run FORMS in a scratch org buffer holding CONTENTS, a headline or string.
+CONTENTS is evaluated once, in the caller's buffer."
   (declare (indent 1))
-  `(with-temp-buffer
-     (insert (cl-typecase ,contents
-               (org-glance-headline (org-glance-headline:contents ,contents))
-               (string ,contents)
-               (otherwise (error "Expected `org-glance-headline' or string, but got %s" (type-of ,contents)))))
-     (org-glance--org-mode)
-     (goto-char (point-min))
-     ,@forms))
+  (let ((value (gensym "contents")))
+    `(let ((,value ,contents))
+       (with-temp-buffer
+         (insert (cl-typecase ,value
+                   (org-glance-headline (org-glance-headline:contents ,value))
+                   (string ,value)
+                   (otherwise (error "Expected `org-glance-headline' or string, but got %s"
+                                     (type-of ,value)))))
+         (org-glance--org-mode)
+         (goto-char (point-min))
+         ,@forms))))
 
 (cl-defun org-glance-headline:at-point ()
   (save-excursion
@@ -99,25 +98,23 @@ forces `tab-width' to 8 -- which org's parser REQUIRES, and which a fresh buffer
   (alist-get property (org-glance-headline:properties headline) nil nil #'string=))
 
 (cl-defun org-glance-headline:node-properties (headline)
-  "Alist of HEADLINE's org `:PROPERTIES:' drawer properties (keys uppercased).
-Distinct from `org-glance-headline:properties', which parses body `KEY: value'
-lines for the extract feature; this reads the property drawer."
+  "Return HEADLINE's `:PROPERTIES:' drawer as an alist, keys uppercased.
+Body `KEY: value' lines are `org-glance-headline:properties'."
   (thunk-force (org-glance-headline:-node-properties headline)))
 
 (cl-defun org-glance-headline:node-property (property headline)
-  "Value of HEADLINE's drawer PROPERTY (an org `:PROPERTIES:' key), or nil.
-PROPERTY is matched case-insensitively (e.g. \"TAG\", \"ORG_GLANCE_ID\")."
+  "Return HEADLINE's drawer PROPERTY, matched case-insensitively, or nil."
   (alist-get (upcase property) (org-glance-headline:node-properties headline)
              nil nil #'string=))
 
 (cl-defun org-glance-headline:schedule (headline)
-  "Scheduled timestamp of HEADLINE as a raw org string, or nil."
+  "Return HEADLINE's scheduled timestamp as a raw org string, or nil."
   (cl-check-type headline org-glance-headline)
   (-some->> (org-glance-headline:-schedule headline)
     (org-element-property :raw-value)))
 
 (cl-defun org-glance-headline:deadline (headline)
-  "Deadline timestamp of HEADLINE as a raw org string, or nil."
+  "Return HEADLINE's deadline timestamp as a raw org string, or nil."
   (cl-check-type headline org-glance-headline)
   (-some->> (org-glance-headline:-deadline headline)
     (org-element-property :raw-value)))
@@ -130,17 +127,14 @@ PROPERTY is matched case-insensitively (e.g. \"TAG\", \"ORG_GLANCE_ID\")."
     (and (re-search-forward org-glance:key-value-pair-re nil t) t)))
 
 (defun org-glance-headline--buffer-encrypted? ()
-  "Non-nil if the current buffer's headline carries ciphertext.
-Either the whole body is `aes-encrypted' (the legacy layout) or at least one
-`#+begin_crypt' block is sealed (see `org-glance--crypt-block-regions')."
+  "Non-nil when a crypt block is sealed or the whole body is legacy ciphertext."
   (or (org-glance-headline--crypt-legacy-cipher-p)
       (org-glance--crypt-sealed-blocks-p)))
 
 (defun org-glance-headline--hash-log-drawers ()
   "Return the drawer names stripped before hashing.
-LOGBOOK plus any custom drawer `org-log-into-drawer' or
-`org-clock-into-drawer' names (t means LOGBOOK; an integer threshold names
-none)."
+`org-glance-headline:hash-ignore-drawers' plus those `org-log-into-drawer' and
+`org-clock-into-drawer' name; t means LOGBOOK, an integer none."
   (delete-dups
    (delq nil (append org-glance-headline:hash-ignore-drawers
                      (mapcar (lambda (v) (cond ((stringp v) v) ((eq v t) "LOGBOOK")))
@@ -148,8 +142,7 @@ none)."
                                    (bound-and-true-p org-clock-into-drawer)))))))
 
 (defun org-glance-headline--delete-log-drawers ()
-  "Delete the current buffer's logbook drawers, contents and all.
-MUTATES the buffer.  Rationale: `org-glance-headline:hash-ignore-drawers'."
+  "Delete the current buffer's log drawers, contents and all."
   (let ((case-fold-search t)
         (re (concat "^[ \t]*:" (regexp-opt (org-glance-headline--hash-log-drawers) t)
                     ":[ \t]*$")))
@@ -160,9 +153,8 @@ MUTATES the buffer.  Rationale: `org-glance-headline:hash-ignore-drawers'."
           (delete-region beg (min (point-max) (1+ (line-end-position)))))))))
 
 (defun org-glance-headline--buffer-hash ()
-  "Return the content hash of the current buffer.
-Strips the id/hash drawer properties and the LOGBOOK drawers first, so clocking
-leaves the hash alone.  MUTATES the buffer, so call it LAST when sharing one."
+  "Return the buffer's content hash, sans ignored properties and log drawers.
+Stripping them MUTATES the buffer: call it LAST on a shared one."
   (goto-char (point-min))
   (dolist (property org-glance-headline:hash-ignore-properties)
     (org-entry-delete nil property))
@@ -171,9 +163,7 @@ leaves the hash alone.  MUTATES the buffer, so call it LAST when sharing one."
     (with-temp-buffer (insert data) (buffer-hash))))
 
 (cl-defmacro org-glance-headline--lazy-fact (contents &rest body)
-  "A thunk computing BODY in an org buffer holding CONTENTS.
-The one spelling of a lazy content fact: the type check, the delay and the
-buffer.  Forced through `thunk-force' by the accessor that owns the slot."
+  "Return a thunk evaluating BODY in an org buffer holding string CONTENTS."
   (declare (indent 1))
   `(progn
      (cl-check-type ,contents string)
@@ -182,8 +172,14 @@ buffer.  Forced through `thunk-force' by the accessor that owns the slot."
 (cl-defun org-glance-headline--hash (contents)
   (org-glance-headline--lazy-fact contents (org-glance-headline--buffer-hash)))
 
+(defun org-glance-headline--buffer-properties ()
+  "Return the body `KEY: value' pairs of the headline filling a scratch buffer.
+Deletes its log drawers first: no fact sees what the hash ignores (invariant 5)."
+  (org-glance-headline--delete-log-drawers)
+  (org-glance--buffer-key-value-pairs))
+
 (cl-defun org-glance-headline--properties (contents)
-  (org-glance-headline--lazy-fact contents (org-glance--buffer-key-value-pairs)))
+  (org-glance-headline--lazy-fact contents (org-glance-headline--buffer-properties)))
 
 (cl-defun org-glance-headline--node-properties (contents)
   (org-glance-headline--lazy-fact contents (org-entry-properties nil 'standard)))
@@ -197,23 +193,17 @@ buffer.  Forced through `thunk-force' by the accessor that owns the slot."
     (-properties      . ,#'org-glance-headline--properties)
     (-node-properties . ,#'org-glance-headline--node-properties)
     (-encrypted?      . ,#'org-glance-headline--encrypted))
-  "Slots computed FROM `contents', each with the builder that recomputes it.
-A copy replacing `:contents' rebuilds them: each is a memo or a thunk closed
-over the OLD string.  A nil builder means drop the slot.  The pairs are
-spelled out because the names differ -- `-encrypted?' is built by
-`--encrypted'.  An explicit UPDATE-PLIST value wins.")
+  "Slots derived from `contents', as (SLOT . BUILDER); nil BUILDER resets SLOT.
+`org-glance-headline--copy' rebuilds them when it replaces `:contents'.")
 
 (defconst org-glance-headline--content-fact-keys
   '(:relations :links :linked :propertized :encrypted :range :hash)
   "Keys `org-glance-headline--content-facts' returns.
-The keyword FROM vocabulary of `org-glance-headline-metadata:fields'; a row
-naming anything else reads nil forever.  Checked at load with the table.")
+The FROM vocabulary of `org-glance-headline-metadata:fields', checked at load.")
 
 (cl-defun org-glance-headline--content-facts (headline)
-  "Return HEADLINE's content-derived facts, computed once.
-Reuses the plist its parse captured (`--buffer-content-facts'), else computes
-them in one org-mode buffer now.  The memo is keyed by the exact contents
-STRING, so a copy that rewrote contents recomputes."
+  "Return HEADLINE's content-derived facts plist.
+Reuse its `-facts' memo when keyed by its own (`eq') contents, else compute."
   (let ((memo (org-glance-headline:-facts headline)))
     (if (and memo (eq (car memo) (org-glance-headline:contents headline)))
         (cdr memo)
@@ -221,10 +211,10 @@ STRING, so a copy that rewrote contents recomputes."
         (org-glance-headline--buffer-content-facts)))))
 
 (cl-defun org-glance-headline--buffer-content-facts ()
-  "Return the content facts of the headline filling the CURRENT buffer.
-One plist keyed by `org-glance-headline--content-fact-keys', from a single
-org-mode pass: the links parse feeds both `linked?' and the relation edges.
-Hash runs LAST -- it deletes drawer properties in place."
+  "Return the `--content-fact-keys' plist of the headline filling the buffer.
+One pass over the text the hash reads: log drawers go first (invariant 5), the
+hash runs LAST.  Both mutate the buffer, so it must be a scratch one."
+  (org-glance-headline--delete-log-drawers)
   (goto-char (point-min))
   (pcase-let* ((links (org-glance--buffer-links))
                (`(,edges . ,plain) (org-glance--links-partition links)))
@@ -237,13 +227,10 @@ Hash runs LAST -- it deletes drawer properties in place."
           :hash        (org-glance-headline--buffer-hash))))
 
 (cl-defun org-glance-headline--buffer-range ()
-  "The BODY's first active date range as (FROM TO) with brackets, or nil.
-The headline's interval (`org-tr-regexp').  The search starts after the
-heading's meta-data (`org-end-of-meta-data'), so a range in the title, a
-planning line, the property drawer or the LOGBOOK never projects; ranges
-inside sealed crypt blocks are invisible by construction (invariant 14).
-The scan spans the whole record -- a parent's contents include its
-descendants (like every content fact), so a child's range can project."
+  "Return the body's first active range as bracketed (FROM TO), or nil.
+The search starts past the heading's meta-data, so title, planning and drawers
+never project; it spans descendants, so a child's range can.  Sealed crypt
+blocks hide theirs (invariant 14)."
   (save-excursion
     (goto-char (point-min))
     (org-end-of-meta-data t)
@@ -309,9 +296,8 @@ descendants (like every content fact), so a child's range can project."
                                  (funcall builder contents))))))
 
 (cl-defun org-glance-headline--copy (headline &rest update-plist)
-  "Copy HEADLINE, replacing the slots described by UPDATE-PLIST.
-Replacing `:contents' rebuilds the contents-derived slots
-(`org-glance-headline--contents-derived-slots') UPDATE-PLIST leaves out."
+  "Copy HEADLINE, replacing the slots UPDATE-PLIST names.
+A new `:contents' rebuilds each `--contents-derived-slots' slot left out."
   (declare (indent 1))
   (cl-check-type headline org-glance-headline)
   (when (plist-member update-plist :contents)
@@ -333,29 +319,25 @@ Replacing `:contents' rebuilds the contents-derived slots
            finally (return (apply #'make-org-glance-headline params))))
 
 (cl-defmacro org-glance-headline--rewrite-contents (headline &rest body)
-  "HEADLINE's contents after evaluating BODY in a buffer holding them."
+  "Return HEADLINE's contents, trimmed, after BODY edits them in an org buffer."
   (declare (indent 1))
   `(org-glance-headline:with-contents ,headline
      ,@body
      (s-trim (buffer-substring-no-properties (point-min) (point-max)))))
 
 (cl-defmacro org-glance-headline--map-contents (headline &rest body)
-  "A fresh `org-glance-headline' re-parsed from HEADLINE after BODY edits it.
-BODY runs in a temp org buffer holding HEADLINE's contents
-\(`org-glance-headline--rewrite-contents')."
+  "Return HEADLINE re-parsed after BODY edits its contents in an org buffer."
   (declare (indent 1))
   `(org-glance-headline--from-string
     (org-glance-headline--rewrite-contents ,headline ,@body)))
 
 (cl-defun org-glance-headline--body-region ()
-  "Cons (BEG . END) of the current buffer's headline body:
-end of meta-data (planning + drawers) to end of subtree."
+  "Return the headline body as (BEG . END): end of meta-data to end of subtree."
   (cons (save-excursion (goto-char (point-min)) (org-end-of-meta-data t) (point))
         (save-excursion (goto-char (point-min)) (org-end-of-subtree t) (point))))
 
 (defun org-glance-headline--crypt-legacy-cipher-p ()
-  "Non-nil when the buffer holds the pre-block layout:
-no crypt blocks, and the whole body is ciphertext (aes header at body start)."
+  "Non-nil for the legacy layout: no crypt block, ciphertext at body start."
   (and (null (org-glance--crypt-block-regions))
        (save-excursion
          (goto-char (point-min))
@@ -364,20 +346,16 @@ no crypt blocks, and the whole body is ciphertext (aes header at body start)."
 
 (defun org-glance-headline--crypt-upgrade-legacy ()
   "Wrap a legacy whole-body cipher in one crypt block; return non-nil if done.
-A wrapped bare cipher IS a sealed block (`org-glance--crypt-sealed?'), so after
-this the block path handles everything -- legacy blobs become block blobs at
-their first decrypt, with no downstream branching.  Structurally safe: a public
-body has no aes header, so the upgrade can never re-wrap unwrapped plaintext."
+The result is a sealed block.  A plaintext body never matches, so never wraps."
   (when (org-glance-headline--crypt-legacy-cipher-p)
     (let ((body (org-glance-headline--body-region)))
       (org-glance--crypt-wrap-region (car body) (cdr body)))
     t))
 
 (cl-defun org-glance-headline:encrypt (headline password)
-  "HEADLINE with its secret regions sealed under PASSWORD.
-When the body carries `#+begin_crypt' blocks, seal exactly those (plaintext
-between them stays public and indexable); with no blocks, wrap the whole body
-in one crypt block and seal it.  Already-encrypted HEADLINE returns unchanged."
+  "Return HEADLINE with its crypt blocks sealed under PASSWORD (invariant 14).
+With no block, first wrap the whole body in one.  An already-encrypted HEADLINE
+returns unchanged."
   (cl-check-type headline org-glance-headline)
   (cl-check-type password string)
   (if (org-glance-headline:encrypted? headline)
@@ -391,12 +369,9 @@ in one crypt block and seal it.  Already-encrypted HEADLINE returns unchanged."
       :-encrypted? t)))
 
 (cl-defun org-glance-headline:decrypt (headline password &optional unwrap)
-  "HEADLINE with its ciphertext opened under PASSWORD.
-A legacy whole-body cipher is first upgraded to one crypt block
-(`org-glance-headline--crypt-upgrade-legacy'); then every sealed block is
-unsealed.  Markers stay unless UNWRAP is non-nil -- rekeying keeps them, making
-a headline public removes them.  Signal on a wrong PASSWORD.  Not-encrypted
-HEADLINE returns unchanged."
+  "Return HEADLINE with every sealed block opened under PASSWORD.
+Upgrade a legacy whole-body cipher to one block first; UNWRAP drops the markers.
+A wrong PASSWORD signals a `user-error'; unencrypted HEADLINE returns as is."
   (cl-check-type headline org-glance-headline)
   (cl-check-type password string)
   (if (not (org-glance-headline:encrypted? headline))
@@ -418,8 +393,7 @@ HEADLINE returns unchanged."
              return headline)))
 
 (cl-defun org-glance--title-clean (title)
-  "Render org link markup in TITLE as plain text.
-\"[[target][desc]]\" becomes \"desc\"; a bare \"[[target]]\" becomes \"target\"."
+  "Return TITLE with each link rendered as its description, else its target."
   (cl-check-type title string)
   (replace-regexp-in-string
    org-link-bracket-re

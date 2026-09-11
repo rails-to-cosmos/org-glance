@@ -11,18 +11,13 @@
 (require 'org-glance-graph)
 
 (defvar org-glance-property-index--cache (make-hash-table :test #'equal)
-  "In-session memo: store-path -> hash-table id->(HASH :drawer AL :body AL).
-Avoids re-reading the sidecar per cell; our own writes keep it current, and the
-per-id content-hash check catches any change made in another process.")
+  "In-session memo: store-path -> hash-table id->(HASH :drawer AL :body AL).")
 
 (defvar org-glance-property-index--dirty (make-hash-table :test #'equal)
-  "Set of store-paths whose memo re-parsed a blob since the last flush.
-`--flush-if-dirty' writes only these, so a no-op refresh persists nothing.")
+  "Set of store-paths whose memo re-parsed a blob since the last flush.")
 
 (cl-defun org-glance-property-index--candidate-key? (key)
-  "Non-nil if drawer KEY is a genuine column candidate.
-Hides org-glance bookkeeping (`ORG_GLANCE_*') and org's synthesised CATEGORY
-\(which `node-properties' always injects), leaving user-authored drawer keys."
+  "Non-nil if drawer KEY is a user-authored column candidate (invariant 16)."
   (not (or (string-prefix-p "ORG_GLANCE_" key)
            (equal key "CATEGORY"))))
 
@@ -49,19 +44,15 @@ Hides org-glance bookkeeping (`ORG_GLANCE_*') and org's synthesised CATEGORY
               collect (cons id e)))))
 
 (cl-defun org-glance-property-index--flush-if-dirty (graph)
-  "Persist GRAPH's index only if a blob was re-parsed since the last flush.
-Table renders warm the memo via the columns' value-fns; this then writes at most
-once per render, and nothing at all when every id was already hash-valid."
+  "Persist GRAPH's index only if a blob was re-parsed since the last flush."
   (let ((key (org-glance-graph:store-path graph)))
     (when (gethash key org-glance-property-index--dirty)
       (org-glance-property-index--flush graph)
       (remhash key org-glance-property-index--dirty))))
 
 (cl-defun org-glance-property-index--entry (graph id)
-  "ID's index entry (HASH :drawer AL :body AL), refreshed on a content-hash miss.
-Mutates the in-session table; a cold/stale/absent id costs ONE blob parse (both
-alists at once).  A gone id is not cached.  Does not flush -- a batch op
-\(`:ensure' / `:keys') or a table render (`--flush-if-dirty') persists."
+  "Return GRAPH's entry (HASH :drawer AL :body AL) for ID, parsed on a miss.
+A hash miss costs one blob parse, memoized unless ID is gone; never flushes."
   (let* ((h (org-glance-property-index--table graph))
          (meta (org-glance-graph:live-meta graph id))
          (hash (and meta (org-glance-headline-metadata:hash meta)))
@@ -96,15 +87,13 @@ alists at once).  A gone id is not cached.  Does not flush -- a batch op
              (org-glance-property-index:drawer graph id) nil nil #'string=))
 
 (cl-defun org-glance-property-index:ensure (graph ids)
-  "Refresh the index for IDS (parse the stale/absent ones) and flush if changed."
+  "Refresh GRAPH's index for IDS (parse stale/absent ones); flush if changed."
   (dolist (id ids) (org-glance-property-index--entry graph id))
   (org-glance-property-index--flush-if-dirty graph))
 
 (cl-defun org-glance-property-index:keys (graph ids)
-  "Sorted union of candidate drawer KEYS across IDS.
-The candidate set for the table's `C-c +' column prompt: every user-authored
-drawer key the headlines matching the current filter carry (bookkeeping and
-CATEGORY excluded).  Read-only w.r.t. disk -- a following render persists."
+  "Return the sorted union of candidate drawer keys across IDS in GRAPH.
+These feed the table's `C-c +' column prompt; nothing is written to disk."
   (org-glance--sorted-distinct
    (cl-loop for id in ids
             append (cl-loop for kv in (org-glance-property-index:drawer graph id)
@@ -112,8 +101,7 @@ CATEGORY excluded).  Read-only w.r.t. disk -- a following render persists."
                             collect (car kv)))))
 
 (cl-defun org-glance-property-index--prune-legacy (graph)
-  "Delete the pre-cache/-split location of this module's sidecar, if present.
-`org-glance-graph-after-open-functions' hook; the module owns its filename."
+  "Delete GRAPH's sidecar from its legacy config location, on graph open."
   (let ((legacy (org-glance-graph:config-file graph "property-index.eld")))
     (when (f-exists? legacy) (f-delete legacy))))
 (add-hook 'org-glance-graph-after-open-functions

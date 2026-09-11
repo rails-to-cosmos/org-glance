@@ -17,8 +17,7 @@
   :type 'directory)
 
 (defvar org-glance-graph nil
-  "Current global graph instance.
-Constructed by `org-glance-init'; nil until the system is initialized.")
+  "Current global graph instance; nil until `org-glance-init' builds it.")
 
 (cl-defun org-glance-initialized? ()
   "Return the global graph if the system is initialized, else nil."
@@ -27,23 +26,20 @@ Constructed by `org-glance-init'; nil until the system is initialized.")
 (declare-function org-glance-init "org-glance")
 
 (cl-defun org-glance-ensure-init ()
-  "Return the global graph, initializing org-glance on first use.
-The guard commands run before touching the graph: when unbuilt, run
-`org-glance-init' (autoloaded) so a fresh install needs no manual init."
+  "Return the global graph, running `org-glance-init' on first use."
   (or org-glance-graph
       (progn (org-glance-init) org-glance-graph)))
 
 (defcustom org-glance-overview-default-view 'org-glance-table
   "Which view `org-glance-overview' opens by default.
-Value `org-glance-table' opens the sortable table dashboard (default); value
-`org-glance-overview' opens the classic org-text overview (backward-compatible).
-`T' toggles either view to the other.  Legacy values `table'/`org' still work."
+`org-glance-table' (table dashboard) or `org-glance-overview' (org text); `T'
+toggles it.  The legacy values `table' and `org' still work."
   :group 'org-glance
   :type '(choice (const :tag "Table dashboard (org-glance-table)" org-glance-table)
                  (const :tag "Org-text overview (org-glance-overview)" org-glance-overview)))
 
 (cl-defun org-glance-overview--default-table? ()
-  "Non-nil when `org-glance-overview-default-view' selects the table dashboard."
+  "Non-nil when `org-glance-overview-default-view' is the table dashboard."
   (memq org-glance-overview-default-view '(org-glance-table table)))
 
 (provide 'org-glance-core)

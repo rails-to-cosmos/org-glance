@@ -15,7 +15,8 @@ argument in [[file:proposals][docs/proposals/]].
    union-merged stores resolve the wrong record; heal misclassifies debris.
 
 2. *Atomic writes; MANIFEST swap is the commit point.*  Every store write is
-   temp-then-rename (=org-glance-graph--atomic-write=, =file-precious-flag= on blobs);
+   temp-then-rename (=org-glance--atomic-write=, =file-precious-flag= on blobs), and so
+   is every =.eld= sidecar (=org-glance--write-eld=); a failed write removes its temp;
    compaction commits the MANIFEST *before* truncating the open segment.  Violation:
    crash/ENOSPC truncates data or resurrects a tombstoned headline.
 
@@ -25,8 +26,10 @@ argument in [[file:proposals][docs/proposals/]].
 
 4. *Schema tables are the single source of truth.*
    =org-glance-headline-metadata:fields= drives constructor + serialize + deserialize;
-   row order IS the JSON key order, so new fields append at the END only, and the
-   load-time guard checks slot ORDER against the struct.  =org-glance-filter:table=
+   row order IS the JSON key order, so new fields append at the END only.  The
+   load-time guard =org-glance-headline-metadata--check-fields= checks slot ORDER
+   against the struct, that each FROM names a known content fact, and that a
+   list-typed slot has a vector ENCODE kind.  =org-glance-filter:table=
    drives keys + predicate + canonicalisation.  A list-valued field MUST encode to a
    JSON *vector* (=org-glance-graph--encode= builds =vector=s): =--append= calls
    =json-serialize= OUTSIDE the error-demoted hook, so a nil/list encoder crashes
@@ -43,7 +46,9 @@ argument in [[file:proposals][docs/proposals/]].
    that fallback.  The content hash strips the id/hash properties
    (=org-glance-headline:hash-ignore-properties=) and the LOGBOOK drawers
    (=org-glance-headline:hash-ignore-drawers=), so clocking never churns it or the
-   caches keyed on it.  The =org-glance-material:= body link is canonical; =relations=
+   caches keyed on it; every derived fact reads the same text
+   (=--buffer-content-facts=, =--buffer-properties= delete the log drawers first), or
+   a clock-in changes a cached value under an unchanged hash.  The =org-glance-material:= body link is canonical; =relations=
    AND =links= metadata are projections recomputed on save/reindex.  Occurrence
    snapshots (=data/<id>/occurrences/=) are canonical content — immutable, GC'd with
    the id dir at compaction, so a tombstoned id's snapshots linger until then.
@@ -216,17 +221,22 @@ argument in [[file:proposals][docs/proposals/]].
     parses; agenda and link-following work without materializing.  Violation: agenda
     misses planning, or the render cost becomes O(blobs).
 
-21. *Reserved properties are managed keys.*  The keys in
-    =org-glance-material-hidden-properties= belong to org-glance: concealed in material
-    buffers (overlays only — file and store keep them), hand edits reverted at
-    =before-save= with a warning (=org-glance-material--restore-reserved=, the sole
-    sanctioned in-buffer edit under inv 11; it touches only the heading drawer, disjoint
-    from the crypt seal's body blocks).  Violation: a hand-edited or region-killed
-    =ORG_GLANCE_ID= silently orphans the blob from its WAL id.
+21. *Managed drawer keys live in the file, never in the material buffer.*  The keys in
+    =org-glance-material-hidden-properties= (snapshotted per buffer at open,
+    =org-glance-material--managed-keys=) are removed from the heading's drawer at open
+    and after every revert (=org-glance-material--strip-reserved=, outside undo, modified
+    flag kept), stashed verbatim (=--reserved-lines=), and spliced into every write by
+    =--reserved-annotations= on =write-region-annotate-functions= — into the heading's
+    drawer, else a fresh one after heading + planning.  A material buffer reverts with
+    modes preserved (=org-glance-material--revert=).  Violation: a managed line kept as
+    buffer text is editable — DEL at the body's start eats the drawer's closing newline, a
+    line typed under the heading detaches the drawer, and a save writes a second id
+    drawer; a mode re-run on revert kills the stash and the next save writes a blob with
+    no id.
 
 22. *Material saves rewrite user content only through announced normalize hooks.*  The
-    =before-save-hook= rewrites are exactly: the reserved-property revert
-    (=org-glance-material--restore-reserved=), the case-twin tag collapse
+    =before-save-hook= rewrites are exactly: dropping a hand-typed managed line
+    (=org-glance-material--drop-hand-typed-reserved=), the case-twin tag collapse
     (=org-glance-material--dedupe-tags=) — each raising a =display-warning= — and the
     crypt seal (inv 14).  Violation: a silent rewrite clobbers user text with no trace
     (collides with inv 11).
@@ -273,9 +283,9 @@ argument in [[file:proposals][docs/proposals/]].
 * Confirmed by the 2026-07-26 sweep
 
 27. *Save-hook depth ordering is load-bearing.*  =org-glance-material:sync= runs at depth
-    0, =--decrypt-buffer= at 90, =--hide-reserved-properties= at 100, so =sync= reads the
-    buffer while it is still SEALED and the WAL, the property index and every projection
-    see ciphertext — the mechanism behind inv 14.  Violation: lowering =--decrypt-buffer=
+    0 and re-parses the FILE, =--decrypt-buffer= at 90 unseals the buffer after it, so
+    the WAL, the property index and every projection see ciphertext — the mechanism
+    behind inv 14.  Violation: lowering =--decrypt-buffer=
     below =sync= indexes decrypted plaintext into =headlines.jsonl= and the property
     cache.
 

@@ -26,8 +26,8 @@
     (should (null org-glance-filter-spec))))
 
 (ert-deftest org-glance-test:ui-toggle-view ()
-  "The transient view toggle flips `org-glance-overview-default-view' between the
-table and org-text view (round-tripping), and maps a legacy value to canonical."
+  "The transient view toggle round-trips `org-glance-overview-default-view'.
+It flips between table and org-text view and maps a legacy value to canonical."
   (let ((org-glance-overview-default-view 'org-glance-table))
     (should (equal "table" (org-glance-transient--view-mode)))
     (org-glance-transient:toggle-view)

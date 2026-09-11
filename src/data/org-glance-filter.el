@@ -12,17 +12,13 @@
 (require 'org-glance-graph)
 
 (defcustom org-glance-filter-spec '(:done nil :archived nil :commented nil)
-  "Ambient filter applied to headline actions, as a normalized filter spec.
-Default: active (not-done), unarchived, uncommented headlines.  Set via the
-`org-glance-transient' transient (clear with `c' to see everything);
-consumed by the picker commands (materialize / open / extract) and overlaid
-onto the overview and agenda.  See `org-glance-filter:predicate' for the
-spec language."
+  "Ambient normalized filter spec for the pickers, overview and agenda.
+Default: active, unarchived, uncommented headlines.  `org-glance-transient'
+sets it and `c' there clears it.  Syntax: `org-glance-filter:predicate'."
   :group 'org-glance
   :type 'sexp)
 
 (defconst org-glance-filter:table
-  ;; Row: KEY :match KIND :accessor FN :canon KIND (nil :canon = as-is).
   `((:tags           :match member-all     :canon tags
                      :accessor ,#'org-glance-headline-metadata:tags)
     (:state          :match state-equal
@@ -48,23 +44,18 @@ spec language."
     (:id-any         :match member         :canon string-list :transient t
                      :accessor ,#'org-glance-headline-metadata:id)
     (:where          :transient t))
-  "The single source of truth for the headline filter language.
-Drives `org-glance-filter:keys', `:predicate' and `--canonical-pairs'
-together -- previously each new key meant four lockstep edits, two of them
-silently forgettable (a missing predicate clause made the filter match
-EVERYTHING; a missing canonicalisation case fragmented the cache).  Adding a
-plain value-key = one row here.  `:title' is exact; `:title-contains' is a
-case-insensitive substring.")
+  "The single source of truth for the headline filter language (invariant 4).
+Row: KEY :match KIND :accessor FN :canon KIND (nil = as-is) :transient FLAG.
+Drives `org-glance-filter:keys', `:predicate' and `--canonical-pairs'.
+`:title' is exact; `:title-contains' is a case-insensitive substring.")
 
 (defconst org-glance-filter--structural-keys '(:done :done-keywords :where)
   "Keys `org-glance-filter:predicate' handles outside the `:match' dispatch.
-`:done' is parameterised by `:done-keywords'; `:where' is a raw predicate.
-Every other row MUST declare a `:match' kind: a nil one builds no clause, so
-the key constrains nothing and the filter matches EVERYTHING.")
+`:done' reads `:done-keywords'; `:where' is a raw predicate.
+Every other row MUST declare a `:match' kind, or its key constrains nothing.")
 
 (cl-defun org-glance-filter--check-table (table)
-  "Signal unless TABLE is a valid filter table; else return t.
-Runs at load over the real table; tests call it with broken ones."
+  "Signal unless TABLE is a valid filter table; else return t."
   (cl-loop for (key . props) in table
            for kind = (plist-get props :match)
            do (cond ((memq key org-glance-filter--structural-keys)
@@ -80,14 +71,12 @@ Runs at load over the real table; tests call it with broken ones."
 
 (defconst org-glance-filter:keys
   (mapcar #'car org-glance-filter:table)
-  "Recognised keys in a normalised filter spec (`:tag' folds into `:tags').
-Derived from `org-glance-filter:table'.")
+  "Recognised keys in a normalised filter spec (`:tag' folds into `:tags').")
 
 (cl-defun org-glance-filter:normalize-spec (filter)
-  "Coerce FILTER into a canonical plist spec (or nil for \"all\").
-nil/() stays nil; a bare tag symbol/string becomes `(:tags (TAG))'; a plist is
-returned with any `:tag' folded into `:tags' so downstream code only ever sees
-`:tags'.  Signals an error on an unrecognised key."
+  "Coerce FILTER into a canonical plist spec, or nil for \"all\".
+A bare tag symbol or string becomes `(:tags (TAG))'; a plist's `:tag' folds
+into `:tags'.  Signal an error on an unrecognised key."
   (cond
    ((null filter) nil)
    ((symbolp filter) (list :tags (list (format "%s" filter))))
@@ -139,9 +128,8 @@ returned with any `:tag' folded into `:tags' so downstream code only ever sees
     (_ (error "org-glance: filter key has no :match kind: %S" kind))))
 
 (cl-defun org-glance-filter:predicate (filter)
-  "Return a predicate (lambda (METADATA) -> generalized-boolean) for FILTER.
-A nil/empty filter yields a predicate that accepts every headline.  Each present
-clause must hold (logical AND).  See `org-glance-filter:table'."
+  "Return a predicate on headline metadata that ANDs FILTER's clauses.
+A nil or empty FILTER accepts every headline; keys: `org-glance-filter:table'."
   (let ((spec (org-glance-filter:normalize-spec filter))
         (clauses nil))
     (when (plist-member spec :done)
@@ -167,8 +155,7 @@ clause must hold (logical AND).  See `org-glance-filter:table'."
       (lambda (_m) t))))
 
 (cl-defun org-glance-filter--canon-value (key value)
-  "Canonical form of VALUE under KEY, per the table's :canon kind.
-Shared by the spec identity and the cache key (a hash of that identity)."
+  "Return VALUE canonicalized for KEY per the table's `:canon' kind."
   (pcase (plist-get (alist-get key org-glance-filter:table) :canon)
     ('tags (sort (mapcar #'org-glance--downcased-string value) #'string<))
     ('string-list (sort (org-glance--strings value) #'string<))
@@ -176,18 +163,15 @@ Shared by the spec identity and the cache key (a hash of that identity)."
     (_ value)))
 
 (cl-defun org-glance-filter--canonical-pairs (spec)
-  "Order-independent (KEY . VALUE) alist for normalised SPEC.
-Keys sorted; values canonicalised per the table so that `prin1' renders them
-unambiguously."
+  "Return normalised SPEC as a key-sorted alist with canonical values."
   (sort (cl-loop for (k v) on spec by #'cddr
                  collect (cons k (org-glance-filter--canon-value k v)))
         (lambda (a b) (string< (symbol-name (car a)) (symbol-name (car b))))))
 
 (cl-defun org-glance-filter--link-value (key v)
-  "Link value string V coerced for filter KEY, per the table's kinds.
-Lists are comma-separated; booleans read t/nil; planning keys read
-present/absent (the clause's own vocabulary); `:priority' reads a letter;
-`:where' (a function) is not linkable."
+  "Coerce link value string V for filter KEY per the table's kinds.
+Lists split on commas, booleans read t/nil, planning keys present/absent and
+`:priority' a letter; `:where' signals an error."
   (let* ((props (alist-get key org-glance-filter:table))
          (kind (plist-get props :match)))
     (cond
@@ -205,9 +189,8 @@ present/absent (the clause's own vocabulary); `:priority' reads a letter;
      (t v))))
 
 (cl-defun org-glance-filter:from-link-path (path)
-  "Filter spec encoded in an overview link PATH: \"TAG[?KEY=VALUE&...]\".
-TAG empty or `all' adds no tag constraint.  KEYs are the filter-table keys;
-unknown keys error via `normalize-spec'.  Returns a normalized spec."
+  "Return the normalized spec in overview link PATH \"TAG[?KEY=VALUE&...]\".
+An empty or `all' TAG adds no tag; an unknown KEY signals an error."
   (pcase-let* ((`(,head ,query) (split-string path "[?]"))
                (spec (unless (member (downcase head) '("" "all"))
                        (list :tags (list (downcase head))))))
@@ -223,26 +206,22 @@ unknown keys error via `normalize-spec'.  Returns a normalized spec."
     (org-glance-filter:normalize-spec spec)))
 
 (cl-defun org-glance-filter:transient? (filter)
-  "Non-nil when FILTER carries a `:transient' key (see the table).
-Transient views are one-off: never overview-cached, no persisted table config."
+  "Non-nil when any FILTER key is table-flagged `:transient' (invariant 17)."
   (cl-loop for (k _v) on (org-glance-filter:normalize-spec filter) by #'cddr
            thereis (plist-get (alist-get k org-glance-filter:table) :transient)))
 
 (cl-defun org-glance-filter:identity (filter)
-  "Unambiguous printed identity of FILTER's canonical form.
-Two filters are \"the same\" when these identities match (the directory
-name is a lossy hash prefix)."
+  "Return the unambiguous printed identity of FILTER's canonical form.
+Equal identities mean the same filter."
   (->> filter
        org-glance-filter:normalize-spec
        org-glance-filter--canonical-pairs
        prin1-to-string))
 
 (cl-defun org-glance-filter:read-state (&optional graph)
-  "Completing-read a todo-state choice for the filter.
-Offers `active' / `done' / `all' plus GRAPH's concrete todo states.  Returns the
-symbol `active', `done' or `all', or a concrete state string.  Specials win on a
-\(rare) name clash with a lowercase concrete state.  Signals `user-error' on
-empty input."
+  "Read a todo-state filter choice: `active', `done', `all' or a GRAPH state.
+Return the symbol or the state string; specials win a lowercase name clash.
+Signal `user-error' on empty input."
   (let* ((states (and graph (org-glance-graph:states graph)))
          (concrete (cl-remove-if (lambda (s) (member s '("active" "done" "all"))) states))
          (choice (completing-read "Todo state: "
@@ -251,10 +230,8 @@ empty input."
     (pcase choice ("active" 'active) ("done" 'done) ("all" 'all) (_ choice))))
 
 (cl-defun org-glance-filter:set-state (spec choice)
-  "Return SPEC with its todo-state dimension replaced by CHOICE.
-CHOICE is `active'/`done'/`all' or a concrete state string (see `:read-state');
-it covers both the `:state' and `:done' keys.  `all' clears the dimension;
-`active'/`done' set `:done'; a concrete state string sets `:state'."
+  "Return SPEC with its todo-state dimension (`:state', `:done') set to CHOICE.
+CHOICE `all' clears it, `active'/`done' set `:done', a state string `:state'."
   (let ((s (org-glance-filter:normalize-spec spec)))
     (cl-remf s :state)
     (cl-remf s :done)
@@ -274,9 +251,7 @@ it covers both the `:state' and `:done' keys.  `all' clears the dimension;
       (plist-put s :title-contains needle))))
 
 (cl-defun org-glance-filter:merge (base extra)
-  "Merge normalized EXTRA's clauses onto BASE; EXTRA wins on a key conflict.
-Both are coerced via `:normalize-spec'.  Used to overlay a one-off choice (a
-prompted tag) onto the ambient `org-glance-filter-spec'."
+  "Merge EXTRA's clauses onto BASE, both normalized; EXTRA wins a key conflict."
   (let ((s (org-glance-filter:normalize-spec base)))
     (cl-loop for (k v) on (org-glance-filter:normalize-spec extra) by #'cddr
              do (setq s (plist-put s k v)))
@@ -301,17 +276,12 @@ prompted tag) onto the ambient `org-glance-filter-spec'."
            finally return (if parts (s-join ", " parts) "all")))
 
 (cl-defun org-glance-filter:tags (filter)
-  "Return the :tags from FILTER as a list of downcased symbols, or nil.
-Tags are canonically downcased (`org-glance-tag?'); downcasing here means a
-mixed-case filter value yields a valid tag for capture / config lookup rather
-than a spurious symbol."
+  "Return FILTER's `:tags' as downcased tag symbols (invariant 13), or nil."
   (let ((tags (plist-get (org-glance-filter:normalize-spec filter) :tags)))
     (mapcar #'org-glance-tag:from-string tags)))
 
 (cl-defun org-glance-filter:sole-tag (filter)
-  "Return FILTER's sole tag as a string, or nil unless it names exactly one.
-Backs the prompt-free `C' in overview / table: a single-tag view names its tag,
-while the unfiltered or multi-tag view has none, so the caller re-prompts."
+  "Return FILTER's sole tag as a string, or nil unless it names exactly one."
   (let ((tags (org-glance-filter:tags filter)))
     (when (and tags (null (cdr tags)))
       (symbol-name (car tags)))))

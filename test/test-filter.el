@@ -3,7 +3,7 @@
 (require 'test-helpers)
 
 (defun org-glance-test:meta (id state)
-  "A bare metadata record carrying ID and todo STATE, for predicate tests."
+  "Return a bare metadata record with ID and todo STATE."
   (make-org-glance-headline-metadata :id id :state state :title id))
 
 (ert-deftest org-glance-test:filter-predicate-state ()
@@ -22,7 +22,7 @@
       (should (funcall p todo)) (should (funcall p done)) (should (funcall p none)))))
 
 (ert-deftest org-glance-test:filter-set-state ()
-  "set-state replaces the whole todo-state dimension (:state and :done)."
+  "`set-state' replaces the whole todo-state dimension (:state and :done)."
   (should (equal '(:done nil) (org-glance-filter:set-state nil 'active)))
   (should (equal '(:done t)   (org-glance-filter:set-state nil 'done)))
   (should (equal '(:state "TODO") (org-glance-filter:set-state nil "TODO")))
@@ -32,21 +32,21 @@
   (should (equal '(:tags ("work")) (org-glance-filter:set-state '(:tags ("work") :done nil) 'all))))
 
 (ert-deftest org-glance-test:filter-set-substring ()
-  "set-substring sets `:title-contains', or clears it on empty input."
+  "`set-substring' sets `:title-contains', or clears it on empty input."
   (should (equal '(:title-contains "foo") (org-glance-filter:set-substring nil "foo")))
   (should (null (org-glance-filter:set-substring '(:title-contains "foo") "")))
   (should (equal '(:done nil :title-contains "x")
                  (org-glance-filter:set-substring '(:done nil) "x"))))
 
 (ert-deftest org-glance-test:filter-merge ()
-  "merge overlays EXTRA onto BASE; EXTRA wins on a key conflict."
+  "`merge' overlays EXTRA onto BASE; EXTRA wins on a key conflict."
   (should (equal '(:done nil :tags ("work")) (org-glance-filter:merge '(:done nil) "work")))
   (should (equal '(:done nil) (org-glance-filter:merge '(:done nil) nil)))
   (should (equal '(:tags ("a")) (org-glance-filter:merge nil "a")))
   (should (equal '(:done t) (org-glance-filter:merge '(:done nil) '(:done t)))))
 
 (ert-deftest org-glance-test:filter-sole-tag ()
-  "sole-tag names the tag only for a single-tag filter (downcased); else nil."
+  "`sole-tag' names the tag only for a single-tag filter (downcased); else nil."
   (should (string= "work" (org-glance-filter:sole-tag '(:tags ("work")))))
   (should (string= "work" (org-glance-filter:sole-tag "work")))
   (should (string= "work" (org-glance-filter:sole-tag '(:tags ("Work")))))
@@ -55,7 +55,7 @@
   (should-not (org-glance-filter:sole-tag '(:tags ("a" "b")))))
 
 (ert-deftest org-glance-test:filter-describe ()
-  "describe renders a compact human label for a spec."
+  "`describe' renders a compact human label for a spec."
   (should (string= "all" (org-glance-filter:describe nil)))
   (should (string= "active" (org-glance-filter:describe '(:done nil))))
   (should (string= "done" (org-glance-filter:describe '(:done t))))
@@ -65,7 +65,7 @@
   (should (string= "id-any(2)" (org-glance-filter:describe '(:id-any ("a" "b"))))))
 
 (ert-deftest org-glance-test:filter-read-state ()
-  "read-state maps the specials and concrete states; errors on empty input."
+  "`read-state' maps the specials and concrete states; errors on empty input."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
                              (org-glance-test:headline "r1" "* TODO a")
@@ -81,10 +81,8 @@
       (should-error (org-glance-filter:read-state graph) :type 'user-error))))
 
 (ert-deftest org-glance-test:filter-read-state-collision ()
-  "A concrete state whose name collides with a special (active/done/all) folds
-into that special: it is offered exactly once and selecting it yields the
-special symbol, never the literal string.  Documents the deliberate limitation
-\(org todo keywords are uppercase by convention, so this is essentially theoretical)."
+  "A concrete state named like a special (active/done/all) folds into it.
+It is offered once and reads as the special symbol, a deliberate limitation."
   (cl-letf (((symbol-function 'org-glance-graph:states)
              (lambda (&rest _) '("active" "TODO"))))
     (org-glance-test:offering (offered "active")
@@ -93,9 +91,8 @@ special symbol, never the literal string.  Documents the deliberate limitation
       (should (member "TODO" offered)))))
 
 (ert-deftest org-glance-test:filter-archived-commented ()
-  "`:archived' / `:commented' filter on org's ARCHIVE tag and COMMENT keyword;
-the metadata flags round-trip through serialize -> disk -> deserialize, and a
-record from before the fields reads nil (kept by the nil filter)."
+  "`:archived' and `:commented' filter on org's ARCHIVE tag and COMMENT keyword.
+The flags survive a reopen; a record predating them reads nil."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
       (org-glance-test:headline "live" "* TODO Live")
@@ -121,8 +118,8 @@ record from before the fields reads nil (kept by the nil filter)."
       (should-not (org-glance-headline-metadata:commented? meta)))))
 
 (ert-deftest org-glance-test:filter-spec-defcustom ()
-  "`org-glance-filter-spec' is a defcustom whose default hides done, archived
-and commented headlines; `describe' renders the flags compactly."
+  "Custom `org-glance-filter-spec' hides done, archived, commented by default.
+`describe' renders the flags compactly."
   (should (custom-variable-p 'org-glance-filter-spec))
   (should (equal '(:done nil :archived nil :commented nil)
                  (default-value 'org-glance-filter-spec)))
@@ -133,9 +130,8 @@ and commented headlines; `describe' renders the flags compactly."
                        (org-glance-filter:describe '(:archived t)))))
 
 (ert-deftest org-glance-test:filter-table-guard-fires ()
-  "The load-time guard rejects a row that would never reach `predicate\'.
-A nil `:match\' builds no clause, so the key silently constrains nothing and
-the filter matches EVERYTHING -- the regression the table exists to prevent."
+  "The load-time guard rejects a row that would never reach `predicate'.
+A nil `:match' constrains nothing, so the filter would match everything."
   (should (org-glance-filter--check-table org-glance-filter:table))
   (should-error (org-glance-filter--check-table
                  '((:colour :accessor identity)))

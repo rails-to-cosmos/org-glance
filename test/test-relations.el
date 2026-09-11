@@ -3,8 +3,7 @@
 (require 'test-helpers)
 
 (ert-deftest org-glance-test:relations-edges-from-links ()
-  "material links (kinded + kindless), legacy visit links, and dedup; other
-link types contribute no edge."
+  "Only material and legacy visit links yield edges, kinded or not, deduped."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
       (org-glance-test:headline "src" "* TODO Source"
@@ -18,8 +17,7 @@ link types contribute no edge."
                    (org-glance-test:field graph "src" relations)))))
 
 (ert-deftest org-glance-test:relations-round-trip-deserialized ()
-  "Edges survive serialize→disk→deserialize; the `:refers-to' filter matches on
-DESERIALIZED structs (the inner-vector normalization trap)."
+  "Relations survive a reopen and `:refers-to' matches deserialized structs."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
       (org-glance-test:headline "a" "* TODO A :book:"
@@ -40,8 +38,8 @@ DESERIALIZED structs (the inner-vector normalization trap)."
     (should (null (org-glance-headline-metadata:relations meta)))))
 
 (ert-deftest org-glance-test:relations-id-any-filter-and-identity ()
-  "`:id-any' selects the listed ids; its identity is order-insensitive; both
-relation keys are transient (never overview-cached, no table config)."
+  "`:id-any' selects the listed ids; its identity ignores their order.
+Both relation keys are transient (invariant 17)."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
       (org-glance-test:headline "x" "* TODO X :book:")
@@ -57,8 +55,8 @@ relation keys are transient (never overview-cached, no table config)."
     (should (null (org-glance-overview:spec-key '(:refers-to "x"))))))
 
 (ert-deftest org-glance-test:material-refer-inserts-link ()
-  "`@' at a body boundary inserts a material link; the C-u variant a ?kind=;
-self is excluded from the candidates."
+  "`@' at a body boundary inserts a material link, kinded under a prefix arg.
+Self is never a candidate."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
       ;; me's own kinded edge seeds the graph's kind vocabulary ("author")
@@ -89,7 +87,7 @@ self is excluded from the candidates."
                (buffer-string))))))
 
 (ert-deftest org-glance-test:material-refer-in-title ()
-  "`@' works inside the heading title (after a space).
+  "`@' after a space in the heading title inserts a material link.
 Column-0 self-insert is owned by `material-refer-self-inserts-elsewhere'."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
@@ -141,8 +139,7 @@ Column-0 self-insert is owned by `material-refer-self-inserts-elsewhere'."
         (should (s-contains? "@* TODO Me" (buffer-string)))))))
 
 (ert-deftest org-glance-test:link-material-follow ()
-  "Following org-glance-material:ID materializes ID; ?kind= is stripped;
-dangling id errors."
+  "Following a material link materializes it sans ?kind=; a dangling id errors."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "t" "* TODO Target"))
     (let ((org-glance-graph graph))
@@ -155,9 +152,8 @@ dangling id errors."
           (should-error (org-glance-link:material "no-such-id") :type 'user-error))))))
 
 (ert-deftest org-glance-test:material-references-commands ()
-  "`C-c @' opens ONE relation table -- outgoing edges and referrers merged --
-under the bare relation filter, anchored on this headline.  A headline related
-to nothing in either direction errors."
+  "`C-c @' opens ONE relation table merging both directions, anchored here.
+The filter is the bare `:id-any'; a headline related to nothing errors."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
       (org-glance-test:headline "a" "* TODO A" "[[org-glance-material:b][B]]")
@@ -182,9 +178,8 @@ to nothing in either direction errors."
         (should-error (org-glance-relations:references) :type 'user-error)))))
 
 (ert-deftest org-glance-test:relations-table-relation-column ()
-  "The relation table's `Relation' cell names direction and kind: `>' for an
-edge FROM the anchor, `<' for one TO it, both for a mutual pair, the bare arrow
-for a kindless edge.  Rows merge both directions."
+  "The `Relation' cell shows `>' from the anchor, `<' to it, both when mutual.
+A kind follows its arrow; rows merge both directions."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
       (org-glance-test:headline "a" "* TODO A"
@@ -207,9 +202,7 @@ for a kindless edge.  Rows merge both directions."
       (should-not (member "relation" (org-glance-test:table-col-keys))))))
 
 (ert-deftest org-glance-test:relations-crypt-sealed-excluded ()
-  "A link inside a SEALED crypt block is not indexed; one outside is.
-Both projections of the sealed bytes are checked: `relations' (material links)
-and `links' (plain ones)."
+  "Only links outside a sealed crypt block reach `relations' and `links'."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
       (org-glance-headline:encrypt
@@ -227,9 +220,8 @@ and `links' (plain ones)."
                    (org-glance-test:field graph "s" links)))))
 
 (ert-deftest org-glance-test:relations-crypt-sync-parses-sealed ()
-  "The LIVE SAVE path (sync) derives relations from the SEALED bytes: a link
-inside a crypt block is excluded although the buffer was plaintext at save
-time; reindex agrees."
+  "Save-time sync derives relations from SEALED bytes, matching reindex.
+A decrypted buffer's crypt-block link stays unindexed (invariant 27)."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
       (org-glance-headline:encrypt
@@ -293,7 +285,7 @@ time; reindex agrees."
                    (id (org-glance-filter:from-link-path "?priority=A&linked=t"))))
     (should (equal (id '(:done t :done-keywords ("DONE" "GIVEN")))
                    (id (org-glance-filter:from-link-path "?done=t&done-keywords=DONE,GIVEN"))))
-    ;; planning keys take the predicate's vocabulary; `t' errors (regression).
+    ;; planning keys take the predicate's vocabulary; `t' errors.
     (should (equal (id '(:schedule :present :deadline :absent))
                    (id (org-glance-filter:from-link-path "?schedule=present&deadline=absent"))))
     (should-error (org-glance-filter:from-link-path "?schedule=t"))
@@ -305,9 +297,8 @@ time; reindex agrees."
     (should-error (org-glance-filter:from-link-path "book?novalue"))))
 
 (ert-deftest org-glance-test:overview-link-follow ()
-  "A `?'-qualified path opens the EXACT stated filter (no ambient merge); a
-bare TAG path merges the ambient spec like the command; both land in the
-default view."
+  "A `?' path opens exactly its filter; a bare TAG merges the ambient spec.
+Both land in the default view."
   (org-glance-test:with-graph graph
     (let ((org-glance-graph graph)
           (org-glance-filter-spec '(:done nil))
@@ -323,9 +314,8 @@ default view."
                        (org-glance-filter:identity (car seen))))))))
 
 (ert-deftest org-glance-test:table-edge-kind-column ()
-  "A relation kind is a column: `C-c +' offers it pretty, the column shows the
-target TITLES (many-to-many comma-joined, gone targets fall back to the id),
-and the per-tag schema round-trips it as an edge column."
+  "`C-c +' offers a relation kind, pretty, as a column the per-tag schema keeps.
+Cells join target titles with commas; a gone target shows its id."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
       (org-glance-test:headline "c1" "* TODO Kebena Decaf :coffee:"
@@ -348,8 +338,7 @@ and the per-tag schema round-trips it as an edge column."
                        (org-glance-test:table-cell "c1" "kind:roasted-by"))))))
 
 (ert-deftest org-glance-test:table-custom-column-kind-vs-property ()
-  "Case is the type tag: \"AUTHOR\" builds a drawer column, \"author\" an
-edge column -- both usable on one graph, no live-membership flip."
+  "Case alone types a column: \"AUTHOR\" is a drawer one, \"author\" an edge."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
       (org-glance-test:headline-props "bk" "* TODO Book" '(("AUTHOR" . "Tolkien"))

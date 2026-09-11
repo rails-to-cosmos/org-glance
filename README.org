@@ -89,7 +89,7 @@ in that tag's overview / table to edit it directly).
 
 ** Edit a headline
 
-=RET= on a row/heading (or =C-x j m= anywhere) *materializes* it: its file opens in a normal org buffer. Everything org can do works here. =C-x C-s= saves and re-indexes; open views refresh on their next display.  (The =:ORG_GLANCE_ID:= drawer is concealed and protected: hand edits to it revert on save with a warning.)
+=RET= on a row/heading (or =C-x j m= anywhere) *materializes* it: its file opens in a normal org buffer. Everything org can do works here. =C-x C-s= saves and re-indexes; open views refresh on their next display.  Bookkeeping properties such as =:ORG_GLANCE_ID:= stay out of the buffer and are written back on every save.
 
 ** Relations
 
@@ -162,7 +162,7 @@ A headline with a repeater (=SCHEDULED: <… +1d>=) stays ONE headline.  With =o
 | =org-glance-view-fill-frame=            | =t=                             | views take the whole frame; =nil= keeps your windows                                         |
 | =org-glance-repeat-history-depth=       | =0=                             | occurrence snapshots kept: N / =t= = all / =0= = off                                           |
 | =org-glance-material-password-ttl=      | =300=                           | seconds a crypt password stays cached; =0= = forever                                         |
-| =org-glance-material-hidden-properties= | id + hash                     | drawer keys concealed AND edit-protected in material buffers                               |
+| =org-glance-material-hidden-properties= | id + hash                     | drawer keys kept out of material buffers, written back on save                            |
 | =org-glance-table-state-colors=         | tokyo-night-ish               | per-state badge colours (falls back to =org-todo-keyword-faces=, then =…-default-state-color=) |
 | =org-glance-plugins=                    | =nil=                           | plugins to load at init (e.g. =(llm)=); =I= enables one, =U= disables                            |
 | =org-glance-conflict-resolution=        | =ask=                           | git-conflict healing: =ask= / =union= / =nil= (error)                                            |

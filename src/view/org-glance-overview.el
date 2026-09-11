@@ -28,17 +28,10 @@
   "Prop-line header written at the top of the overview file.")
 
 (cl-defun org-glance-overview:spec-key (filter)
-  "Return a compact, deterministic cache key for FILTER.
-\"all\" for the empty filter; nil when FILTER is transient — uncacheable
-\(`org-glance-filter:transient?': `:where' and the relation keys).
-The key is the first 12 hex chars of the SHA-1 of the canonical spec identity
-(`org-glance-filter:identity'), so specs differing only in key order or tag
-order map to the same key, every machine derives the same name for the same
-filter, and the name is filesystem-safe by construction.  The prefix is still
-LOSSY: distinct specs can (astronomically rarely) share a key; the SPEC sidecar
-check in `cached-file' turns such a collision into a rebuild, never into serving
-the wrong overview.  The sidecar carries the human-readable record of which
-filter a cache directory holds."
+  "Return a deterministic cache key for FILTER.
+\"all\" for the empty filter, nil for a transient one, else the first 12 hex
+chars of the SHA-1 of its `org-glance-filter:identity'.
+`org-glance-overview:cached-file' rebuilds on a prefix collision."
   (let ((spec (org-glance-filter:normalize-spec filter)))
     (cond
      ((null spec) "all")
@@ -58,9 +51,8 @@ filter a cache directory holds."
                   (s-trim (f-read-text sidecar 'utf-8))))))
 
 (cl-defun org-glance-overview:render-headline (graph metadata)
-  "Render METADATA as one self-sufficient org heading.
-Agenda and link-following need no materialization; relation titles resolve
-live from GRAPH (id fallback for gone targets)."
+  "Render METADATA as one self-sufficient org heading (invariant 20).
+Relation titles resolve live from GRAPH, falling back to a gone target's id."
   (let ((state (org-glance-headline-metadata:state metadata))
         (priority (org-glance-headline-metadata:priority metadata))
         (schedule (org-glance-headline-metadata:schedule metadata))
@@ -97,15 +89,8 @@ live from GRAPH (id fallback for gone targets)."
 
 (cl-defun org-glance-overview:render (graph &optional filter)
   "Render GRAPH's live headlines matching FILTER as org text.
-FILTER is nil (all), a bare tag, or a filter plist -- see
-`org-glance-filter:predicate'.
-
-Pragmas FILTER's tags agree on (`org-glance-tag-config:preamble-for-filter';
-the `#+TODO:' cycle today) are emitted as file keywords in the header -- so
-org, on opening the cached file (overview OR agenda, both of which
-read this text), cycles and faces those states natively -- and the cycle's
-done-set is bound while the `:done'/`active?' predicate is built, so selection
-is correct for the tag's keywords without any spec/cache-key change."
+FILTER is nil (all), a bare tag, or a plist (`org-glance-filter:predicate').
+Prefix the pragmas FILTER's tags agree on; select by their cycle's done-set."
   (cl-check-type graph org-glance-graph)
   (let* ((cycle (org-glance-tag-config:cycle-for-filter graph filter))
          (org-done-keywords (if cycle
@@ -131,10 +116,9 @@ is correct for the tag's keywords without any spec/cache-key change."
   (f-join (org-glance-graph:store-path graph) "overviews"))
 
 (cl-defun org-glance-overview:spec-cache-file (graph filter)
-  "File backing FILTER's overview under GRAPH.
-The empty filter uses the legacy unfiltered file; an uncacheable `:where' filter
-uses a shared transient file (so it never clobbers a real cache); every other
-filter gets `<cache-path>/<key>/overview.org'."
+  "Return the file backing FILTER's overview under GRAPH.
+`org-glance-overview:file' for the empty filter, a shared `transient.org' for
+a transient one, else `<cache-path>/<key>/overview.org'."
   (let ((key (org-glance-overview:spec-key filter)))
     (cond
      ((null key) (f-join (org-glance-overview:cache-path graph) "transient.org"))
@@ -142,23 +126,14 @@ filter gets `<cache-path>/<key>/overview.org'."
      (t (f-join (org-glance-overview:cache-path graph) key "overview.org")))))
 
 (cl-defun org-glance-overview--fresher-than? (file-mtime src-mtime)
-  "Non-nil if SRC-MTIME is absent or FILE-MTIME is STRICTLY newer.
-Strict, so a same-second source treats the cache as stale and rebuilds: serving
-stale content is the only real bug, a rebuild is just a perf cost.  A future
-source (clock skew / restored backup) also rebuilds.  Takes mtimes rather than
-paths so every source dimension -- a file, or a folded set like the per-tag
-configs -- runs through this one comparison."
+  "Non-nil if SRC-MTIME is absent or FILE-MTIME is STRICTLY newer."
   (or (null src-mtime)
       (time-less-p src-mtime file-mtime)))
 
 (cl-defun org-glance-overview:fresh? (graph file)
-  "Non-nil if FILE exists and is newer than every source it is rendered from.
-The sources: GRAPH's `headlines.jsonl' (content), the per-tag config files (the
-`#+TODO:' header + per-tag done-set render depends on), so editing a tag's cycle
-invalidates existing overview caches like a content change, and
-`EXTERNAL.jsonl', so an edit or a delete made outside Emacs invalidates them as
-soon as it lands rather than when `org-glance-graph:refresh-external' folds it
-in."
+  "Non-nil if FILE exists and is newer than every source it renders from.
+The sources: GRAPH's `headlines.jsonl', its `EXTERNAL.jsonl' (an outside edit
+invalidates before it is folded in) and the per-tag config files."
   (cl-check-type graph org-glance-graph)
   (when-let* ((mtime (org-glance--file-mtime file)))
     (cl-every (lambda (src) (org-glance-overview--fresher-than? mtime src))
@@ -169,21 +144,15 @@ in."
                     (org-glance-tag-config:source-mtime graph)))))
 
 (cl-defun org-glance-overview--header-current? (file)
-  "Non-nil if FILE starts with the current `org-glance-overview:header'.
-A cache rendered by an older org-glance (e.g. with the pre-rename
-`org-glance-overview-v2' prop-line mode) must be rebuilt: its prop-line
-would try to enable a mode that no longer exists."
+  "Non-nil if FILE begins with the prop-line of `org-glance-overview:header'."
   (let ((prop-line (car (s-lines org-glance-overview:header))))
     (with-temp-buffer
       (insert-file-contents file nil 0 (+ 16 (length prop-line)))
       (looking-at-p (regexp-quote prop-line)))))
 
 (cl-defun org-glance-overview:write (graph &optional filter)
-  "Unconditionally (re)generate FILTER's overview file for GRAPH; return its path.
-Used by the agenda and by `g' (refresh), which must always rebuild.  A keyed
-cache directory also gets its SPEC identity sidecar, claiming the (hashed,
-lossy) directory name for exactly this filter and recording the filter
-readably."
+  "Regenerate FILTER's overview file for GRAPH unconditionally; return its path.
+A keyed cache directory also gets a SPEC sidecar recording FILTER's identity."
   (let ((key (org-glance-overview:spec-key filter))
         (file (org-glance-overview:spec-cache-file graph filter)))
     (f-mkdir-full-path (f-dirname file))
@@ -194,14 +163,9 @@ readably."
     file))
 
 (cl-defun org-glance-overview:cached-file (graph &optional filter)
-  "Path to FILTER's overview file for GRAPH, rebuilding only when stale.
-A hit requires the file to be fresh AND, for keyed directories, the SPEC
-sidecar to record exactly FILTER's identity -- directory names are truncated
-hashes, so a (rare) name collision between distinct filters rebuilds instead
-of serving the other filter's overview.  On a hit the file is returned without
-reading
-`headlines.jsonl' or rendering.  An uncacheable `:where' filter always
-re-renders."
+  "Return FILTER's overview file for GRAPH, rebuilding only when stale.
+A hit -- fresh, current header, and a SPEC sidecar naming FILTER unless the key
+is \"all\" -- skips reading and rendering; a transient filter re-renders."
   (let ((key (org-glance-overview:spec-key filter))
         (file (org-glance-overview:spec-cache-file graph filter)))
     (cond
@@ -254,8 +218,7 @@ re-renders."
 (define-key org-glance-overview-mode-map (kbd "q") #'quit-window)
 
 (defvar-local org-glance-overview--spec nil
-  "Normalised filter spec the current overview buffer was generated with
-(nil = all headlines).")
+  "Normalised filter spec this overview buffer renders; nil for all headlines.")
 
 (cl-defun org-glance-overview:id-at-point ()
   "ORG_GLANCE_ID of the headline at point, or signal a `user-error'."
@@ -281,10 +244,7 @@ re-renders."
   (org-glance-view:pick-occurrence org-glance-graph (org-glance-overview:id-at-point)))
 
 (cl-defun org-glance-overview--headline-at-point ()
-  "The live `org-glance-headline' for the heading at point.
-The overview is a cached snapshot that can outlive the graph, so a heading may
-name a headline that has since been deleted; error clearly rather than passing
-nil into the material layer."
+  "Return the live `org-glance-headline' at point; error if it was deleted."
   (org-glance-view:live-headline org-glance-graph (org-glance-overview:id-at-point)))
 
 (cl-defun org-glance-overview:open ()
@@ -299,10 +259,8 @@ nil into the material layer."
 
 (cl-defun org-glance-overview:todo (&optional arg)
   "Advance the TODO state of the headline at point exactly like `C-c C-t'.
-Runs org's own `org-todo' (ARG passed through) in the headline's materialized
-blob buffer -- interactive LOGBOOK notes and all (see
-`org-glance-material:change-todo-live') -- then refreshes this overview and
-returns point to the headline once the change (and any note) is committed."
+Pass ARG to `org-todo' in the material buffer, LOGBOOK notes included; once
+the change commits, refresh and return point to the headline."
   (interactive "P")
   (let ((id (org-glance-overview:id-at-point)))
     (org-glance-material:change-todo-live
@@ -326,12 +284,12 @@ returns point to the headline once the change (and any note) is committed."
     (message "%s %s" (capitalize (symbol-name kind)) (if remove "cleared" "set"))))
 
 (cl-defun org-glance-overview:schedule (&optional arg)
-  "Set the schedule of the headline at point, like `C-c C-s'; `C-u' clears it."
+  "Set the schedule of the headline at point, like `C-c C-s'; ARG clears it."
   (interactive "P")
   (org-glance-overview--set-planning 'schedule arg))
 
 (cl-defun org-glance-overview:deadline (&optional arg)
-  "Set the deadline of the headline at point, like `C-c C-d'; `C-u' clears it."
+  "Set the deadline of the headline at point, like `C-c C-d'; ARG clears it."
   (interactive "P")
   (org-glance-overview--set-planning 'deadline arg))
 
@@ -386,10 +344,8 @@ returns point to the headline once the change (and any note) is committed."
                       ""))
 
 (cl-defun org-glance-overview:configure-tag ()
-  "Configure this overview's tag directly, skipping the tag prompt.
-Bound to `C' -- the prompt-free counterpart to the transient's `C'.  Edit the
-config of the sole tag this overview filters on; the unfiltered or multi-tag
-view names no single tag, so fall back to the tag prompt."
+  "Configure this overview's sole filter tag, skipping the tag prompt (`C').
+An unfiltered or multi-tag overview falls back to the prompt."
   (interactive)
   (org-glance-tag-config-edit
    (org-glance-filter:sole-tag org-glance-overview--spec)))
@@ -398,12 +354,10 @@ view names no single tag, so fall back to the tag prompt."
 
 ;;;###autoload
 (cl-defun org-glance-overview (&optional tag)
-  "Browse the graph, optionally filtered, in the default view.
-Interactively, prompt for a tag (empty input = no tag constraint) and overlay it
-on the ambient `org-glance-filter-spec' (default: active headlines).
-The landing view is `org-glance-overview-default-view' (the table dashboard by
-default); press `O' there to toggle to the other view.  TAG may be a bare tag
-(symbol/string) or a full filter plist -- see `org-glance-filter:predicate'."
+  "Browse the graph, optionally filtered by TAG, in the default view.
+TAG, a bare tag or a filter plist (`org-glance-filter:predicate'), overlays
+the ambient `org-glance-filter-spec'; interactively, read it (empty = none).
+`org-glance-overview-default-view' names the view; `O' there toggles it."
   (interactive (list (org-glance-view:completing-read-tag "Overview tag (empty for all): ")))
   (org-glance-ensure-init)
   (org-glance-overview:visit-default org-glance-graph
@@ -430,7 +384,7 @@ default); press `O' there to toggle to the other view.  TAG may be a bare tag
                                 (org-glance-filter:read-state org-glance-graph))))
 
 (cl-defun org-glance-overview:filter-by-substring ()
-  "Narrow the current overview to headlines whose title contains a substring."
+  "Narrow the current overview to titles containing a substring."
   (interactive)
   (let ((needle (read-string "Title contains: ")))
     (when (string-empty-p needle) (user-error "No substring given"))
@@ -455,16 +409,13 @@ default); press `O' there to toggle to the other view.  TAG may be a bare tag
 ;; Invariant 10: a save flags views stale; each refills at a display boundary.
 
 (cl-defun org-glance-overview--stale? ()
-  "Non-nil when the current overview buffer may show outdated results.
-The view's STALE-FN (see `org-glance-view:register'): the cache file changed
-under us, or predates a source it renders from (`org-glance-overview:fresh?')."
+  "Non-nil when the current overview buffer may show outdated results."
   (or (not (verify-visited-file-modtime (current-buffer))) ; file changed under us
       (not (org-glance-overview:fresh? org-glance-graph buffer-file-name))))
 
 ;;;###autoload
 (cl-defun org-glance-agenda ()
-  "Show an `org-agenda' over the graph's scheduled/deadline headlines.
-Honours the ambient `org-glance-filter-spec' (default: active headlines)."
+  "Show an `org-agenda' over the headlines `org-glance-filter-spec' admits."
   (interactive)
   (org-glance-ensure-init)
   ;; A dedicated file: `a' must never rewrite the file an open overview visits.

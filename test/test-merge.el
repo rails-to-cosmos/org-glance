@@ -10,13 +10,13 @@
           ">>>>>>> other-machine\n"))
 
 (cl-defun org-glance-test-merge:write-metrics-conflict (graph ours theirs)
-  "Write a conflict-marked tag-metrics sidecar for GRAPH; return its path."
+  "Write GRAPH's tag-metrics file conflicted as OURS/THEIRS; return its path."
   (let ((file (org-glance-tag-metrics--file graph)))
     (org-glance-test:write file (org-glance-test-merge:conflict-eld ours theirs))
     file))
 
 (cl-defun org-glance-test-merge:seg-names (graph)
-  "Sorted basenames of the on-disk seg-*.jsonl files in GRAPH's meta dir."
+  "Return sorted basenames of GRAPH's on-disk seg-*.jsonl files."
   (let ((meta (org-glance-graph:meta-path graph)))
     (sort (cl-remove-if-not #'org-glance-graph--segment-generation
                             (directory-files meta nil nil))
@@ -34,14 +34,8 @@
   (concat (json-serialize (apply #'list kv)) "\n"))
 
 (ert-deftest org-glance-test:merge-gitattributes-written ()
-  "Store construction gives the union driver THE WAL'S OWN FILES AND NO OTHER,
-and a second open never clobbers a hand-edited file (write-if-absent).
-
-THE GLOBS ARE THE RESOLVER'S TWO PREDICATES (`--conflicted-jsonl-files'): the
-open segment by name and the sealed `seg-*'.  A `*.jsonl' glob handed git the
-notification family and glance's `COMPLETIONS.jsonl' as well -- the one cohort
-the gitignore cannot reach, git applying no ignore rule to a path it already
-tracks -- where a union re-lays bytes under a live fold cursor."
+  "Store .gitattributes unions only the WAL's files; a reopen keeps hand edits.
+A `*.jsonl' glob would also union the notification queue (invariant 8)."
   (org-glance-test:with-graph graph
     (let ((path (f-join (org-glance-graph:meta-path graph) ".gitattributes"))
           (expected "headlines.jsonl merge=union\nseg-*.jsonl merge=union\n"))
@@ -57,9 +51,8 @@ tracks -- where a union re-lays bytes under a live fold cursor."
                                       'utf-8)))))))
 
 (ert-deftest org-glance-test:merge-manifest-conflict-self-heal ()
-  "A MANIFEST left conflict-marked by git is self-healed on the next open: every
-on-disk non-empty seg-*.jsonl becomes visible again, live records are restored,
-and the rewritten MANIFEST is valid canonical JSON."
+  "A conflict-marked MANIFEST self-heals to canonical JSON on the next open.
+Every non-empty on-disk segment and its live records become visible again."
   (org-glance-test:with-graph graph
     (org-glance-test:with-seal-each-insert
       (org-glance-graph:add graph (org-glance-test:headline "a" "* Alpha"))
@@ -88,9 +81,8 @@ and the rewritten MANIFEST is valid canonical JSON."
           (should-not (s-contains? "<<<<<<<" text)))))))
 
 (ert-deftest org-glance-test:merge-union-positional-last-wins ()
-  "A union-merged open segment (extra lines from the other machine appended
-after ours, including a newer duplicate id placed later) reads by physical
-position: the last record per id wins and no data is lost."
+  "A union-merged open segment loses no record and resolves ids by position.
+The other machine's appended duplicate, being later, wins (invariant 1)."
   (org-glance-test:with-graph graph
     (org-glance-graph:insert graph (list (list :id "a" :state "" :title "A-orig" :hash "ha1")))
     (org-glance-graph:insert graph (list (list :id "b" :state "" :title "B-orig" :hash "hb1")))
@@ -111,8 +103,7 @@ position: the last record per id wins and no data is lost."
                            #'string<))))))
 
 (ert-deftest org-glance-test:merge-seal-on-both-adopted ()
-  "Two non-empty sealed segments present on disk while the MANIFEST lists neither
-\(conflict-marked) are both adopted on open -- records visible, none deleted."
+  "Segments a conflicted MANIFEST omits are adopted on open, none deleted."
   (with-temp-directory dir
     (let ((meta (f-join dir ".org-glance" "meta")))
       (org-glance-test:write (f-join meta "seg-0000000001.jsonl")
@@ -136,10 +127,8 @@ position: the last record per id wins and no data is lost."
         (should (f-exists? (f-join meta "seg-0000000002.jsonl")))))))
 
 (ert-deftest org-glance-test:merge-open-segment-conflict-union-resolved ()
-  "Conflict markers already written into the open segment (a store synced before
-the union driver existed) are union-resolved on open when
-`org-glance-conflict-resolution' is `union': markers gone, every record
-from both sides kept, positional last-wins per id."
+  "A conflicted open segment union-resolves on open under `union' resolution.
+Markers go, both sides' records stay, and the last record per id wins."
   (org-glance-test:with-graph graph
     (let ((open (org-glance-graph:headline-meta-path graph))
           (org-glance-conflict-resolution 'union))
@@ -163,8 +152,8 @@ from both sides kept, positional last-wins per id."
           (should (string= "DONE" (org-glance-headline-metadata:state a))))))))
 
 (ert-deftest org-glance-test:merge-open-segment-conflict-ask-approved ()
-  "With `ask' resolution an approved prompt union-resolves the conflicted open
-segment; a declined prompt errors and leaves the markers in place."
+  "Under `ask', approving the prompt union-resolves a conflicted open segment.
+Declining errors and leaves the markers in place."
   (org-glance-test:with-graph graph
     (let ((open (org-glance-graph:headline-meta-path graph))
           (org-glance-conflict-resolution 'ask))
@@ -184,8 +173,7 @@ segment; a declined prompt errors and leaves the markers in place."
                                #'string<))))))))
 
 (ert-deftest org-glance-test:merge-open-segment-conflict-nil-errors ()
-  "With nil resolution the store refuses to open a conflict-marked segment:
-signals an error and leaves the markers in place for manual handling."
+  "With nil resolution a conflicted open segment errors and keeps its markers."
   (org-glance-test:with-graph graph
     (let ((open (org-glance-graph:headline-meta-path graph))
           (org-glance-conflict-resolution nil))
@@ -196,11 +184,11 @@ signals an error and leaves the markers in place for manual handling."
       (should-error (org-glance-test:reopen graph))
       (should (s-contains? "<<<<<<<" (f-read-text open 'utf-8))))))
 
-;;; tag-metrics.eld conflicts: a config/*.eld the union driver (*.jsonl) misses
+;;; tag-metrics.eld conflicts: config/*.eld lies outside the union driver.
 
 (ert-deftest org-glance-test:merge-tag-metrics-plist-semantics ()
-  "Metric plists union by field: earliest :created, latest :modified, and `max'
-for the counters -- never a sum, which a shared base would double-count."
+  "Metric plists union by field and never sum (invariant 8).
+They keep the earliest :created, latest :modified and `max' counters."
   (let ((m (org-glance-tag-metrics--merge-plists
             (list :created (seconds-to-time 100) :modified (seconds-to-time 200) :captures 3 :removals 1)
             (list :created (seconds-to-time 50)  :modified (seconds-to-time 300) :captures 5 :removals 0))))
@@ -210,8 +198,7 @@ for the counters -- never a sum, which a shared base would double-count."
     (should (= 1 (plist-get m :removals)))))
 
 (ert-deftest org-glance-test:merge-tag-metrics-conflict-union-resolved ()
-  "A git-conflicted tag-metrics.eld is union-merged on read under `union':
-earliest :created, latest :modified, max counters; the file is rewritten clean."
+  "Under `union', reading a conflicted tag-metrics.eld heals it by field merge."
   (org-glance-test:with-graph graph
     (let* ((org-glance-conflict-resolution 'union)
            (file (org-glance-test-merge:write-metrics-conflict
@@ -250,8 +237,7 @@ earliest :created, latest :modified, max counters; the file is rewritten clean."
       (should (s-contains? "<<<<<<<" (f-read-text file 'utf-8))))))
 
 (ert-deftest org-glance-test:merge-tag-metrics-heal-on-open ()
-  "A git-conflicted tag-metrics.eld is resolved proactively when the graph is
-reopened (the after-open hook), not only on the next append."
+  "Reopening heals a conflicted tag-metrics.eld via the after-open hook."
   (org-glance-test:with-graph graph
     (let ((org-glance-conflict-resolution 'union)
           (file (org-glance-test-merge:write-metrics-conflict
@@ -263,8 +249,8 @@ reopened (the after-open hook), not only on the next append."
                                 :captures)))))))
 
 (ert-deftest org-glance-test:merge-eld-read-floor ()
-  "`org-glance--read-eld' on any conflicted .eld keeps a readable side, never the
-stray `<<<<<<<' marker symbol that would crash the caller."
+  "`org-glance--read-eld' reads any conflicted .eld as one readable side.
+The `<<<<<<<' marker symbol, which would crash the caller, is never returned."
   (with-temp-directory dir
     (let ((file (f-join dir "c.eld")))
       (f-write-text (org-glance-test-merge:conflict-eld '(("a" . 1)) '(("b" . 2))) 'utf-8 file)
@@ -273,11 +259,9 @@ stray `<<<<<<<' marker symbol that would crash the caller."
         (should (or (assoc "a" r) (assoc "b" r)))))))
 
 (ert-deftest org-glance-test:merge-eld-read-floor-skips-empty-head ()
-  "A side written as literal `nil' (an emptied config) must not shadow a
-populated side -- `--read-eld' picks the non-empty one regardless of side order."
+  "`--read-eld' picks the populated side over a literal nil, in either order."
   (with-temp-directory dir
     (let ((file (f-join dir "c.eld")))
-      ;; nil is HEAD, populated side second: the buggy `listp' floor returned nil.
       (f-write-text (org-glance-test-merge:conflict-eld nil '(("b" . 2))) 'utf-8 file)
       (should (equal '(("b" . 2)) (org-glance--read-eld file)))
       (f-write-text (org-glance-test-merge:conflict-eld '(("a" . 1)) nil) 'utf-8 file)
@@ -292,8 +276,8 @@ populated side -- `--read-eld' picks the non-empty one regardless of side order.
     (should-not (org-glance--conflict-marked? "line-a\nline-b\n"))))
 
 (ert-deftest org-glance-test:conflict-resolve-gate ()
-  "`--resolve-conflict' gates on the policy custom: `union' runs the fn silently,
-`ask' prompts (approve runs / decline errors), nil errors -- returning fn value."
+  "`--resolve-conflict' returns the resolver's value under `union' silently.
+`ask' prompts first; a declined prompt or a nil policy errors without running."
   (let ((run (lambda () 'did-resolve)))
     (let ((org-glance-conflict-resolution 'union))
       (should (eq 'did-resolve (org-glance--resolve-conflict "x" run))))
@@ -306,9 +290,8 @@ populated side -- `--read-eld' picks the non-empty one regardless of side order.
       (should-error (org-glance--resolve-conflict "x" (lambda () (error "must not run")))))))
 
 (ert-deftest org-glance-test:heal-eld-generic-merge ()
-  "`--heal-eld' is format-agnostic: a caller brings any merge-fn over the sides.
-A clean file returns its single form; a conflicted one heals via the merge-fn,
-writes back marker-free, and returns the merged value."
+  "`--heal-eld' heals a conflicted file with any caller-supplied merge-fn.
+It rewrites marker-free and returns the merged value, or a clean file's form."
   (with-temp-directory dir
     (let ((file (f-join dir "s.eld"))
           (org-glance-conflict-resolution 'union)
@@ -320,6 +303,22 @@ writes back marker-free, and returns the merged value."
       (let ((after (f-read-text file 'utf-8)))
         (should-not (org-glance--conflict-marked? after))               ; rewritten clean
         (should (equal '(1 2 3 4) (car (read-from-string after))))))))
+
+(ert-deftest org-glance-test:eld-write-survives-a-torn-write ()
+  "A sidecar write that dies mid-way leaves the previous .eld intact: the bytes
+land in a temp file renamed over PATH (invariant 2)."
+  (with-temp-directory dir
+    (let ((path (f-join dir "config" "x.eld"))
+          (real (symbol-function 'write-region)))
+      (org-glance--write-eld path '((a . 1)))
+      (cl-letf (((symbol-function 'write-region)
+                 (lambda (start end filename &rest args)
+                   (let ((text (if (stringp start) start (buffer-substring start end))))
+                     (apply real (substring text 0 (min 3 (length text))) nil filename args))
+                   (error "Simulated crash mid-write"))))
+        (should-error (org-glance--write-eld path '((a . 2) (b . 3)))))
+      (should (equal '((a . 1)) (org-glance--read-eld path)))
+      (should-not (directory-files (f-dirname path) nil "\\.tmp\\.")))))
 
 (provide 'test-merge)
 ;;; test-merge.el ends here

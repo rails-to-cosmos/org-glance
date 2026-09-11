@@ -24,10 +24,7 @@
 
 (cl-defun org-glance-tag:validate-string (value)
   "Return VALUE trimmed when org can parse it as a tag; `user-error' otherwise.
-Org tags allow only letters, digits, `_', `@', `#' and `%' (`org-tag-re');
-any other character (a dash, a space, a dot) breaks heading parsing -- org
-leaves the \":tag:\" text in the title.  Called at every tag CREATION
-boundary; reading stored data never validates."
+Checks `org-tag-re'; callers are tag CREATION boundaries only (invariant 13)."
   (let ((s (s-trim (format "%s" value))))
     (unless (string-match-p (format "\\`%s\\'" org-tag-re) s)
       (user-error "`%s' is not a valid org tag (allowed: letters, digits, _ @ # %%)" s))
@@ -35,10 +32,7 @@ boundary; reading stored data never validates."
 
 (cl-defun org-glance-tag:from-string (value)
   "Coerce VALUE (a tag string, or any printable) to its canonical tag symbol.
-Trimmed, downcased and interned, so mixed-case or padded input yields the same
-downcased symbol the rest of the system stores and compares (`org-glance-tag?').
-The inverse of `org-glance-tag:to-string'; used wherever a tag enters from text
-\(filter specs, captured/parsed headlines, the picker, tag-config)."
+Trim, downcase and intern it; the inverse of `org-glance-tag:to-string'."
   (->> value (format "%s") s-trim downcase intern))
 
 (provide 'org-glance-tag)

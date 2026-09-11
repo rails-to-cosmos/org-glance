@@ -34,8 +34,7 @@
     ""))
 
 (cl-defun org-glance-tags--format-cycle (cycle)
-  "Format CYCLE (a `#+TODO:'-style string) with each keyword coloured.
-The `|' active/done separator is left plain."
+  "Format CYCLE (a `#+TODO:'-style string), colouring each keyword but `|'."
   (if (org-glance--present-string? cycle)
       (mapconcat (lambda (tok)
                    (if (string= tok "|") tok (org-glance-table--colorize-state tok)))
@@ -60,8 +59,7 @@ The `|' active/done separator is left plain."
     (sort . ((column . "tag") (ascending . t)))))
 
 (cl-defun org-glance-tags--row (graph tag plist)
-  "Build a `table-view' row for TAG (a string) from its metrics PLIST.
-The row id is the tag string; the Cycle cell comes from the tag's config."
+  "Build TAG's `table-view' row from its metrics PLIST and GRAPH's tag config."
   (let ((cfg (ignore-errors
                (org-glance-tag-config:resolve graph (org-glance-tag:from-string tag)))))
     `((id . ,tag)
@@ -79,10 +77,7 @@ The row id is the tag string; the Cycle cell comes from the tag's config."
            collect (org-glance-tags--row graph (car entry) (cdr entry))))
 
 (cl-defun org-glance-tags--tag-filter (tag)
-  "TAG's view filter: the tag overlaid on the ambient spec.
-Same merge as the o/table entry points, so RET here and the picker open
-the SAME view (the dashboard previously bypassed the ambient filter and
-showed e.g. archived rows the picker hides)."
+  "Return TAG overlaid on the ambient `org-glance-filter-spec'."
   (org-glance-filter:merge org-glance-filter-spec
                            (org-glance-tag:from-string tag)))
 
@@ -95,9 +90,8 @@ showed e.g. archived rows the picker hides)."
   (org-glance-overview:visit graph (org-glance-tags--tag-filter tag)))
 
 (cl-defun org-glance-tags--retag-remove (graph tag-string ids)
-  "Drop TAG-STRING off each headline in IDS via `org-glance-material:retag'.
-An id whose blob buffer has unsaved edits (retag's `user-error') is skipped.
-Return (CHANGED . SKIPPED)."
+  "Drop TAG-STRING off each GRAPH headline in IDS; return (CHANGED . SKIPPED).
+An id whose buffer has unsaved edits (a retag `user-error') is skipped."
   (let ((changed 0) (skipped 0))
     (dolist (id ids)
       (condition-case nil
@@ -107,9 +101,8 @@ Return (CHANGED . SKIPPED)."
     (cons changed skipped)))
 
 (cl-defun org-glance-tags--act-remove (graph tag-string)
-  "Remove tag TAG-STRING from GRAPH: drop it off each headline, after confirming.
-Non-destructive -- multi-tagged headlines stay alive under their other tags; the
-tag vanishes once no live headline carries it."
+  "Remove TAG-STRING from every GRAPH headline carrying it, after confirming.
+No headline is deleted; the tag disappears with its last carrier."
   (let* ((metas (cl-remove-if-not
                  (lambda (m) (member tag-string
                                      (org-glance-headline-metadata:tag-strings m)))

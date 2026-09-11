@@ -19,9 +19,8 @@
            (advice-remove 'org-auto-repeat-maybe #'org-glance-datetime-restore))))
 
 (cl-defun org-glance-datetime-active-repeated-timestamps (&rest includes)
-  "Subtree's active repeated timestamps, sorted ascending.
-INCLUDES may add `include-schedules' / `include-deadlines' planning
-timestamps.  One `org-element' parse of the narrowed subtree."
+  "Return the subtree's active repeated timestamps, sorted ascending.
+INCLUDES may add `include-schedules' / `include-deadlines' planning timestamps."
   (save-restriction
     (org-narrow-to-subtree)
     (let* ((org-data (org-element-parse-buffer))

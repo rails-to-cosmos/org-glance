@@ -4,8 +4,7 @@
 (require 'org-glance)
 
 (cl-defmacro with-temp-directory (dir &rest body)
-  "Create a temporary directory, bind it to DIR, run BODY in it, and delete the directory afterward.
-DIR is a symbol that will hold the path to the temporary directory within BODY."
+  "Bind symbol DIR to a fresh temporary directory, run BODY, then delete it."
   (declare (indent 1))
   `(let ((,dir (make-temp-file "temp-dir-" t)))
      (unwind-protect
@@ -22,11 +21,8 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
   (f-write-text text 'utf-8 path))
 
 (cl-defun org-glance-test:conflict-open (ours theirs)
-  "Return line-oriented text git left conflict-marked with OURS over THEIRS.
-OURS and THEIRS are each a string of newline-terminated lines.  ONE speller of
-the marker layout, shared by every file the resolvers read -- the WAL's open
-segment, a sealed one, and the notification family the resolver must leave
-alone."
+  "Return text git left conflict-marked with OURS over THEIRS.
+OURS and THEIRS are newline-terminated line strings; the sole marker speller."
   (concat "<<<<<<< HEAD\n" ours "=======\n" theirs ">>>>>>> other-machine\n"))
 
 (cl-defmacro org-glance-test:session (&rest body)
@@ -43,17 +39,13 @@ alone."
        ,@body)))
 
 (cl-defun org-glance-test:headline (id &rest lines)
-  "Build an `org-glance-headline' carrying ID.
-LINES is the heading, then optional planning (SCHEDULED:/DEADLINE:/CLOSED:)
-lines, then optional body.  The ORG_GLANCE_ID drawer is placed after the
-heading and any planning lines -- where org expects a property drawer --
-so the id parses correctly whether or not a body or planning is present."
+  "Build an `org-glance-headline' carrying ID from LINES.
+LINES is heading, planning, then body lines; the id drawer follows planning."
   (apply #'org-glance-test:headline-props id (car lines) nil (cdr lines)))
 
 (cl-defun org-glance-test:change-todo-live (graph id &optional arg)
-  "Run `org-glance-material:change-todo-live' (the no-note path) in a live origin
-buffer and return the finalized state string.  The no-note commit is synchronous,
-so no timer pumping is needed."
+  "Run `org-glance-material:change-todo-live' on GRAPH's ID with ARG.
+Return the state its synchronous no-note path finalizes, or nil."
   (let ((origin (generate-new-buffer " *ctl-origin*"))
         (result 'unset))
     (unwind-protect
@@ -83,17 +75,16 @@ so no timer pumping is needed."
 
 (cl-defun org-glance-test:store-mtime (graph seconds)
   "Set GRAPH's headline-meta mtime SECONDS relative to now.
-Negative backdates it (existing caches read as fresh); positive advances
-it (caches read as stale)."
+Negative SECONDS makes existing caches read fresh; positive, stale."
   (set-file-times (org-glance-graph:headline-meta-path graph)
                   (time-add (current-time) seconds)))
 
 (cl-defun org-glance-test:sealed-segments (graph)
-  "Names of the sealed segments listed in GRAPH's MANIFEST."
+  "Return the names of the sealed segments GRAPH's MANIFEST lists."
   (org-glance-graph--sealed-segments graph))
 
 (cl-defun org-glance-test:count-records (graph)
-  "Number of records a forward scan of GRAPH's store yields."
+  "Return how many records a forward scan of GRAPH's store yields."
   (let ((n 0))
     (org-glance-graph--scan-forward graph (lambda (_r) (cl-incf n)))
     n))
@@ -106,15 +97,17 @@ it (caches read as stale)."
      ,@body))
 
 (cl-defun org-glance-test:simulate-material-save (graph id contents)
-  "Run `org-glance-material:sync' as if ID's blob were saved as CONTENTS."
-  (with-temp-buffer
-    (insert contents)
-    (setq-local org-glance-material--graph graph
-                org-glance-material--id id)
-    (org-glance-material:sync)))
+  "Write CONTENTS to ID's blob in GRAPH, then run `org-glance-material:sync'."
+  (let ((path (org-glance-graph:content-path graph id)))
+    (org-glance-test:write path contents)
+    (with-temp-buffer
+      (setq-local org-glance-material--graph graph
+                  org-glance-material--id id)
+      (let ((buffer-file-name path))
+        (org-glance-material:sync)))))
 
 (cl-defun org-glance-test:open-size (graph)
-  "Byte size of GRAPH's open (unsealed) segment file, 0 if absent."
+  "Return the byte size of GRAPH's open segment file, or 0 if absent."
   (org-glance--file-size (org-glance-graph:headline-meta-path graph)))
 
 (cl-defun org-glance-test:sed (from to)
@@ -129,9 +122,8 @@ it (caches read as stale)."
           heading id (if body (concat body "\n") "")))
 
 (cl-defmacro org-glance-test:with-material ((buffer graph id &rest opts) &rest body)
-  "Materialize ID from GRAPH into BUFFER, make it current, run BODY, kill it.
-OPTS pass through to `org-glance-material:open' (e.g. `:decrypt t').
-The modified flag is cleared and the buffer unconditionally killed on exit."
+  "Materialize ID from GRAPH into BUFFER and run BODY there.
+OPTS pass to `org-glance-material:open'; exit always kills BUFFER unmodified."
   (declare (indent 1))
   `(let ((,buffer (org-glance-material:open ,graph ,id ,@opts)))
      (unwind-protect
@@ -149,8 +141,8 @@ The modified flag is cleared and the buffer unconditionally killed on exit."
        (when (get-buffer "*Org Note*") (kill-buffer "*Org Note*")))))
 
 (cl-defmacro org-glance-test:with-overview ((buf graph filter) &rest body)
-  "Visit GRAPH's overview for FILTER, bind the buffer to BUF for BODY,
-kill it afterward.  Dynamically binds `org-glance-graph' to GRAPH."
+  "Visit GRAPH's overview for FILTER as BUF around BODY, then kill it.
+Binds `org-glance-graph' to GRAPH dynamically."
   (declare (indent 1))
   `(let* ((org-glance-graph ,graph)
           (,buf (org-glance-overview:visit ,graph ,filter)))
@@ -160,8 +152,8 @@ kill it afterward.  Dynamically binds `org-glance-graph' to GRAPH."
          (kill-buffer ,buf)))))
 
 (cl-defmacro org-glance-test:counting-renders ((counter &optional (return "")) &rest body)
-  "Bind COUNTER to 0 and stub `org-glance-overview:render' to bump it and
-return RETURN, then run BODY."
+  "Run BODY with `org-glance-overview:render' stubbed to count into COUNTER.
+COUNTER starts at 0; the stub returns RETURN."
   (declare (indent 1))
   `(let ((,counter 0))
      (cl-letf (((symbol-function 'org-glance-overview:render)
@@ -169,8 +161,7 @@ return RETURN, then run BODY."
        ,@body)))
 
 (cl-defmacro org-glance-test:with-failing-ingest (id &rest body)
-  "Run BODY with `org-glance-graph:add' erroring on any headline with id ID.
-All other ingests proceed through the real function."
+  "Run BODY with `org-glance-graph:add' erroring only on calls that add ID."
   (declare (indent 1))
   `(let ((orig (symbol-function 'org-glance-graph:add)))
      (cl-letf (((symbol-function 'org-glance-graph:add)
@@ -189,49 +180,42 @@ All other ingests proceed through the real function."
        (when (buffer-live-p ,buf) (kill-buffer ,buf)))))
 
 (cl-defmacro org-glance-test:with-table-filter (graph filter var context &rest body)
-  "Visit GRAPH's table for FILTER (reference CONTEXT or nil), bind the buffer
-to VAR, run BODY, kill it.  Implemented over `org-glance-test:with-shown'
-\(same show-stubs + kill-all)."
+  "Bind VAR to GRAPH's table for FILTER and CONTEXT around BODY, then kill it.
+CONTEXT is a reference context or nil; built on `org-glance-test:with-shown'."
   (declare (indent 4))
   `(org-glance-test:with-shown (,var)
      (setq ,var (org-glance-table:visit ,graph ,filter :context ,context))
      ,@body))
 
 (cl-defmacro org-glance-test:with-table ((graph &optional filter context) &rest body)
-  "Visit GRAPH's table for FILTER (reference-view CONTEXT or nil); run BODY
-with the table buffer current, kill it afterward.  BODY refers to the buffer
-via `current-buffer'."
+  "Run BODY in GRAPH's table for FILTER and reference CONTEXT, then kill it."
   (declare (indent 1) (debug ((form &optional form form) body)))
   (let ((buf (gensym "table-buf")))
     `(org-glance-test:with-table-filter ,graph ,filter ,buf ,context
        (with-current-buffer ,buf ,@body))))
 
 (cl-defun org-glance-test:table-col-keys (&optional (buf (current-buffer)))
-  "Display-order column keys of table BUF (default: current buffer)."
+  "Return the display-order column keys of table BUF, default current buffer."
   (with-current-buffer buf
     (mapcar (lambda (c) (alist-get 'key c)) (table-view--columns table-view--spec))))
 
 (cl-defun org-glance-test:goto-cell (id key)
-  "Move point to row ID's KEY cell in the current table buffer.
-By-key (the `table-view-col' text property), so column reorders never
-silently redirect a test to the wrong cell."
+  "Move point to row ID's KEY cell in the current table and assert its column."
   (table-view--goto-id id)
   (table-view--goto-cell key)
   (should (equal key (get-text-property (point) 'table-view-col))))
 
 (cl-defun org-glance-test:table-cell (id key &optional (buf (current-buffer)))
-  "Cell KEY of row ID in table BUF (default: current buffer)."
+  "Return cell KEY of row ID in table BUF, default current buffer."
   (with-current-buffer buf
     (table-view--cell (cl-find id table-view--rows
                                :key (lambda (r) (alist-get 'id r)) :test #'equal)
                       key)))
 
 (cl-defmacro org-glance-test:offering ((coll answer) &rest body)
-  "Stub `completing-read' around BODY, recording what it offers in COLL.
-Each prompt stores its COLLECTION argument in COLL (last prompt wins), then
-replies with ANSWER, a form that may read COLL (e.g. `(caar coll)').  COLL
-stays bound around BODY for assertions on what was offered.  Complement of
-`org-glance-test:answering', whose stubs cannot see their arguments."
+  "Stub `completing-read' around BODY, recording the last collection in COLL.
+Each prompt returns ANSWER, a form that may read COLL, e.g. `(caar coll)'.
+Complement of `org-glance-test:answering', whose stubs cannot see arguments."
   (declare (indent 1) (debug ((symbolp form) body)))
   `(let (,coll)
      (cl-letf (((symbol-function 'completing-read)
@@ -239,10 +223,9 @@ stays bound around BODY for assertions on what was offered.  Complement of
        ,@body)))
 
 (cl-defmacro org-glance-test:with-shown ((var) &rest body)
-  "Stub `switch-to-buffer'/`pop-to-buffer' to record shown buffers in VAR
-\(most recent; the stubs still return the buffer).  Run BODY; on exit KILL
-every buffer shown, modified flags cleared -- shown buffers must never leak
-into later tests (a stray view buffer changes what later tests observe)."
+  "Run BODY with `switch-to-buffer'/`pop-to-buffer' stubbed to set VAR.
+VAR holds the last buffer shown, which the stubs still return.  Exit kills
+every shown buffer, modified flags cleared, so none leaks into later tests."
   (declare (indent 1) (debug ((symbolp) body)))
   (let ((all (gensym "shown-all")))
     `(let (,var ,all)
@@ -258,10 +241,9 @@ into later tests (a stray view buffer changes what later tests observe)."
              (kill-buffer b)))))))
 
 (cl-defun org-glance-test:headline-props (id heading props &rest body)
-  "Build a headline: HEADING, planning lines from BODY's head, the drawer
-\(ORG_GLANCE_ID + PROPS as (KEY . VALUE) pairs), then the rest of BODY.
-Planning lines (SCHEDULED:/DEADLINE:/CLOSED:) are hoisted BEFORE the drawer,
-where org expects them."
+  "Build a headline carrying ID from HEADING, PROPS and BODY.
+BODY's leading SCHEDULED:/DEADLINE:/CLOSED: lines follow HEADING, then a
+drawer of ORG_GLANCE_ID and the (KEY . VALUE) PROPS, then the rest of BODY."
   (let* ((planning (seq-take-while
                     (lambda (l) (string-match-p "^\\(SCHEDULED\\|DEADLINE\\|CLOSED\\):" l))
                     body))
@@ -286,10 +268,7 @@ where org expects them."
     (call-interactively #'table-view-mark-toggle)))
 
 (cl-defmacro org-glance-test:answering (bindings &rest body)
-  "Stub prompting functions to constant answers around BODY.
-BINDINGS is ((FN VALUE)...); each FN becomes a lambda ignoring its args and
-returning VALUE.  For prompts whose stub must inspect its arguments, use a
-plain `cl-letf'."
+  "Stub each FN of BINDINGS ((FN VALUE)...) to a constant VALUE around BODY."
   (declare (indent 1))
   `(cl-letf ,(mapcar (lambda (b)
                        `((symbol-function ',(car b)) (lambda (&rest _) ,(cadr b))))
@@ -310,14 +289,12 @@ plain `cl-letf'."
   (org-todo "DONE"))
 
 (defun org-glance-test:offered-ids (candidates)
-  "Sorted headline ids of a picker's CANDIDATES alist (label . metadata)."
+  "Return the sorted headline ids of a picker's (label . metadata) CANDIDATES."
   (sort (mapcar (lambda (c) (org-glance-headline-metadata:id (cdr c))) candidates)
         #'string<))
 
 (cl-defmacro org-glance-test:field (graph id field)
-  "GRAPH's stored metadata FIELD for ID.
-FIELD is the unquoted slot name (`title', `state', `encrypted?' ...); it
-expands to the `org-glance-headline-metadata:' accessor at compile time."
+  "Return GRAPH's stored FIELD for ID; FIELD is an unquoted metadata slot name."
   `(,(intern (format "org-glance-headline-metadata:%s" field))
     (org-glance-graph:get-headline ,graph ,id)))
 
@@ -336,20 +313,18 @@ expands to the `org-glance-headline-metadata:' accessor at compile time."
      ,@body))
 
 (cl-defun org-glance-test:meta-cell (graph id key)
-  "The KEY cell string of headline ID's `org-glance-table' row in GRAPH.
-Reads the row GRAPH derives fresh from metadata, unlike
-`org-glance-test:table-cell', which reads the row a table buffer holds."
+  "Return the KEY cell of ID's `org-glance-table' row derived fresh from GRAPH.
+`org-glance-test:table-cell' reads a table buffer's row instead."
   (alist-get key (alist-get 'cells
                             (org-glance-table--row (org-glance-graph:get-headline graph id)))))
 
 (defun org-glance-test:row-ids (rows)
-  "The `id' cell of each row in ROWS."
+  "Return the `id' cell of each row in ROWS."
   (mapcar (lambda (r) (alist-get 'id r)) rows))
 
 (cl-defmacro org-glance-test:assert-fills-frame (visit-form)
-  "Assert VISIT-FORM fills the frame when `org-glance-view-fill-frame' is non-nil
-and leaves a two-window split alone when nil.  VISIT-FORM must return the view
-buffer and really display it (`switch-to-buffer')."
+  "Assert VISIT-FORM fills the frame iff `org-glance-view-fill-frame' is set.
+VISIT-FORM must return the view buffer, displayed via `switch-to-buffer'."
   `(save-window-excursion
      (dolist (case '((t . 1) (nil . 2)))
        (delete-other-windows) (split-window)          ; two windows before the visit
@@ -368,8 +343,7 @@ buffer and really display it (`switch-to-buffer')."
     (org-glance-graph dir)))
 
 (cl-defun org-glance-test:legacy-encrypt (headline password)
-  "HEADLINE re-parsed with its whole body as legacy (pre-block) ciphertext.
-Fabricates the pre-crypt-block on-disk layout for upgrade/compat tests."
+  "Return HEADLINE re-parsed with its whole body as legacy PASSWORD ciphertext."
   (org-glance-headline--from-string
    (org-glance-headline:with-contents headline
      (org-end-of-meta-data t)
