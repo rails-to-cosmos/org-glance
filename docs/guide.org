@@ -1,0 +1,213 @@
+#+TITLE: org-glance guide
+#+AUTHOR: Dmitry Akatov
+#+EMAIL: dmitry.akatov@protonmail.com
+
+#+CATEGORY: org-glance
+#+STARTUP: overview
+
+Thin [[https://orgmode.org/][org-mode]] metadata layer, query engine and UI for [[https://www.gnu.org/savannah-checkouts/gnu/emacs/emacs.html][Emacs]].
+
+* Install
+
+#+begin_src emacs-lisp
+(add-to-list 'package-archives '("rails-to-cosmos" . "https://rails-to-cosmos.github.io/elpa/"))
+
+(use-package org-glance
+  :bind (("C-x j" . org-glance-transient))
+  :config (org-glance-init)
+  :ensure t)
+#+end_src
+
+The =rails-to-cosmos= archive provides =org-glance= and its [[https://github.com/rails-to-cosmos/table-view][table-view]] dependency; the remaining deps (=dash=, =f=, =s=, =aes=, =transient=) come from MELPA, so keep a MELPA entry in =package-archives= too.
+
+* Usage
+
+Entrypoint is =org-glance-transient= (=C-x j=).
+
+** Capture
+
+=C-x j += → pick (or type) a tag → an org-capture-style buffer opens →
+write an ordinary headline, =C-c C-c=:
+
+#+begin_src org
+,* TODO [#A] Kopi Luwak :coffee:
+  SCHEDULED: <2026-08-01 Sat> DEADLINE: <2026-08-10 Mon>
+
+  Passed through a civet.
+  [[https://example.com][Homepage]]
+#+end_src
+
+** Overview
+
+=C-x j o= → pick a tag → its *table*: one row per headline, colour-coded todo states:
+
+#+begin_example
+| State | Title      | Scheduled        | Deadline         | Pri | Tags   |
+|-------+------------+------------------+------------------+-----+--------|
+| TODO  | Kopi Luwak | <2026-08-01 Sat> | <2026-08-10 Mon> | A   | coffee |
+#+end_example
+
+=O= toggles to the org-text *overview* — a plain read-only org buffer, so folding, =C-x j a= (agenda) and link clicking all behave exactly as in org. Each overview heading is self-sufficient:
+
+#+begin_src org
+,* TODO [#A] Kopi Luwak :coffee:
+DEADLINE: <2026-08-10 Mon> SCHEDULED: <2026-08-01 Sat>
+- [[https://example.com][Homepage]]
+#+end_src
+
+Act on the row/heading at point without opening anything:
+
+| Key               | On the single row at point                                                     | With =C-u=                     | With marked rows (=m=)      | Pressed again (toggle)                       |
+|-------------------+--------------------------------------------------------------------------------+------------------------------+---------------------------+----------------------------------------------|
+| =RET=               | materialize (open for editing, step 3)                                         |                              |                           |                                              |
+| =m=                 | mark (=u= unmarks)                                                               |                              |                           | unmark                                       |
+| =M= / =U=             | mark all visible / unmark all                                                  |                              |                           |                                              |
+| =C-c C-t=           | change todo state                                                              |                              | one prompt sets all       |                                              |
+| =C-c C-s= / =C-c C-d= | schedule / deadline                                                            | clear it                     |                           |                                              |
+| =+= / =-=             | add a headline to the view's tag (capture) / remove one from it                |                              |                           |                                              |
+| =C-c +=             | add a column (drawer property or relation kind)                                |                              |                           |                                              |
+| =C-c -=             | remove the column at point (prompts when point is off a column)                | always prompt for the column |                           |                                              |
+| =:=                 | add another tag to the headline                                                | remove one                   |                           |                                              |
+| =j= (or =!=)          | open a link inside the headline                                                |                              |                           |                                              |
+| =@=                 | table of everything the headline relates to (both directions)                  |                              |                           |                                              |
+| =i=                 | edit the cell at point (state: todo prompt; dates: calendar; text: minibuffer) |                              |                           |                                              |
+| =C-c p=             | copy the headline (a fresh id, content verbatim)                               |                              |                           |                                              |
+| =e=                 | copy a =KEY: value= from its body                                                |                              |                           |                                              |
+| =#=                 | encrypt                                                                        | change password              |                           | decrypt                                      |
+| =l=                 | log occurrences of a repeating headline (step 6)                               |                              |                           |                                              |
+| =D=                 | delete                                                                         |                              |                           |                                              |
+| =O=                 | switch to the org overview                                                     |                              |                           | back to the table                            |
+| =/=                 | filter by substring                                                            | clear the filter             | narrow to the marked rows | widen the narrowed view                      |
+| =^=                 | sort by the column at point                                                    |                              |                           | flip asc ⇄ desc; off a column: cycle columns |
+| =g=                 | refresh (table); resets the =/= filter / narrow to the view's own filter         |                              |                           |                                              |
+| =?=                 | show the key legend (table)                                                    |                              |                           | hide it                                      |
+| =C-c C-c=           | save the layout (reference tables: prompt for a scope)                         |                              |                           |                                              |
+
+Column layout, sort and added columns persist per tag.  Optionally give a tag
+its own config: todo cycle and capture template (=C= in the transient — or =C=
+in that tag's overview / table to edit it directly).
+
+** Edit a headline
+
+=RET= on a row/heading (or =C-x j m= anywhere) *materializes* it: its file opens in a normal org buffer. Everything org can do works here. =C-x C-s= saves and re-indexes; open views refresh on their next display.  Bookkeeping properties such as =:ORG_GLANCE_ID:= stay out of the buffer and are written back on every save.
+
+** Relations
+
+In a materialized buffer — or while capturing (step 1) — =@= at the start of a word prompts for another headline and inserts a link to it; =C-u @= also asks a reference *kind*:
+
+#+begin_src org
+roasted by [[glance:0e904834?kind=roasted-by][Manhattan Coffee Roasters]]
+#+end_src
+
+Clicking the link opens the roaster; the graph indexes it as a typed edge, and the views pick it up. The overview heading gains a relation line:
+
+#+begin_src org
+- roasted by [[org-glance-material:0e904834][Manhattan Coffee Roasters]]
+#+end_src
+
+and =C-c += in the table now offers a =Roasted by= column with the target titles:
+
+#+begin_example
+State  Title       ...  Roasted by
+TODO   Kopi Luwak  ...  Manhattan Coffee Roasters
+#+end_example
+
+In a materialized buffer:
+
+| Key   | Action                                         |
+|-------+------------------------------------------------|
+| =@=     | insert a reference (completion, at word start) |
+| =C-u @= | same, plus a reference kind (=roasted by=, …)    |
+| =C-c @= | table of everything this headline relates to   |
+
+A relation table lists both directions in one view — the headlines this one refers to AND the ones referring to it — and its =Relation= column names each row's direction and kind (=> roasted by=, =<=).  =@= on a row in the table or the overview opens the same view for that headline.
+
+Relation tables open with the default layout; edits to it are not saved automatically (an echo-area nudge reminds you) — =C-c C-c= applies the layout (columns, order, sort) to a scope of your choice: this headline, or a tag pair (=coffee → roaster=, the anchor's tag first).  Every later relation table matching the scope restores it.
+
+A link can also address a whole view: =[[org-glance-overview:coffee?done=nil][Active coffees]]=.
+
+** Encryption
+
+Wrap a region in a crypt block with =C-c #= (no region: the whole body):
+
+#+begin_src org
+,#+begin_crypt
+bank: 1234-5678
+,#+end_crypt
+#+end_src
+
+On disk it is ciphertext, and a materialized headline opens THAT WAY -- no password prompt until you ask for one.  Unseal with =C-c #= in the buffer, or materialize with the transient's =-d= switch to open decrypted; then it re-seals on every save (auto-save and backups disabled).  Text OUTSIDE the blocks stays public and searchable.
+
+=C-c #= is the only crypt key; what it does depends on where point is:
+
+| Point / buffer state         | =C-c #=                                   |
+|------------------------------+-----------------------------------------|
+| active region                | wrap it in a crypt block                |
+| sealed buffer (ciphertext)   | unseal it (prompts, hardens the buffer) |
+| inside a plaintext block     | unwrap that block -- public on save     |
+| decrypted, outside any block | seal it back, forgetting the password   |
+| plaintext headline           | encrypt the whole body as one block     |
+
+** Repeating headlines
+
+A headline with a repeater (=SCHEDULED: <… +1d>=) stays ONE headline.  With =org-glance-repeat-history-depth= set (N newest, =t= = all, per-headline =:ORG_GLANCE_REPEAT_HISTORY_DEPTH:= wins), each completion snapshots the done state before org resets it; the table's =Rep= column marks repeaters, and =l= (=C-c h= in the buffer) opens any past occurrence read-only.
+
+* Customize
+
+| Variable                              | Default                       |                                                                                            |
+|---------------------------------------+-------------------------------+--------------------------------------------------------------------------------------------|
+| =org-glance-directory=                  | =org-directory=                 | root of the managed content (store lives in =.org-glance/=)                                  |
+| =org-glance-overview-default-view=      | =org-glance-table=              | what =o= opens; =org-glance-overview= for org-text                                             |
+| =org-glance-filter-spec=                | active, -archived, -commented | ambient filter every view starts from (=nil= = everything)                                   |
+| =org-glance-view-fill-frame=            | =t=                             | views take the whole frame; =nil= keeps your windows                                         |
+| =org-glance-repeat-history-depth=       | =0=                             | occurrence snapshots kept: N / =t= = all / =0= = off                                           |
+| =org-glance-material-password-ttl=      | =300=                           | seconds a crypt password stays cached; =0= = forever                                         |
+| =org-glance-material-hidden-properties= | id + hash                     | drawer keys kept out of material buffers, written back on save                            |
+| =org-glance-table-state-colors=         | tokyo-night-ish               | per-state badge colours (falls back to =org-todo-keyword-faces=, then =…-default-state-color=) |
+| =org-glance-plugins=                    | =nil=                           | plugins to load at init (e.g. =(llm)=); =I= enables one, =U= disables                            |
+| =org-glance-conflict-resolution=        | =ask=                           | git-conflict healing: =ask= / =union= / =nil= (error)                                            |
+| =org-glance-tag-config-dir=             | =nil=                           | override dir of per-tag config files (=config/tags/=)                                        |
+
+Example — org-text views, everything visible, daily history for a year:
+
+#+begin_src emacs-lisp
+(setq org-glance-overview-default-view 'org-glance-overview
+      org-glance-filter-spec nil               ; show DONE too
+      org-glance-repeat-history-depth 365)
+#+end_src
+
+* Plugins
+
+Optional features ship as SEPARATE packages.  Two steps, and they belong to different tools: your package manager installs the package, org-glance enables it.  Install it, then list it in =org-glance-plugins= — or press =I= in the transient (=U= disables).  The transient's *System* heading lists what is enabled and marks any plugin whose library failed to load:
+
+#+begin_src emacs-lisp
+(use-package org-glance-llm
+  :after org-glance
+  :ensure t
+  :init (setq org-glance-plugins '(llm)))
+#+end_src
+
+- [[https://github.com/rails-to-cosmos/org-glance-llm][*org-glance-llm*]] — LLM sessions per headline.  =l= opens an
+  [[https://github.com/rails-to-cosmos/agnostic-llm][agnostic-llm]] session in the
+  headline's data directory (or its =:ORG_GLANCE_PROJECT_DIR:=, set with
+  =C-c d= in a materialized buffer); =L= lists every session (running /
+  exited / stopped), derived live at each refresh; =C-c l= opens the session for
+  the headline at hand.  It depends on =agnostic-llm= (also on the
+  =rails-to-cosmos= archive), which pulls in =vterm= — loaded lazily on
+  first use.  Core org-glance does NOT depend on it.
+
+* Maintenance
+
+Everything derived rebuilds from the org files, so these are safe to run at any time:
+
+| Command                                    | What it does                                     |
+|--------------------------------------------+--------------------------------------------------|
+| =M-x org-glance-reindex=                     | rebuild every derived index from the org files   |
+| =M-x org-glance-graph:refresh-external=      | fold in edits made by another program right now  |
+| =M-x org-glance-graph:clear-spent-external=  | delete spent notification files to reclaim space |
+
+* Hacking
+
+Conventions, invariants and the build/test commands: [[file:../AGENTS.md][AGENTS.md]].
+
+Design wiki, including the local-development setup: [[file:index.org][index.org]].

@@ -141,6 +141,8 @@ Notable user-facing changes.  Versions date-based
   not deleted) -- mirror of the bare =+= capture.
 
 ** Changed
+- README: adds installation and capture examples and moves the full feature
+  reference to =docs/guide.org=.
 - =C-c @= in a material buffer now calls =org-glance-relations:references=
   (was =org-glance-material:references=); the command moved to the new
   =org-glance-relations= bridge library, above both material and table.
