@@ -53,9 +53,10 @@ evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
 6. Ids are path-safety-checked via `error` (never `cl-assert`) before any filesystem use.
 7. Single-user, no locking; staleness detection uses the full store snapshot (mtime +
    size + segment names), never mtime alone.
-8. Git conflicts heal by union merge; `.eld` sidecar merges are commutative and
-   non-inflating (earliest/latest/`max`, never a sum), the property index being the
-   deliberate lossy-floor exception. The jsonl resolver is the WAL's alone, named as an
+8. Git conflicts heal by union merge. Writer-owned `meta/tag-metrics-seg-*.eld`
+   components sum across files; divergent snapshots of one component and migrated
+   legacy baselines merge non-inflating by earliest/latest/`max`. The property index is
+   the deliberate lossy-floor exception. The jsonl resolver is the WAL's alone, named as an
    ALLOWLIST — the open segment and `seg-<gen>.jsonl` — so every other JSONL family in
    `meta/` is out by construction: the notification queue, its generations, glance's
    `COMPLETIONS.jsonl`. The NAMES are the handle, the resolver running ahead of

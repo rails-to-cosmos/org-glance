@@ -1,27 +1,76 @@
-;;; org-glance-tag-metrics.el --- per-tag event metrics sidecar -*- lexical-binding: t; -*-
+;;; org-glance-tag-metrics.el --- per-tag event metric segments -*- lexical-binding: t; -*-
 
 ;;; Code:
 
 (require 'cl-lib)
 (require 'f)
+(require 'org-id)
 (require 'org-glance-utils)
 (require 'org-glance-tag)
 (require 'org-glance-graph)
 
+(defvar org-glance-tag-metrics--session-id nil
+  "Dynamically bound writer id override for tag-metrics tests.")
+
+(defvar org-glance-tag-metrics--session-ids (make-hash-table :test #'equal)
+  "Writer ids keyed by canonical store path for this Emacs process.")
+
+(defconst org-glance-tag-metrics--segment-name-re
+  (concat "\\`tag-metrics-seg-"
+          "[[:xdigit:]]\\{8\\}-[[:xdigit:]]\\{4\\}-[[:xdigit:]]\\{4\\}-"
+          "[[:xdigit:]]\\{4\\}-[[:xdigit:]]\\{12\\}\\.eld\\'")
+  "Matches a writer-owned tag-metrics segment basename.")
+
+(defconst org-glance-tag-metrics--legacy-name-re
+  "\\`tag-metrics-legacy-[[:xdigit:]]\\{40\\}\\.eld\\'"
+  "Matches a migrated singleton tag-metrics segment basename.")
+
+(cl-defun org-glance-tag-metrics--session-id (graph)
+  "Return this Emacs process's stable writer id for GRAPH."
+  (or org-glance-tag-metrics--session-id
+      (let ((store (org-glance-graph:store-path graph)))
+        (or (gethash store org-glance-tag-metrics--session-ids)
+            (puthash store (org-id-uuid)
+                     org-glance-tag-metrics--session-ids)))))
+
 (cl-defun org-glance-tag-metrics--file (graph)
-  "Path to GRAPH's per-tag metrics sidecar."
-  (org-glance-graph:config-file graph "tag-metrics.eld"))
+  "Path to this Emacs process's writer-owned metrics segment for GRAPH."
+  (f-join (org-glance-graph:meta-path graph)
+          (format "tag-metrics-seg-%s.eld"
+                  (org-glance-tag-metrics--session-id graph))))
+
+(cl-defun org-glance-tag-metrics--files (graph regexp)
+  "Return GRAPH's regular metadata files whose basenames match REGEXP."
+  (sort (cl-remove-if-not
+         #'file-regular-p
+         (directory-files (org-glance-graph:meta-path graph) t regexp))
+        #'string<))
+
+(cl-defun org-glance-tag-metrics--read-file (path)
+  "Read one writer-owned metrics segment at PATH, healing divergent snapshots."
+  (org-glance--heal-eld
+   path
+   (lambda (sides)
+     (org-glance-tag-metrics--merge-maps (cl-remove-if-not #'listp sides)))
+   (file-name-nondirectory path)))
 
 (cl-defun org-glance-tag-metrics--read (graph)
-  "Return GRAPH's tag-metrics map, an alist TAG-STRING -> plist, or nil.
-A git-conflicted sidecar heals by union merge (invariant 8)."
-  (org-glance--heal-eld
-   (org-glance-tag-metrics--file graph)
-   (lambda (sides)
-     (org-glance-tag-metrics--merge-maps (cl-remove-if-not #'listp sides)))))
+  "Return GRAPH's folded tag-metrics map, an alist TAG-STRING -> plist.
+Writer-owned segments add their disjoint counters.  Migrated singleton
+snapshots first merge by extrema, preserving their shared historical base."
+  (org-glance-tag-metrics--migrate graph)
+  (let* ((legacy (mapcar #'org-glance-tag-metrics--read-file
+                         (org-glance-tag-metrics--files
+                          graph org-glance-tag-metrics--legacy-name-re)))
+         (baseline (org-glance-tag-metrics--merge-maps legacy))
+         (segments (mapcar #'org-glance-tag-metrics--read-file
+                           (org-glance-tag-metrics--files
+                            graph org-glance-tag-metrics--segment-name-re))))
+    (org-glance-tag-metrics--sum-maps
+     (if baseline (cons baseline segments) segments))))
 
 (cl-defun org-glance-tag-metrics--write (graph map)
-  "Persist MAP (alist TAG-STRING -> plist) as GRAPH's tag-metrics sidecar."
+  "Persist MAP in this Emacs process's writer-owned segment for GRAPH."
   (org-glance--write-eld (org-glance-tag-metrics--file graph) map))
 
 (cl-defun org-glance-tag-metrics--merge-plists (a b)
@@ -53,12 +102,50 @@ A git-conflicted sidecar heals by union merge (invariant 8)."
                                 (cdr existing) (cdr cell)))
             (push (cons (car cell) (copy-sequence (cdr cell))) merged)))))))
 
+(cl-defun org-glance-tag-metrics--sum-plists (a b)
+  "Combine metrics from disjoint writer segments A and B."
+  (let ((out (org-glance-tag-metrics--merge-plists a b)))
+    (dolist (key '(:captures :removals) out)
+      (setq out (plist-put out key (+ (or (plist-get a key) 0)
+                                      (or (plist-get b key) 0)))))))
+
+(cl-defun org-glance-tag-metrics--sum-maps (maps)
+  "Fold disjoint writer MAPS, summing counters and merging timestamps."
+  (let (sum)
+    (dolist (map maps (nreverse sum))
+      (dolist (cell map)
+        (let ((existing (assoc (car cell) sum)))
+          (if existing
+              (setcdr existing (org-glance-tag-metrics--sum-plists
+                                (cdr existing) (cdr cell)))
+            (push (cons (car cell) (copy-sequence (cdr cell))) sum)))))))
+
+(cl-defun org-glance-tag-metrics--migrate (graph)
+  "Move GRAPH's legacy config singleton into a content-addressed baseline.
+Divergent legacy files acquire different names and merge by extrema on read."
+  (let ((legacy (org-glance-graph:config-file graph "tag-metrics.eld")))
+    (when (f-exists? legacy)
+      (let* ((map (org-glance--heal-eld
+                   legacy
+                   (lambda (sides)
+                     (org-glance-tag-metrics--merge-maps
+                      (cl-remove-if-not #'listp sides)))))
+             (bytes (prin1-to-string map))
+             (name (format "tag-metrics-legacy-%s.eld"
+                           (secure-hash 'sha1 bytes)))
+             (dest (f-join (org-glance-graph:meta-path graph) name)))
+        (unless (f-exists? dest)
+          (org-glance--write-eld dest map))
+        (when (f-exists? legacy)
+          (f-delete legacy))))))
+
 (cl-defun org-glance-tag-metrics--touch (graph specs)
   "Record GRAPH's tag events for SPECS; hooked before each append.
 A live record bumps `:captures', a tombstone `:removals' (its cached tags);
 both stamp `:created' once and `:modified' now."
   (let ((now (current-time))
-        (map (org-glance-tag-metrics--read graph))
+        (map (org-glance-tag-metrics--read-file
+              (org-glance-tag-metrics--file graph)))
         (changed nil))
     (cl-labels
         ((bump (tag counter)
@@ -82,24 +169,18 @@ both stamp `:created' once and `:modified' now."
 
 (add-hook 'org-glance-graph-before-append-functions #'org-glance-tag-metrics--touch)
 
-(cl-defun org-glance-tag-metrics--heal-on-open (graph)
-  "Resolve a git-conflicted tag-metrics sidecar when GRAPH is opened.
-Heal eagerly, like the WAL resolver, under `org-glance-conflict-resolution'."
-  (let ((path (org-glance-tag-metrics--file graph)))
-    (when (and (f-exists? path)
-               (org-glance--conflict-marked? (f-read-text path 'utf-8)))
-      (org-glance-tag-metrics--read graph))))
-
-(add-hook 'org-glance-graph-after-open-functions #'org-glance-tag-metrics--heal-on-open)
+(add-hook 'org-glance-graph-after-open-functions #'org-glance-tag-metrics--read)
 
 (cl-defun org-glance-tag-metrics--ensure-created (graph live-tags)
   "Ensure LIVE-TAGS each have a `:created' in GRAPH's sidecar; return the map.
 Seed a missing one from its headlines' earliest blob mtime, else now."
-  (let* ((map (org-glance-tag-metrics--read graph))
-         (unseeded (cl-remove-if (lambda (tag) (plist-get (cdr (assoc tag map)) :created))
+  (let* ((all (org-glance-tag-metrics--read graph))
+         (map (org-glance-tag-metrics--read-file
+               (org-glance-tag-metrics--file graph)))
+         (unseeded (cl-remove-if (lambda (tag) (plist-get (cdr (assoc tag all)) :created))
                                  live-tags)))
     (if (null unseeded)
-        map
+        all
       (let ((earliest (make-hash-table :test 'equal)))
         (dolist (meta (org-glance-graph:headlines graph))
           (let ((tags (org-glance-headline-metadata:tag-strings meta)))
@@ -119,7 +200,7 @@ Seed a missing one from its headlines' earliest blob mtime, else now."
                                 (or (gethash tag earliest) (current-time)))))
             (if cell (setcdr cell pl) (push (cons tag pl) map))))
         (org-glance-tag-metrics--write graph map)
-        map))))
+        (org-glance-tag-metrics--read graph)))))
 
 (cl-defun org-glance-tag-metrics:all (graph)
   "Return per-tag metrics for GRAPH's live tags, seeding missing `:created'.

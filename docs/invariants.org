@@ -86,12 +86,15 @@ argument in [[file:proposals][docs/proposals/]].
    family, on the one cohort =--ensure-gitignore= cannot help (inv 34).  A store
    already carrying the wide glob keeps it until a hand edit.
 
-   =.eld= sidecar merges are commutative and non-inflating — earliest/latest/=max=,
-   never a sum; a =nil= side never shadows a populated one (=org-glance--read-eld=,
-   =org-glance-tag-metrics--merge-plists=).  The property-index sidecar is the
+   Tag metrics use writer-owned =meta/tag-metrics-seg-*.eld= components: counters
+   SUM across distinct files; divergent snapshots of one component and migrated
+   =tag-metrics-legacy-*.eld= baselines merge by earliest/latest/=max=.  Thus no two
+   writers normally edit one path and concurrent increments survive exactly
+   (=org-glance-tag-metrics--sum-maps=, =--merge-plists=).  A =nil= side never
+   shadows a populated one (=org-glance--read-eld=).  The property-index sidecar is the
    deliberate exception, reading via the lossy =--read-eld= floor, a conflict
    self-healing on the next content-hash miss.  See
-   [[file:proposals/2026-07-15-eld-sidecar-conflict-resolution.done.org][eld-sidecar-conflict-resolution]].
+   [[file:proposals/2026-09-23-segmented-tag-metrics.done.org][segmented-tag-metrics]].
 
 * Hooks and views
 

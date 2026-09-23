@@ -128,10 +128,10 @@ count of headlines whose =closed-day= falls in that bucket.
 
 ** 4. The WRITE-activity histogram
 
-The tag-metrics sidecar (=config/tag-metrics.eld=) is an alist of TAG-STRING ->
-plist (=src/data/org-glance-tag-metrics.el:19-29=).  Add ONE global per-day
-counter under a reserved key that cannot collide with a tag (tags are downcased
-symbol names; use a keyword, e.g. =:activity=), whose value is an alist
+Each =meta/tag-metrics-seg-<writer>.eld= component is an alist of TAG-STRING ->
+plist.  Add the per-day counter to each writer component and sum it with the
+same disjoint-component fold as captures/removals.  Use a reserved key that
+cannot collide with a tag (for example =:activity=), whose value is an alist
 =("YYYY-MM-DD" . count)=.
 
 - *Bump.*  =org-glance-tag-metrics--touch= already runs on

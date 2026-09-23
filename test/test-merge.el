@@ -184,11 +184,11 @@ Declining errors and leaves the markers in place."
       (should-error (org-glance-test:reopen graph))
       (should (s-contains? "<<<<<<<" (f-read-text open 'utf-8))))))
 
-;;; tag-metrics.eld conflicts: config/*.eld lies outside the union driver.
+;;; Writer-owned tag-metrics segments heal divergent snapshots by extrema.
 
 (ert-deftest org-glance-test:merge-tag-metrics-plist-semantics ()
-  "Metric plists union by field and never sum (invariant 8).
-They keep the earliest :created, latest :modified and `max' counters."
+  "Snapshots of one metric component merge by field and never sum.
+They keep the earliest :created, latest :modified and `max' counters (invariant 8)."
   (let ((m (org-glance-tag-metrics--merge-plists
             (list :created (seconds-to-time 100) :modified (seconds-to-time 200) :captures 3 :removals 1)
             (list :created (seconds-to-time 50)  :modified (seconds-to-time 300) :captures 5 :removals 0))))
@@ -198,7 +198,7 @@ They keep the earliest :created, latest :modified and `max' counters."
     (should (= 1 (plist-get m :removals)))))
 
 (ert-deftest org-glance-test:merge-tag-metrics-conflict-union-resolved ()
-  "Under `union', reading a conflicted tag-metrics.eld heals it by field merge."
+  "Under `union', reading a conflicted writer segment heals by field merge."
   (org-glance-test:with-graph graph
     (let* ((org-glance-conflict-resolution 'union)
            (file (org-glance-test-merge:write-metrics-conflict
@@ -217,7 +217,7 @@ They keep the earliest :created, latest :modified and `max' counters."
         (should (equal m (car (read-from-string text))))))))
 
 (ert-deftest org-glance-test:merge-tag-metrics-conflict-ask-approved ()
-  "Under `ask', approving the prompt heals the conflicted tag-metrics.eld."
+  "Under `ask', approving the prompt heals the conflicted writer segment."
   (org-glance-test:with-graph graph
     (let ((org-glance-conflict-resolution 'ask)
           (file (org-glance-test-merge:write-metrics-conflict
@@ -228,7 +228,7 @@ They keep the earliest :created, latest :modified and `max' counters."
       (should-not (s-contains? "<<<<<<<" (f-read-text file 'utf-8))))))
 
 (ert-deftest org-glance-test:merge-tag-metrics-conflict-nil-errors ()
-  "With resolution nil, a conflicted tag-metrics.eld errors and stays marked."
+  "With resolution nil, a conflicted writer segment errors and stays marked."
   (org-glance-test:with-graph graph
     (let ((org-glance-conflict-resolution nil)
           (file (org-glance-test-merge:write-metrics-conflict
@@ -237,7 +237,7 @@ They keep the earliest :created, latest :modified and `max' counters."
       (should (s-contains? "<<<<<<<" (f-read-text file 'utf-8))))))
 
 (ert-deftest org-glance-test:merge-tag-metrics-heal-on-open ()
-  "Reopening heals a conflicted tag-metrics.eld via the after-open hook."
+  "Reopening heals a conflicted writer segment via the after-open hook."
   (org-glance-test:with-graph graph
     (let ((org-glance-conflict-resolution 'union)
           (file (org-glance-test-merge:write-metrics-conflict

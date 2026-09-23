@@ -3,6 +3,10 @@
 
 Status: *done* · 2026-07-15
 
+The tag-metrics singleton described here was superseded by
+[[file:2026-09-23-segmented-tag-metrics.done.org][writer-owned metadata segments]].
+The generic conflict toolkit and the remaining config sidecars are unchanged.
+
 Extends [[file:2026-07-09-git-sync-merge-resolution.done.org][git-sync-merge-resolution]] from the =meta/*.jsonl= WAL to the
 =config/*.eld= sidecars, which the =union= git driver cannot cover, and factors
 the conflict machinery both resolvers share into a reusable toolkit.  Suite green

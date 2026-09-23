@@ -2,6 +2,30 @@
 
 (require 'test-helpers)
 
+(ert-deftest org-glance-test:tags-metrics-live-under-meta ()
+  "Each process writes its own tag-metrics segment under meta/."
+  (org-glance-test:with-graph graph
+    (let ((org-glance-tag-metrics--session-id
+           "00000000-0000-0000-0000-000000000001"))
+      (org-glance-graph:add graph (org-glance-test:headline "a" "* A :x:"))
+      (let ((path (org-glance-tag-metrics--file graph)))
+        (should (string-prefix-p (file-name-as-directory
+                                  (org-glance-graph:meta-path graph))
+                                 path))
+        (should (f-exists? path))
+        (should-not (f-exists? (org-glance-graph:config-file
+                                graph "tag-metrics.eld")))))))
+
+(ert-deftest org-glance-test:tags-metrics-worktrees-have-distinct-writers ()
+  "One Emacs process gives separate store paths separate writer segments."
+  (with-temp-directory first
+    (with-temp-directory second
+      (let ((a (org-glance-graph first))
+            (b (org-glance-graph second)))
+        (should-not
+         (equal (file-name-nondirectory (org-glance-tag-metrics--file a))
+                (file-name-nondirectory (org-glance-tag-metrics--file b))))))))
+
 (ert-deftest org-glance-test:tags-metrics-tracked ()
   "Adding headlines records per-tag count, states, timestamps and captures."
   (org-glance-test:with-graph graph
@@ -39,6 +63,45 @@
     (let ((m (cdr (assoc "x" (org-glance-tag-metrics--read graph)))))
       (should (= 1 (plist-get m :removals))))
     (should-not (member "x" (org-glance-graph:tags graph)))))
+
+(ert-deftest org-glance-test:tags-metrics-writer-segments-sum ()
+  "Disjoint writer segments preserve concurrent increments exactly."
+  (org-glance-test:with-graph graph
+    (let ((org-glance-tag-metrics--session-id
+           "00000000-0000-0000-0000-000000000001"))
+      (org-glance-graph:add graph (org-glance-test:headline "a" "* A :x:")))
+    (let ((org-glance-tag-metrics--session-id
+           "00000000-0000-0000-0000-000000000002"))
+      (org-glance-graph:add graph (org-glance-test:headline "b" "* B :x:")))
+    (let ((m (cdr (assoc "x" (org-glance-tag-metrics--read graph)))))
+      (should (= 2 (plist-get m :captures))))))
+
+(ert-deftest org-glance-test:tags-metrics-migrates-config-singleton ()
+  "The old config singleton becomes a content-addressed metadata baseline."
+  (org-glance-test:with-graph graph
+    (let ((legacy (org-glance-graph:config-file graph "tag-metrics.eld")))
+      (org-glance--write-eld legacy '(("x" :captures 7 :removals 2)))
+      (let ((m (cdr (assoc "x" (org-glance-tag-metrics--read graph)))))
+        (should (= 7 (plist-get m :captures)))
+        (should (= 2 (plist-get m :removals))))
+      (should-not (f-exists? legacy))
+      (should (= 1 (length (org-glance-tag-metrics--files
+                            graph org-glance-tag-metrics--legacy-name-re)))))))
+
+(ert-deftest org-glance-test:tags-metrics-legacy-baselines-do-not-double-count ()
+  "Divergent singleton migrations merge before current components are added."
+  (org-glance-test:with-graph graph
+    (let ((meta (org-glance-graph:meta-path graph)))
+      (org-glance--write-eld
+       (f-join meta (concat "tag-metrics-legacy-" (make-string 40 ?a) ".eld"))
+       '(("x" :captures 5)))
+      (org-glance--write-eld
+       (f-join meta (concat "tag-metrics-legacy-" (make-string 40 ?b) ".eld"))
+       '(("x" :captures 7)))
+      (org-glance--write-eld (org-glance-tag-metrics--file graph)
+                             '(("x" :captures 2)))
+      (should (= 9 (plist-get (cdr (assoc "x" (org-glance-tag-metrics--read graph)))
+                              :captures))))))
 
 (ert-deftest org-glance-test:tags-rows ()
   "`org-glance-tags--rows' yields one row per tag, id = tag, count in cells."

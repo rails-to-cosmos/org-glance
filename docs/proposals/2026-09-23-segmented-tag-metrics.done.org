@@ -1,0 +1,46 @@
+#+TITLE: Writer-owned tag-metrics segments
+#+DATE: 2026-09-23
+
+Status: *done* · 2026-09-23
+
+* Problem
+
+=config/tag-metrics.eld= was one tracked, atomically rewritten alist.  Every
+writer edited that path.  Its semantic conflict merge kept timestamp extrema
+and =max= counters, which avoided inflation but lost distinct increments.
+
+Copying the headline WAL layout would retain two shared write points: an open
+segment and a MANIFEST.  Tag metrics are commutative aggregates and need no
+positional ordering, so they use independent components instead.
+
+* Design
+
+Each Emacs process owns one =meta/tag-metrics-seg-<uuid>.eld= per canonical store
+path.  The file is a per-tag map of that process's timestamp extrema and
+counters.  A write reads and atomically replaces only its component.  Other
+processes and other worktrees choose different UUIDs.
+
+Reads discover the segment family by its strict basename predicate.  They keep
+the earliest =:created=, latest =:modified=, and sum =:captures= / =:removals=
+across components.  If git presents divergent snapshots of the same component,
+that file heals with earliest/latest/=max= because both sides describe one
+writer's cumulative state.
+
+The old singleton migrates on graph open to
+=meta/tag-metrics-legacy-<sha1>.eld= and is then removed from =config/=.  The
+content-addressed name lets divergent historical singletons coexist.  All
+legacy files first merge by earliest/latest/=max= into one baseline; current
+writer components are added after it.  Migration cannot recover increments the
+old singleton merge had already discarded.
+
+There is no MANIFEST and no automatic compaction.  One process session creates
+at most one component per store.  Safe distributed compaction would need a
+coverage protocol to prevent two compacted snapshots from counting the same
+component twice.
+
+* Verification
+
+=test/test-tags.el= pins the =meta/= location, exact addition across two writer
+components, and singleton migration.  =test/test-merge.el= pins extrema merging
+for divergent snapshots and eager healing on graph open.  The full ERT suite is
+green (412/412).

@@ -5,7 +5,7 @@ Status: *done (v1)* · feature 2026-07-06
 
 Implemented v1 with the recommended defaults (suite 218/218):
 - =src/data/org-glance-tag-metrics.el= — the event sidecar
-  (=config/tag-metrics.eld=), updated via a new =org-glance-graph-before-append-functions=
+  (now writer-owned =meta/tag-metrics-seg-*.eld= components), updated via a new =org-glance-graph-before-append-functions=
   hook (fired PRE-append so a tombstone's tags resolve).  =:all= joins live
   count/states with sidecar created/modified/captures/removals; =:created= seeded
   lazily from blob mtime for pre-existing tags.
@@ -98,10 +98,10 @@ creation cannot be derived after the fact.  Instead — per the request to track
 metrics "on tag creation and on other events" — maintain a *per-tag metrics
 sidecar* the store updates as events happen:
 
-- *Store:* =<store>/config/tag-metrics.eld=, a =tag → (:created TS :modified TS
-  :captures N :removals N)= map, read/written with the existing eld +
-  atomic-rename helpers (=--read-eld= / =graph--atomic-write=).  Config-like side
-  metadata OUTSIDE the content WAL (same stance as =tags.org=).
+- *Store:* =<store>/meta/tag-metrics-seg-<writer>.eld= components, each a =tag →
+  (:created TS :modified TS :captures N :removals N)= map, read/written with the
+  existing eld + atomic-rename helpers.  See
+  [[file:2026-09-23-segmented-tag-metrics.done.org][segmented tag metrics]].
 - *Event seam:* the mutation funnel =graph:insert= / =:capture= / =:delete= (all
   land through =--append=).  After an append, for each affected tag: stamp
   =:created= = =(current-time)= on FIRST sighting (once), =:modified= = now on
@@ -113,9 +113,8 @@ sidecar* the store updates as events happen:
   non-recomputable wall-clock facts live in the sidecar.
 - *Reindex* seeds the sidecar for pre-existing tags, using the earliest blob mtime
   as a best-effort =:created= where there is no recorded event history.
-- *Caveat (cross-process):* the sidecar is best-effort like the read cache — two
-  Emacsen appending at once race the read-modify-write; fine for metrics (the WAL
-  stays the source of truth).  Worth recording as a known caveat.
+- *Cross-process:* each Emacs process owns a distinct component; reads sum their
+  counters, so concurrent increments do not race.
 
 * Per-tag configuration columns
 
@@ -237,7 +236,8 @@ buffer-switch, assert =table-view--rows= / point / keymap):
 
 * Open decisions (for approval)
 
-1. *Metrics sidecar:* store at =config/tag-metrics.eld= (recommended) vs. inside
+1. *Metrics sidecar:* originally shipped at =config/tag-metrics.eld=; now segmented
+   under =meta/= (see the linked follow-up) vs. inside
    the content WAL; which events to count (captures/removals only, or also
    edits/retags/state-changes as distinct counters).
 2. *Remove-tag default:* retag+drop-config (recommended) vs. delete-headlines vs.

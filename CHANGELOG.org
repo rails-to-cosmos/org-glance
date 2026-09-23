@@ -143,6 +143,9 @@ Notable user-facing changes.  Versions date-based
 ** Changed
 - README: adds installation and capture examples and moves the full feature
   reference to =docs/guide.org=.
+- Tag metrics now live in writer-owned =meta/tag-metrics-seg-*.eld= files, so
+  concurrent machines preserve both counter increments without editing one
+  =config/tag-metrics.eld=; existing singleton data migrates on graph open.
 - =C-c @= in a material buffer now calls =org-glance-relations:references=
   (was =org-glance-material:references=); the command moved to the new
   =org-glance-relations= bridge library, above both material and table.
