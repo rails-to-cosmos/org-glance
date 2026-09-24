@@ -166,6 +166,10 @@ evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
     SHA-256 values; `org_headline.content_hash` is org-glance's normalized
     content SHA-1. SQLite serializes its writers. The graph WAL remains the
     compatibility reader until the coordinated stage-5 cutover.
+36. Portable parser projections are immutable JSONL records under
+    `meta/projections/PRODUCER/`, keyed by source-relative path, raw digest,
+    semantic-config fingerprint, parser version and producer. Equal duplicates
+    collapse; divergent payloads invalidate the key. SQLite remains local.
 
 ## Known hazards
 

@@ -1,6 +1,6 @@
 # Generalize: field-spec table for the metadata projection
 
-**Status:** proposed · generalizer audit 2026-06-07
+**Status:** done · generalizer audit 2026-06-07
 
 ## Pattern
 

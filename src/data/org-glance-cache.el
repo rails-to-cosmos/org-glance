@@ -14,8 +14,16 @@
 (defconst org-glance-cache:version 2
   "Shared Glance cache schema version.")
 
+(defconst org-glance-cache--portable-format 1)
+(defconst org-glance-cache--parser-version 1)
+(defconst org-glance-cache--producer "org-glance")
+(defconst org-glance-cache--config-key
+  (secure-hash 'sha256 "org-glance:no-semantic-parser-config")
+  "Fingerprint for the empty semantic parser configuration.")
+
 (defconst org-glance-cache--schema
   '("CREATE TABLE IF NOT EXISTS source (path TEXT PRIMARY KEY, digest TEXT NOT NULL, producer TEXT NOT NULL)"
+    "CREATE TABLE IF NOT EXISTS glance_payload (path TEXT PRIMARY KEY REFERENCES source(path) ON DELETE CASCADE, config TEXT NOT NULL, parser_version INTEGER NOT NULL, producer TEXT NOT NULL, payload TEXT NOT NULL)"
     "CREATE TABLE IF NOT EXISTS headline (id TEXT PRIMARY KEY, path TEXT NOT NULL REFERENCES source(path) ON DELETE CASCADE, digest TEXT NOT NULL, org_id TEXT, org_id_property TEXT, title TEXT NOT NULL, state TEXT, priority TEXT, tags TEXT NOT NULL, scheduled TEXT, deadline TEXT, closed TEXT, category TEXT NOT NULL, created TEXT, producer TEXT NOT NULL)"
     "CREATE INDEX IF NOT EXISTS headline_path ON headline(path)"
     "CREATE TABLE IF NOT EXISTS org_headline (id TEXT PRIMARY KEY REFERENCES headline(id) ON DELETE CASCADE, path TEXT NOT NULL, digest TEXT NOT NULL, content_hash TEXT NOT NULL, record TEXT NOT NULL, producer TEXT NOT NULL)"
@@ -78,6 +86,77 @@
     (insert-file-contents-literally path)
     (secure-hash 'sha256 (current-buffer))))
 
+(cl-defun org-glance-cache--portable-path (graph)
+  "Return GRAPH's tracked org-glance projection directory."
+  (f-join (org-glance-graph:meta-path graph) "projections" "org-glance"))
+
+(cl-defun org-glance-cache--relative-path (graph path)
+  "Return PATH relative to GRAPH, or nil when it escapes the graph root."
+  (let ((relative (file-relative-name path (org-glance-graph:directory graph))))
+    (unless (or (file-name-absolute-p relative)
+                (string-prefix-p "../" relative)
+                (equal relative ".."))
+      relative)))
+
+(cl-defun org-glance-cache--portable-key (record)
+  "Return RECORD's exact portable projection key."
+  (list (plist-get record :path) (plist-get record :digest)
+        (plist-get record :config) (plist-get record :parser)
+        (plist-get record :producer)))
+
+(cl-defun org-glance-cache--portable-records (graph)
+  "Return valid portable projection envelopes stored under GRAPH."
+  (let ((dir (org-glance-cache--portable-path graph)))
+    (when (file-directory-p dir)
+      (cl-loop for path in (directory-files dir t "\\.jsonl\\'")
+               append
+               (cl-loop for line in (split-string (f-read-text path 'utf-8) "\n" t)
+                        for record = (ignore-errors
+                                       (json-parse-string line :object-type 'plist))
+                        when (and record
+                                  (= org-glance-cache--portable-format
+                                     (plist-get record :format)))
+                        collect record)))))
+
+(cl-defun org-glance-cache--portable-payload (graph path digest)
+  "Return GRAPH's one exact portable payload for PATH and DIGEST.
+Equal duplicates collapse. Divergent duplicates invalidate the key."
+  (when-let* ((relative (org-glance-cache--relative-path graph path))
+              (key (list relative digest org-glance-cache--config-key
+                         org-glance-cache--parser-version
+                         org-glance-cache--producer)))
+    (let ((payloads
+           (delete-dups
+            (cl-loop for record in (org-glance-cache--portable-records graph)
+                     when (equal key (org-glance-cache--portable-key record))
+                     collect (plist-get record :payload)))))
+      (when (= 1 (length payloads)) (car payloads)))))
+
+(cl-defun org-glance-cache--write-portable (graph path digest payload)
+  "Write GRAPH's immutable keyed projection for PATH, DIGEST and PAYLOAD."
+  (when-let* ((relative (org-glance-cache--relative-path graph path)))
+    (let* ((record (list :format org-glance-cache--portable-format
+                         :producer org-glance-cache--producer
+                         :parser org-glance-cache--parser-version
+                         :config org-glance-cache--config-key
+                         :path relative :digest digest :payload payload))
+           (text (concat (json-serialize record) "\n"))
+           (stem (secure-hash
+                  'sha256
+                  (format "%S" (org-glance-cache--portable-key record))))
+           (dir (org-glance-cache--portable-path graph))
+           (path (f-join dir (concat stem ".jsonl"))))
+      (make-directory dir t)
+      (cond ((not (file-exists-p path))
+             (org-glance--atomic-write path text nil))
+            ((equal text (f-read-text path 'utf-8)) nil)
+            (t (let ((alternate
+                      (f-join dir (format "%s-%s.jsonl" stem
+                                          (secure-hash 'sha256 text)))))
+                 (unless (and (file-exists-p alternate)
+                              (equal text (f-read-text alternate 'utf-8)))
+                   (org-glance--atomic-write alternate text nil))))))))
+
 (cl-defun org-glance-cache--tags (metadata)
   "Return METADATA's tags in Glance's colon-delimited form."
   (let ((tags (org-glance-headline-metadata:tag-strings metadata)))
@@ -103,7 +182,9 @@
          (content-hash (and headline (org-glance-headline:hash headline)))
          (record (plist-put
                   (org-glance-headline-metadata:serialize metadata)
-                  :hash content-hash)))
+                  :hash content-hash))
+         (payload (and record
+                       (decode-coding-string (json-serialize record) 'utf-8 t))))
     (when (and contents headline digest)
       (sqlite-execute
        db
@@ -129,8 +210,10 @@
        db
        "INSERT INTO org_headline(id,path,digest,content_hash,record,producer) VALUES(?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET path=excluded.path,digest=excluded.digest,content_hash=excluded.content_hash,record=excluded.record,producer=excluded.producer"
        (vector id path digest content-hash
-               (json-serialize record)
-               "org-glance")))))
+               payload
+               "org-glance")))
+    (when (and digest payload)
+      (org-glance-cache--write-portable graph path digest payload))))
 
 (cl-defun org-glance-cache--project-edges (db metadata)
   "Replace METADATA's resolved outgoing edges in DB."
@@ -214,18 +297,28 @@
   (org-glance-cache--with-db
    graph
    (lambda (db)
-     (when-let* ((row (car (sqlite-select
-                            db
-                            "SELECT path,digest,content_hash,record FROM org_headline WHERE id=?"
-                            (vector id))))
-                 (path (nth 0 row))
-                 ((file-exists-p path))
-                 ((equal (nth 1 row) (org-glance-cache--file-digest path)))
-                 (record (json-parse-string (nth 3 row) :object-type 'plist))
-                 (metadata (org-glance-headline-metadata:deserialize record))
-                 ((equal (nth 2 row)
-                         (org-glance-headline-metadata:hash metadata))))
-       metadata))))
+     (let* ((path (org-glance-graph:content-path graph id))
+            (digest (and (file-exists-p path)
+                         (org-glance-cache--file-digest path)))
+            (row (car (sqlite-select
+                       db
+                       "SELECT digest,content_hash,record FROM org_headline WHERE id=?"
+                       (vector id))))
+            (payload (cond
+                      ((and row digest (equal (nth 0 row) digest)) (nth 2 row))
+                      (digest (org-glance-cache--portable-payload
+                               graph path digest))))
+            (record (and payload
+                         (ignore-errors
+                           (json-parse-string payload :object-type 'plist))))
+            (metadata (and record
+                           (org-glance-headline-metadata:deserialize record))))
+       (when (and metadata
+                  (equal id (org-glance-headline-metadata:id metadata))
+                  (or (null row)
+                      (equal (nth 1 row)
+                             (org-glance-headline-metadata:hash metadata))))
+         metadata)))))
 
 (add-hook 'org-glance-graph-after-append-functions
           #'org-glance-cache--after-append)

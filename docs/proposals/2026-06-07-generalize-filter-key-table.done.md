@@ -1,6 +1,6 @@
 # Generalize: one descriptor table for overview filter keys
 
-**Status:** proposed · generalizer audit 2026-06-07
+**Status:** done · generalizer audit 2026-06-07
 
 ## Pattern
 

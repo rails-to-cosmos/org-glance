@@ -14,6 +14,10 @@
       (unwind-protect
           (progn
             (should (equal '((2)) (sqlite-select db "PRAGMA user_version")))
+            (should (equal '(("glance_payload"))
+                           (sqlite-select
+                            db
+                            "SELECT name FROM sqlite_master WHERE type='table' AND name='glance_payload'")))
             (pcase-let ((`((,digest ,content-hash ,producer))
                          (sqlite-select
                           db
@@ -30,6 +34,7 @@
     (let ((metadata (org-glance-cache:metadata graph "a")))
       (should (org-glance-headline-metadata? metadata))
       (should (equal "Alpha" (org-glance-headline-metadata:title metadata))))
+    (delete-directory (org-glance-cache--portable-path graph) t)
     (let ((db (sqlite-open (org-glance-cache:path graph))))
       (unwind-protect
           (sqlite-execute
@@ -46,6 +51,33 @@
              db "UPDATE org_headline SET content_hash='stale' WHERE id='a'"))
         (sqlite-close db)))
     (should-not (org-glance-cache:metadata graph "a"))))
+
+(ert-deftest org-glance-test:portable-cache-cold-clone-and-conflict ()
+  "An exact portable row survives a local-cache loss; disagreement poisons it."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "a" "* TODO Alpha :work:"))
+    (let* ((dir (org-glance-cache--portable-path graph))
+           (files (directory-files dir t "\\.jsonl\\'"))
+           (record (json-parse-string (f-read-text (car files) 'utf-8)
+                                      :object-type 'plist))
+           (cache (org-glance-cache:path graph)))
+      (should (= 1 (length files)))
+      (should (equal "org-glance" (plist-get record :producer)))
+      (should (equal 1 (plist-get record :parser)))
+      (should (equal ".org-glance/data/a/data.org"
+                     (plist-get record :path)))
+      (dolist (suffix '("" "-shm" "-wal"))
+        (ignore-errors (delete-file (concat cache suffix))))
+      (should (equal "Alpha"
+                     (org-glance-headline-metadata:title
+                      (org-glance-cache:metadata graph "a"))))
+      (setf (plist-get record :payload) "{}")
+      (org-glance--atomic-write
+       (f-join dir "conflict.jsonl")
+       (concat (json-serialize record) "\n"))
+      (dolist (suffix '("" "-shm" "-wal"))
+        (ignore-errors (delete-file (concat cache suffix))))
+      (should-not (org-glance-cache:metadata graph "a")))))
 
 (ert-deftest org-glance-test:shared-cache-follows-delete ()
   "Deleting a graph headline removes its shared source and incoming edges."

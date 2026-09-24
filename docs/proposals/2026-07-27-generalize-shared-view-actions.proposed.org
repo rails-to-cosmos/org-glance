@@ -1,6 +1,8 @@
 #+TITLE: One action body per operation, shared by the overview and the table
 #+DATE: 2026-07-27
 
+Status: *proposed*.
+
 * Problem
 
 The overview and the table implement *the same twelve operations twice*:

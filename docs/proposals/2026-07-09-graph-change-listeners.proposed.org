@@ -49,7 +49,7 @@ symmetric *after-commit* emission carrying what changed.
    into the cached ~overview.org~ in place, full render on any structural change
    (add / delete / reorder / compaction). Low priority; land only behind a
    benchmark (see
-   [[file:2026-07-09-dev-tooling-benchmarks-linters.proposed.org][Dev tooling:
+   [[file:2026-07-09-dev-tooling-benchmarks-linters.done.org][Dev tooling:
    benchmark harness]]).
 
 * Design
@@ -128,7 +128,7 @@ the region kept id-sorted, which it is not — noted under Risk.
 - ~eask run command test~ (full suite) + ~eask recompile~ warning-free.
 - Benchmark (gate for Part 2): save→refresh render time at N=10^3–10^4, splice
   vs full render, via the
-  [[file:2026-07-09-dev-tooling-benchmarks-linters.proposed.org][benchmark
+  [[file:2026-07-09-dev-tooling-benchmarks-linters.done.org][benchmark
   harness]].
 
 * Risk
@@ -157,13 +157,13 @@ bespoke callsite). Part 2 low priority, medium once benchmarked.
 
 - [[file:2026-07-06-performance-audit.org][Performance audit]] — parent index;
   overview render is theme 3 (item *C* done, this is its incremental successor).
-- [[file:2026-07-06-incremental-metadata-cache.proposed.org][Incremental
+- [[file:2026-07-06-incremental-metadata-cache.done.org][Incremental
   metadata cache]] — the sibling "patch on commit, don't invalidate" for the
   read cache; a natural place to compute CHANGED-IDS from the same append.
-- [[file:2026-07-06-incremental-row-update.proposed.org][Incremental row
+- [[file:2026-07-06-incremental-row-update.done.org][Incremental row
   update]] — the table analogue of Part 2 (upsert one row on a single-row
   change); a table listener could drive it off the same channel.
-- [[file:2026-07-09-dev-tooling-benchmarks-linters.proposed.org][Dev tooling:
+- [[file:2026-07-09-dev-tooling-benchmarks-linters.done.org][Dev tooling:
   benchmark harness + lint]] — gates Part 2.
 - Touched files: =src/data/org-glance-graph.el= (hook + emit sites),
   =src/view/org-glance-view.el= (listener), =src/view/org-glance-material.el=

@@ -33,11 +33,11 @@ All four are org-glance-only, covered by the ERT suite (327 tests) + benchmarks 
 
 | Proposal | Lever | Impact / Effort |
 |----------+-------+-----------------|
-| [[file:2026-07-06-incremental-metadata-cache.proposed.org][Incremental metadata cache]] | patch the cache on append instead of invalidating → save→refresh & bulk =O(N)/O(N·k)= → =O(k)= | *high / high* — the structural one |
-| [[file:2026-07-06-single-parse-metadata.proposed.org][Single-parse metadata]] | reuse the ~--from-string~ parse so a headline build is *1* parse, not ~2 (builds on D) | high / medium |
+| [[file:2026-07-06-incremental-metadata-cache.done.org][Incremental metadata cache]] | patch the cache on append instead of invalidating → save→refresh & bulk =O(N)/O(N·k)= → =O(k)= | *high / high* — the structural one |
+| [[file:2026-07-06-single-parse-metadata.done.org][Single-parse metadata]] | reuse the ~--from-string~ parse so a headline build is *1* parse, not ~2 (builds on D) | high / medium |
 | [[file:2026-07-06-lazy-property-columns.proposed.org][Lazy value-fn for property columns]] | parse only *visible* rows for a displayed property column (not the whole tag) | high / high |
 | [[file:2026-07-06-table-paging.proposed.org][Table paging]] | render a screen-sized page, not the whole matching set | high / high |
-| [[file:2026-07-06-incremental-row-update.proposed.org][Incremental row update]] | upsert one row + single render for single-row actions (pairs with the cache) | medium / medium |
+| [[file:2026-07-06-incremental-row-update.done.org][Incremental row update]] | upsert one row + single render for single-row actions (pairs with the cache) | medium / medium |
 
 Suggested order: *Single-parse metadata* (safe, extends D) → *Incremental
 metadata cache* (the big structural win; makes *Incremental row update* truly

@@ -4,11 +4,9 @@
 :END:
 
 Project reanimated 2026-07 after a long pause; the store, views and tooling were
-rebuilt.  Much of the backlog below is now DONE (flagged inline).  Still-open ideas
-worth pursuing are written up under [[file:docs/proposals/][docs/proposals/]] (the
-2026-07-09 set: relations-edge-model, closed-day-activity-dashboard,
-inactive-archived-commented, full-text-search, delete-headline-command,
-dev-tooling-benchmarks-linters, graph-change-listeners).
+rebuilt.  This file retains the historical backlog.  Current priority and progress
+are tracked in [[file:docs/roadmap.org][docs/roadmap.org]]; proposal designs live under
+[[file:docs/proposals/][docs/proposals/]].
 
 Shipped since reanimation: segmented append-only JSONL WAL store (sealing,
 compaction, crash recovery, in-memory read cache) · JSON serialization · org-text
@@ -42,8 +40,10 @@ reference + CHANGELOG · broad ERT suite.
 - overview(CLASS) -- set of OVERVIEW(HEADLINE of CLASS).
 
 * Tasks
-** STARTED [#A] Reanimate project: add tests, refactor and support
+** DONE [#A] Reanimate project: add tests, refactor and support
+CLOSED: [2026-09-24]
 :LOGBOOK:
+- State "DONE"       from "STARTED"    [2026-09-24 Thu]
 - State "STARTED"    from "TODO"       [2024-11-11 Mon 22:11]
 :END:
 
@@ -52,11 +52,11 @@ reference + CHANGELOG · broad ERT suite.
   - [X] Headline data model
     - [X] Refactor headline data model
     - [X] Refactor capture to use the current headline model
-- [ ] Benchmarks -- see [[file:docs/proposals/2026-07-09-dev-tooling-benchmarks-linters.proposed.org][dev-tooling proposal]]
-- [ ] Linters -- see the same proposal
+- [X] Benchmarks -- see [[file:docs/proposals/2026-07-09-dev-tooling-benchmarks-linters.done.org][dev-tooling proposal]]
+- [X] Linters -- see the same proposal
 - [X] Look at ht / map for hash table manipulation (plain `make-hash-table' where it
   matters + own in-memory fold cache; ht/map not needed)
-- [ ] [[https://elpa.gnu.org/packages/persist.html][Persist]] / [[https://github.com/doublep/extmap/blob/master/extmap.el][Extmap]] for caching -- superseded by
+- [X] [[https://elpa.gnu.org/packages/persist.html][Persist]] / [[https://github.com/doublep/extmap/blob/master/extmap.el][Extmap]] for caching -- superseded by
   the segment store + in-memory fold cache + per-filter overview cache
 ** DONE Thunkify headline derivative properties if possible
 CLOSED: [2026-07-26 Sun 08:33]
@@ -222,7 +222,7 @@ CLOSED: [2026-07-09]
 CLOSED: [2026-07-09]
 Superseded 2026-07-18 by occurrence history (=org-glance-repeat-history-depth=):
 one headline, snapshots under =data/<id>/occurrences/=, =l= picks a version.
-** DONE bidirected relations (pre-reanimation; absent in current code -- see the relations-edge-model proposal)
+** DONE bidirected relations
 CLOSED: [2021-11-20 Sat 13:59]
 :LOGBOOK:
 - State "DONE"       from "STARTED"    [2021-11-20 Sat 13:59]
@@ -230,6 +230,8 @@ CLOCK: [2021-11-20 Sat 11:08]--[2021-11-20 Sat 12:45] =>  1:37
 - Clocked out on [2021-11-20 Sat 12:45]
 - State "STARTED"    from "TODO"       [2021-11-20 Sat 11:08]
 :END:
+Typed relations ship as body links projected into metadata; see
+[[file:docs/proposals/2026-07-18-relations.done.org][relations]].
 ** DONE delete class feature
 CLOSED: [2021-11-20 Sat 16:36]
 :LOGBOOK:
@@ -335,7 +337,7 @@ CLOSED: [2026-07-09]
 - State "CANCELLED"  from "TODO"       [2021-10-01 Fri 16:40]
 :END:
 The store is JSON end-to-end: JSONL records + a JSON MANIFEST.
-*** STARTED mutable states → publish-subscribe model
+*** TODO mutable states → publish-subscribe model
 - [X] implement write ahead log
 - [X] store initial state and diffs, then apply compaction
 - [ ] subscribe on changes -- see [[file:docs/proposals/2026-07-09-graph-change-listeners.proposed.org][graph-change-listeners proposal]]
@@ -390,7 +392,10 @@ CLOSED: [2026-07-26 Sun 08:29]
 CLOSED: [2026-07-18]
 =org-glance--crypt-block-regions= seals/opens each =#+begin_crypt= block wherever it
 sits in the body.
-*** TODO make ARCHIVED/Commented entries inactive (it is populated by EXPORT, but not visible in OPEN/VISIT/MATERIALIZE)
+*** DONE make ARCHIVED/Commented entries inactive
+CLOSED: [2026-07-27]
+The ambient filter hides both; see
+[[file:docs/proposals/2026-07-09-inactive-archived-commented.done.org][archived and commented headlines]].
 ** TODO New Actions
 *** TODO Execute Babel Blocks and Retrieve Results
 * Thoughts

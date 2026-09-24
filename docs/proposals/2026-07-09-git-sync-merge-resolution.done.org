@@ -16,7 +16,7 @@ The store under =.org-glance/= is synced across machines with git (Syncthing +
 a git repo at the sync root).  Its metadata is an append-only JSONL log: one
 open segment =meta/headlines.jsonl= plus immutable sealed =meta/seg-*.jsonl=,
 with =meta/MANIFEST= naming the live sealed set.  See the store-format notes in
-[[file:2026-07-06-incremental-metadata-cache.proposed.org][incremental-metadata-cache]] and the audit entry point
+[[file:2026-07-06-incremental-metadata-cache.done.org][incremental-metadata-cache]] and the audit entry point
 [[file:2026-07-06-performance-audit.org][performance-audit]].
 
 When two machines each append to =headlines.jsonl= after a common prefix, git

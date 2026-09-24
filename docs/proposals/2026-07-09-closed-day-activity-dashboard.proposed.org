@@ -194,9 +194,9 @@ the view reuses table-view, the colorize path, and =view:register= wholesale.
 - [[file:2026-07-06-all-tags-overview.done.org][All-tags overview]] -- origin of the tag-metrics sidecar and the
   =before-append= hook this reuses; the calendar view is its sister.
 - [[file:2026-07-06-lazy-property-columns.proposed.org][Lazy property columns]] -- another additive metadata / table-view feature.
-- [[file:2026-07-06-single-parse-metadata.proposed.org][Single-parse metadata]] -- the one-pass content-facts build the new field
+- [[file:2026-07-06-single-parse-metadata.done.org][Single-parse metadata]] -- the one-pass content-facts build the new field
   slots into.
-- [[file:2026-07-06-incremental-metadata-cache.proposed.org][Incremental metadata cache]] -- the read cache the projection is served from.
+- [[file:2026-07-06-incremental-metadata-cache.done.org][Incremental metadata cache]] -- the read cache the projection is served from.
 - [[file:2026-07-06-table-view-git-dependency.done.org][table-view git dependency]] -- the pinned core the calendar grid renders on.
 - Touched: =src/data/org-glance-headline.el=, =src/data/org-glance-graph.el=,
   =src/data/org-glance-filter.el=, =src/data/org-glance-tag-metrics.el=,

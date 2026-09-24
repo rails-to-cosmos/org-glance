@@ -1,7 +1,7 @@
 #+TITLE: Incremental metadata cache — patch on append, don't invalidate
 #+DATE: 2026-07-06
 
-Status: *proposed* · performance audit 2026-07-06 · part of
+Status: *done* · performance audit 2026-07-06 · part of
 [[file:2026-07-06-performance-audit.org][Performance audit]]
 
 Status: *done* · 2026-07-27 · suite 341/341, compile warning-free.
@@ -150,7 +150,7 @@ rewiring, the snapshot refresh) + ≈ 60–100 LOC of tests.
 
 * Related
 
-- Builds on [[file:2026-07-06-single-parse-metadata.proposed.org][Single-parse metadata]] —
+- Builds on [[file:2026-07-06-single-parse-metadata.done.org][Single-parse metadata]] —
   which shrinks the per-record deserialize the patch still pays for touched ids.
 - [[file:2026-07-09-git-sync-merge-resolution.done.org][Git-sync merge resolution]] relies on the same
   append-only segment layout described here (union-merge the JSONL, self-heal a

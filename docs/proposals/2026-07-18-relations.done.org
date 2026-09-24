@@ -5,7 +5,7 @@ Status: *done* · 2026-07-18 · design adversarially verified against the code
 (4 reviewers; findings folded in below).  Suite 269/269, compile warning-free.
 
 Supersedes the store half of
-[[file:2026-07-09-relations-edge-model.proposed.org][relations-edge-model]]: same
+[[file:2026-07-09-relations-edge-model.done.org][relations-edge-model]]: same
 field-table projection, but the *body link is the canonical edge* — no reverse
 sidecar, no record re-append on edge write.
 
@@ -169,7 +169,7 @@ tests ~half day.
 
 * Related
 
-- [[file:2026-07-09-relations-edge-model.proposed.org][relations-edge-model]] — superseded store half; its =cloned-from= lineage
+- [[file:2026-07-09-relations-edge-model.done.org][relations-edge-model]] — superseded store half; its =cloned-from= lineage
   consumer becomes a follow-up (a capture-time body link).
 - [[file:2026-07-09-graph-change-listeners.proposed.org][graph-change-listeners]] — future reverse-lookup caching.
 - Touched: =src/data/org-glance-utils.el= (=--buffer-links= 5-tuple),

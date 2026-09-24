@@ -1,6 +1,8 @@
 #+TITLE: Scoped schema for reference tables
 #+DATE: 2026-07-19
 
+Status: *done* · 2026-07-19
+
 * Problem
 
 Reference tables (=C-c @= references, =C-u C-c @= back-references) are

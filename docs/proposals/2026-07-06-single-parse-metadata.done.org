@@ -1,7 +1,7 @@
 #+TITLE: Single-parse metadata — reuse the from-string parse
 #+DATE: 2026-07-06
 
-Status: *proposed* · performance audit 2026-07-06 · part of
+Status: *done* · performance audit 2026-07-06 · part of
 [[file:2026-07-06-performance-audit.org][Performance audit]]
 
 Status: *done* · 2026-07-27 · suite 339/339, compile warning-free.
@@ -87,7 +87,7 @@ Medium. ≈ 25–40 LOC in ~org-glance-headline.el~ (share the buffer, attach fa
 
 - Prerequisite context: the done *D* change (this file supersedes its "why not 1
   pass" note).
-- Complements [[file:2026-07-06-incremental-metadata-cache.proposed.org][Incremental metadata cache]] —
+- Complements [[file:2026-07-06-incremental-metadata-cache.done.org][Incremental metadata cache]] —
   fewer per-record parses make both the rebuild and the incremental patch cheaper.
 - Back to the [[file:2026-07-06-performance-audit.org][Performance audit]] index.
 

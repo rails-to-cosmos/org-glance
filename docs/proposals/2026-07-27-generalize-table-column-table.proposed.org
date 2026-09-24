@@ -1,6 +1,8 @@
 #+TITLE: One column table behind the spec, the cells and editability
 #+DATE: 2026-07-27
 
+Status: *proposed*.
+
 * Problem
 
 A built-in table column is declared in *three* places that must agree:

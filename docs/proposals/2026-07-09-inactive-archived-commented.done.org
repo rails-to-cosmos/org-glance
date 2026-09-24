@@ -6,8 +6,6 @@ Status: *done* · shipped, verified against the tree 2026-07-27: slots
 rows (=filter.el:70-71=), the ambient defcustom default (=filter.el:34-42=)
 and tests (=test-filter.el:105-147=).
 
-Status: *proposed* · metadata 2026-07-09
-
 * Problem
 
 The parser already records whether a headline is =ARCHIVED= or =COMMENTED=.
@@ -131,7 +129,7 @@ plus tests. No storage-format break (fields appended), no reader rewrite.
 
 - [[file:2026-07-06-lazy-property-columns.proposed.org][Lazy value-fn for custom property columns]] — its "alternative" section
   proposes the same append-a-projection-field + reindex pattern this uses.
-- [[file:2026-07-06-single-parse-metadata.proposed.org][Single-parse metadata build]] — the =--content-facts= path these
+- [[file:2026-07-06-single-parse-metadata.done.org][Single-parse metadata build]] — the =--content-facts= path these
   struct-read fields sidestep.
 - Touched: =src/data/org-glance-graph.el= (projection + reindex),
   =src/data/org-glance-filter.el= (filter table + ambient default),

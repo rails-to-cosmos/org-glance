@@ -35,8 +35,8 @@ cache. Its tuning knobs and its hot paths are *entirely unmeasured*:
   re-~json-parse~-s *every record in every live segment* on every cold fold; the
   =O(R)= cost that ~--ensure-cache~ (=graph.el:389=) pays on a snapshot miss is
   invisible, so a regression here ships silently.
-- The [[file:2026-07-06-incremental-metadata-cache.proposed.org][Incremental metadata cache]]
-  and [[file:2026-07-06-single-parse-metadata.proposed.org][Single-parse metadata]] proposals
+- The [[file:2026-07-06-incremental-metadata-cache.done.org][Incremental metadata cache]]
+  and [[file:2026-07-06-single-parse-metadata.done.org][Single-parse metadata]] proposals
   each promise an asymptotic win (=O(N)/O(N·k)= → =O(k)=) with *no way to
   confirm it landed* — their "Performance validation" sections have nothing to
   run.
@@ -138,8 +138,8 @@ Low. ≈ 60–100 LOC for ~test/bench-graph.el~, ≈ 20–40 LOC across the two
 
 * Related
 
-- Gives [[file:2026-07-06-incremental-metadata-cache.proposed.org][Incremental metadata cache]]
-  and [[file:2026-07-06-single-parse-metadata.proposed.org][Single-parse metadata]] the
+- Gives [[file:2026-07-06-incremental-metadata-cache.done.org][Incremental metadata cache]]
+  and [[file:2026-07-06-single-parse-metadata.done.org][Single-parse metadata]] the
   before/after numbers their "Performance validation" sections call for.
 - Measures the knobs documented in
   [[file:2026-07-06-performance-audit.org][Performance audit]]; makes its line-30

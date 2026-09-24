@@ -70,6 +70,6 @@ already a first-class table-view capability).
 * Related
 
 - Pairs with [[file:2026-07-06-lazy-property-columns.proposed.org][Lazy value-fn for property columns]].
-- Complementary to [[file:2026-07-06-incremental-row-update.proposed.org][Incremental row update]]
+- Complementary to [[file:2026-07-06-incremental-row-update.done.org][Incremental row update]]
   (which cuts the *per-action* rebuild; paging cuts the *per-render* size).
 - Back to the [[file:2026-07-06-performance-audit.org][Performance audit]] index.

@@ -150,9 +150,9 @@ clone-on-repeat wiring and tests (~half a day).
 
 * Related
 
-- [[file:2026-07-06-single-parse-metadata.proposed.org][Single-parse metadata]] — same field-table projection; ~--relations~ should
+- [[file:2026-07-06-single-parse-metadata.done.org][Single-parse metadata]] — same field-table projection; ~--relations~ should
   fold into the single content-facts pass it proposes rather than reparse.
-- [[file:2026-07-06-incremental-metadata-cache.proposed.org][Incremental metadata cache]] — the read cache an edge write invalidates.
+- [[file:2026-07-06-incremental-metadata-cache.done.org][Incremental metadata cache]] — the read cache an edge write invalidates.
 - [[file:2026-07-06-performance-audit.org][Performance audit]] — the field-table / WAL machinery this reuses.
 - Touched: ~src/data/org-glance-graph.el~, ~src/data/org-glance-headline.el~,
   ~src/data/org-glance-tag-metrics.el~ (as the sidecar template),

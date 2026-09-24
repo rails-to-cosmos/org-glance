@@ -1,7 +1,7 @@
 #+TITLE: Incremental row update for single-row table actions
 #+DATE: 2026-07-06
 
-Status: *proposed* · performance audit 2026-07-06 · part of
+Status: *done* · performance audit 2026-07-06 · part of
 [[file:2026-07-06-performance-audit.org][Performance audit]]
 
 Status: *done* (the org-glance half) · 2026-07-27 · suite 342/342, compile
@@ -60,7 +60,7 @@ cells; no re-derivation), so either is viable; "stay put" matches today's UX.
 This change's =O(1)= ~get-headline~ is only actually =O(1)= once the store cache
 is patched incrementally — otherwise the read after the save re-scans the store.
 So this pairs with
-[[file:2026-07-06-incremental-metadata-cache.proposed.org][Incremental metadata cache]]:
+[[file:2026-07-06-incremental-metadata-cache.done.org][Incremental metadata cache]]:
 together, a single-row state change becomes =O(1)= end-to-end (patch the cache,
 upsert one row) instead of =O(N)= (rebuild cache + rebuild rows + double render).
 
@@ -90,7 +90,7 @@ actions, and a single-render reload) + tests. No vendored-file change (~upsert-r
 
 * Related
 
-- Best landed *after* [[file:2026-07-06-incremental-metadata-cache.proposed.org][Incremental metadata cache]]
+- Best landed *after* [[file:2026-07-06-incremental-metadata-cache.done.org][Incremental metadata cache]]
   (which makes the ~get-headline~ read =O(1)=).
 - Complementary to [[file:2026-07-06-table-paging.proposed.org][Table paging]].
 - Back to the [[file:2026-07-06-performance-audit.org][Performance audit]] index.

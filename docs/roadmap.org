@@ -1,0 +1,106 @@
+#+TITLE: org-glance roadmap
+#+TODO: TODO STARTED | DONE
+
+This is the canonical priority and progress tracker.  The first unfinished
+numbered phase is the default next work.  Keep at most one phase =STARTED=.
+Proposal files hold design detail; [[file:../org-glance.org][org-glance.org]] retains the historical backlog.
+
+When work lands, mark its item =DONE=, rename its proposal from =.proposed= to
+=.done=, update [[file:../CHANGELOG.org][CHANGELOG.org]], and record the verification in the proposal.
+
+Last reviewed: 2026-09-24.  Proposal inventory: 28 resolved, 16 proposed; the
+composable-tag-template proposal has one shipped phase and two proposed phases.
+
+* DONE 0. Reconcile roadmap status
+CLOSED: [2026-09-24]
+
+- [X] Close the reanimation umbrella: tests, benchmarks and linters ship.
+- [X] Close archived/commented filtering.
+- [X] Resolve the superseded relations-edge proposal.
+- [X] Give every structural-generalization proposal an explicit status.
+- [X] Establish this file as the priority source of truth.
+
+* DONE 0.5. Implement the portable projection contract
+CLOSED: [2026-09-25]
+
+- [X] Emit immutable producer-owned records under =meta/projections/org-glance/=.
+- [X] Restore one exact payload after local SQLite loss and poison divergent keys.
+- [X] Add a one-store Glance/org-glance contract case.
+- [X] Keep the mutable WAL read path until the coordinated stage-5 cutover.
+
+* TODO 1. Consolidate the view and table architecture
+
+Land these separately in this order.  Preserve public call compatibility for
+the external =org-glance-llm= plugin.
+
+** TODO Share the table-view visit scaffold
+[[file:proposals/2026-07-27-generalize-view-scaffold.proposed.org][Proposal: shared view scaffold]]
+
+** TODO Share operation bodies between overview and table
+[[file:proposals/2026-07-27-generalize-shared-view-actions.proposed.org][Proposal: shared view actions]]
+
+** TODO Derive table keys and handlers from one action table
+[[file:proposals/2026-07-27-generalize-table-action-table.proposed.org][Proposal: table action table]]
+
+** TODO Derive table specification, cells and editing from one column table
+[[file:proposals/2026-07-27-generalize-table-column-table.proposed.org][Proposal: table column table]]
+
+* TODO 2. Make large stores incrementally cheap
+
+Measure every change with =make bench= before and after.
+
+** TODO Publish graph changes to incremental consumers
+[[file:proposals/2026-07-09-graph-change-listeners.proposed.org][Proposal: graph change listeners]]
+
+** TODO Page or window large tables
+[[file:proposals/2026-07-06-table-paging.proposed.org][Proposal: table paging]]
+
+** TODO Compute custom property columns only for visible rows
+[[file:proposals/2026-07-06-lazy-property-columns.proposed.org][Proposal: lazy property columns]]
+
+* TODO 3. Give plugins declarative domain concepts, then delegation
+
+** TODO Add plugin tag declarations
+[[file:proposals/2026-07-27-plugin-tag-declarations.proposed.org][Proposal: plugin tag declarations]]
+
+** TODO Implement agent delegation in =org-glance-llm=
+[[file:proposals/2026-07-27-agent-delegation.proposed.org][Proposal: agent delegation]]
+
+* TODO 4. Add the first remote integration
+
+** TODO Reconcile the inbox design with the shipped Glance external-writer protocol
+Revise the integration proposal before code so the repositories share one
+ingestion protocol.
+
+** TODO Implement Telegram capture and delegation replies
+[[file:proposals/2026-07-29-integrations-telegram.proposed.org][Proposal: Telegram integration]]
+
+** TODO Reconsider agent observability after delegation is in use
+Deferred until delegation supplies real runs and failure modes.
+[[file:proposals/2026-07-27-agent-observability.proposed.org][Proposal: agent observability]]
+
+* TODO 5. Product capabilities
+
+These are independent unless a proposal states a dependency.  Choose them in
+the listed order after phases 1–4, or explicitly promote one here.
+
+** TODO Add full-text body search
+[[file:proposals/2026-07-09-full-text-search.proposed.org][Proposal: full-text search]]
+
+** TODO Project completion activity by CLOSED day
+[[file:proposals/2026-07-09-closed-day-activity-dashboard.proposed.org][Proposal: CLOSED-day activity dashboard]]
+
+** TODO Replace home-grown encrypted storage with EasyPG
+[[file:proposals/2026-07-06-encrypted-materialize-gpg.proposed.org][Proposal: EasyPG encryption]]
+
+** TODO Finish composable tag templates phases 2–3
+[[file:proposals/2026-06-19-composable-tag-templates.proposed.md][Proposal: composable tag templates]]
+
+** TODO Add the outbox protocol and calendar projection
+Depends on the integration protocol decision in phase 4.
+[[file:proposals/2026-07-30-outbox-calendar.proposed.org][Proposal: calendar outbox]]
+
+* Unscheduled backlog
+
+Items remaining =TODO= in [[file:../org-glance.org][org-glance.org]] are ideas, not commitments.  Promote an
+item into a numbered phase here before implementation.

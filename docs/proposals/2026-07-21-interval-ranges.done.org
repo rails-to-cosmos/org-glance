@@ -1,6 +1,8 @@
 #+TITLE: Date intervals: org timestamp ranges as first-class metadata
 #+DATE: 2026-07-21
 
+Status: *done* · 2026-07-21
+
 * Problem
 
 A travel-style headline spans dates: =<2021-12-18 Sat>--<2021-12-19 Sun>=.

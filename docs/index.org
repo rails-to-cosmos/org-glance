@@ -5,6 +5,8 @@ Entry point for the org-glance design wiki.  Documents live in
 proposals are named =YYYY-MM-DD-slug.proposed.org= and renamed to =….done.org=
 when implemented (older ones are =.md=; new ones are =.org=).
 
+Current priority and progress are tracked in [[file:roadmap.org][the roadmap]].
+
 * Rules of the codebase
 
 - [[file:invariants.org][Global invariants]] — the 34 rules every change must preserve (rule,

@@ -8,7 +8,8 @@ Status: *done*
 org-glance and the optional Glance daemon share
 =.org-glance/cache/glance.sqlite3=.  SQLite serializes writers.  Org files stay
 canonical and the graph WAL remains the compatibility reader during migration
-stage 4.
+stage 4.  Each producer also writes immutable portable projections under
+=meta/projections/PRODUCER/=; SQLite stays local.
 
 * Schema boundary
 
@@ -35,18 +36,34 @@ the existing side-index contract.
 matches the file and its content hash matches the serialized metadata.  This
 API is the read boundary for migration stage 5.
 
+* Portable contract
+
+The JSONL envelope names =format=, =producer=, =parser=, =config=, =path=,
+=digest= and the producer-owned =payload=.  Its exact key is the relative path,
+raw digest, semantic-configuration fingerprint, parser contract version and
+producer.  Equal duplicates collapse.  Different payloads under the same key
+invalidate that key, independent of file or Git order.
+
+org-glance emits version-1 records under
+=meta/projections/org-glance/=.  Its parser has no semantic configuration, so
+the configuration key fingerprints that explicit empty input.  A missing or
+stale local SQLite row can read one exact portable metadata payload.  Other
+versions fall back to normal reconstruction; no compatibility translation is
+part of version 1.
+
 * Verification
 
 - =eask recompile=: warning-free package compilation.
-- =eask run command test=: 415 tests pass.
-- Glance =make interop=: 14/14 cases pass; the shared fixture verifies schema
-  version 2, both projections, both hash domains and the same typed relation.
+- =eask run command test=: 416 tests pass.
+- Glance =make interop=: 15/15 cases pass; the shared fixture verifies schema
+  version 2, both SQLite projections, both hash domains, the same typed
+  relation and exact portable restoration after deleting the local cache.
 - Glance cache tests cover schema rebuild, concurrent writers, incremental
   replacement, preservation of a current peer row and invalidation after its
   raw digest changes.
 
 * Remaining migration
 
-Stage 5 makes the shared cache the org-glance read path, retires JSONL index
-reads after every supported client carries schema version 2, and removes the
-external notification relay.
+Stage 5 makes the shared cache the org-glance read path, retires the legacy
+mutable WAL index after every supported client carries the contract, and
+removes the external notification relay.  Portable JSONL projections remain.

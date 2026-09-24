@@ -1,6 +1,8 @@
 #+TITLE: One action table behind the table's keys and handlers
 #+DATE: 2026-07-27
 
+Status: *proposed*.
+
 * Problem
 
 Every table view declares its action vocabulary *twice*, in two functions,

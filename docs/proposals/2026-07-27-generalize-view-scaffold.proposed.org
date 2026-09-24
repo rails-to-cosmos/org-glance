@@ -1,6 +1,8 @@
 #+TITLE: The shared view scaffold, actually shared
 #+DATE: 2026-07-27
 
+Status: *proposed*.
+
 * Problem
 
 [[file:../../src/view/org-glance-view.el][=org-glance-view.el:196-212=]] documents =org-glance-view:display-table= as
