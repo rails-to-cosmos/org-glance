@@ -5,6 +5,9 @@ Notable user-facing changes.  Versions date-based
 
 * Unreleased
 
+** Changed
+- =C-u @= asks for the relation kind before asking for the referenced headline.
+
 ** Added
 - Transient: =-a= (with archived) and =-c= (with completed) relax the
   headline pickers for materialize / open link / extract property; both default

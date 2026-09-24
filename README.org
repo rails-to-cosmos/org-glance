@@ -62,7 +62,7 @@ The main actions work on the row at point or on rows selected with =m=:
 * Relations
 
 Type =@= at the start of a word while capturing or editing to link another
-headline. =C-u @= also records a relation kind:
+headline. =C-u @= asks for the relation kind first, then the headline:
 
 #+begin_src org
 roasted by [[glance:0e904834?kind=roasted-by][Manhattan Coffee Roasters]]

@@ -1100,18 +1100,19 @@ Reads the live buffer, decrypted crypt blocks included."
 
 (cl-defun org-glance-material--read-reference (graph self &key with-kind)
   "Choose a reference target in GRAPH other than SELF; return (ID TITLE KIND).
-KIND is read when WITH-KIND is non-nil, else nil."
-  (let ((meta (org-glance-material:completing-read
-               graph :prompt "Refer to: "
-               :filter (lambda (m) (not (equal self (org-glance-headline-metadata:id m)))))))
+When WITH-KIND is non-nil, read KIND before choosing the target."
+  (let* ((kind (when with-kind (org-glance-material--read-kind graph)))
+         (meta (org-glance-material:completing-read
+                graph :prompt "Refer to: "
+                :filter (lambda (m) (not (equal self (org-glance-headline-metadata:id m)))))))
     (list (org-glance-headline-metadata:id meta)
           (org-glance--title-clean (org-glance-headline-metadata:title meta))
-          (when with-kind (org-glance-material--read-kind graph)))))
+          kind)))
 
 (cl-defun org-glance-material:insert-reference (graph self &key with-kind)
   "Insert a reference edge at point, or self-insert `@'.
 At a word boundary in body or title, pick a GRAPH headline other than SELF
-and insert its `org-glance-material:' link, with a kind when WITH-KIND.  At
+and insert its `org-glance-material:' link.  WITH-KIND reads the kind first.  At
 a heading's column 0 (speed keys) or mid-word, self-insert as remapped."
   (if (or (and (org-at-heading-p) (bolp))   ; the speed-command position
           (not (or (bolp) (memq (char-before) '(?\s ?\t ?\n)))))
@@ -1124,8 +1125,8 @@ a heading's column 0 (speed keys) or mid-word, self-insert as remapped."
 
 (cl-defun org-glance-material:refer (&optional arg)
   "Insert a reference to another headline at point, or self-insert `@'.
-Delegates to `org-glance-material:insert-reference'; ARG (`C-u @') also reads
-a kind.  `C-q @' inserts a literal `@'."
+Delegates to `org-glance-material:insert-reference'.  ARG (`C-u @') reads the
+kind before the target.  `C-q @' inserts a literal `@'."
   (interactive "P")
   (org-glance-material:insert-reference org-glance-material--graph
                                         org-glance-material--id

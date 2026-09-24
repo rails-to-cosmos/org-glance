@@ -93,7 +93,7 @@ in that tag's overview / table to edit it directly).
 
 ** Relations
 
-In a materialized buffer — or while capturing (step 1) — =@= at the start of a word prompts for another headline and inserts a link to it; =C-u @= also asks a reference *kind*:
+In a materialized buffer — or while capturing (step 1) — =@= at the start of a word prompts for another headline and inserts a link to it; =C-u @= asks for the reference *kind* first, then the headline:
 
 #+begin_src org
 roasted by [[glance:0e904834?kind=roasted-by][Manhattan Coffee Roasters]]

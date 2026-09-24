@@ -28,7 +28,8 @@
 
 (cl-defun org-glance-capture:refer (&optional arg)
   "Insert a reference to another graph headline at point, or self-insert `@'.
-See `org-glance-material:insert-reference'; ARG (`C-u @') also reads a kind."
+See `org-glance-material:insert-reference'.  ARG (`C-u @') reads the kind
+before the target."
   (interactive "P")
   (require 'org-glance-material)
   (org-glance-material:insert-reference org-glance-graph nil :with-kind arg))

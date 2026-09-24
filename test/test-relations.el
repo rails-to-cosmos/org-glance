@@ -73,14 +73,16 @@ Self is never a candidate."
         (should (s-contains? "[[org-glance-material:other][Other headline]]"
                              (buffer-string))))
       (insert "\n")
-      (let (kind-coll)
+      (let (kind-coll prompts)
         (cl-letf (((symbol-function 'completing-read)
-                   (let ((n 0))
-                     (lambda (_p coll &rest _)
-                       (cl-incf n)
-                       (if (= n 1) (caar coll)
-                         (setq kind-coll coll) "roasted by")))))
+                   (lambda (prompt coll &rest _)
+                     (push prompt prompts)
+                     (if (string-prefix-p "Reference kind" prompt)
+                         (progn (setq kind-coll coll) "roasted by")
+                       (caar coll)))))
           (org-glance-material:refer '(4)))
+        (should (equal '("Reference kind (empty for none): " "Refer to: ")
+                       (nreverse prompts)))
         (should (member "author" kind-coll)))    ; seeded above via me's own edge
       (should (s-contains?
                "roasted by [[org-glance-material:other?kind=roasted-by][Other headline]]"

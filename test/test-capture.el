@@ -71,7 +71,7 @@ Removal stays ungated (invariant 13)."
     (should (org-glance-material:retag org-glance-graph "a" "shop" :remove t))))
 
 (ert-deftest org-glance-test:capture-refer-inserts-link ()
-  "Capture buffers enable `org-glance-capture-mode'; `@' there links a headline.
+  "Capture buffers enable `org-glance-capture-mode'; `C-u @' reads kind first.
 Finalize projects it into the captured headline's relations (invariant 5)."
   (org-glance-test:session
     (org-glance-graph:add org-glance-graph
@@ -81,18 +81,24 @@ Finalize projects it into the captured headline's relations (invariant 5)."
     (goto-char (point-max))
     (unless (bolp) (insert "\n"))
     (insert "refers ")
-    (org-glance-test:offering (offered (caar offered))
-      (org-glance-capture:refer)
-      (should (cl-some (lambda (c) (s-contains? "Target headline" c))
-                       (mapcar #'car offered))))
-    (should (s-contains? "[[org-glance-material:target][Target headline]]"
+    (let (prompts)
+      (cl-letf (((symbol-function 'completing-read)
+                 (lambda (prompt coll &rest _)
+                   (push prompt prompts)
+                   (if (string-prefix-p "Reference kind" prompt)
+                       "depends on"
+                     (caar coll)))))
+        (org-glance-capture:refer '(4)))
+      (should (equal '("Reference kind (empty for none): " "Refer to: ")
+                     (nreverse prompts))))
+    (should (s-contains? "depends on [[org-glance-material:target?kind=depends-on][Target headline]]"
                          (buffer-string)))
     (org-capture-finalize)
     (let ((captured (cl-find-if
                      (lambda (m) (string= "Note" (org-glance-headline-metadata:title m)))
                      (org-glance-graph:headlines org-glance-graph))))
       (should captured)
-      (should (equal '(("target" . nil))
+      (should (equal '(("target" . "depends-on"))
                      (org-glance-headline-metadata:relations captured))))))
 
 (provide 'test-capture)
