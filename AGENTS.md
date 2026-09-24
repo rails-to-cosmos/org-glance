@@ -161,6 +161,11 @@ evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
     is git-ignored — what crosses machines is the WAL record the fold produces, at the
     cost of hazard H3. Refusals, ordering rules, the retirement contract and the
     evidence: [[file:docs/invariants.org][docs/invariants.org]].
+35. `cache/glance.sqlite3` schema version 2 is the local multi-writer
+    projection. `headline.digest` and `org_headline.digest` are raw file
+    SHA-256 values; `org_headline.content_hash` is org-glance's normalized
+    content SHA-1. SQLite serializes its writers. The graph WAL remains the
+    compatibility reader until the coordinated stage-5 cutover.
 
 ## Known hazards
 

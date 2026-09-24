@@ -458,6 +458,10 @@ an external write moving a blob and never the WAL (invariant 33)."
 SPECS are metadata structs and tombstone plists; the read cache still shows the
 pre-append state.  Errors are demoted (invariant 9).")
 
+(defvar org-glance-graph-after-append-functions nil
+  "Abnormal hook run with GRAPH and SPECS after SPECS reach the WAL.
+Side indexes update here when they need the graph's new read-cache state.")
+
 (cl-defun org-glance-graph--append (graph specs)
   "Append SPECS to GRAPH's open segment, then maybe seal and compact.
 SPECS are metadata structs or bare plists; each gets a fresh monotonic `seq'."
@@ -476,7 +480,9 @@ SPECS are metadata structs or bare plists; each gets a fresh monotonic `seq'."
     ;; Seal/compact first: compaction REWRITES records; no patch expresses that.
     (org-glance-graph--maybe-seal graph)
     (org-glance-graph--maybe-compact graph)
-    (org-glance-graph--patch-cache graph written)))
+    (org-glance-graph--patch-cache graph written)
+    (with-demoted-errors "org-glance: after-append hook: %S"
+      (run-hook-with-args 'org-glance-graph-after-append-functions graph specs))))
 
 (cl-defun org-glance-graph--maybe-seal (graph)
   (let ((open (org-glance-graph--open-segment-path graph)))

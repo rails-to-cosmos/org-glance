@@ -682,6 +682,25 @@ eight, =cursor-counts-bytes= among them; the poll's window START moved off
 =re-laid-mid-fold=.  Moving the ONE SPELLER instead reddens nothing.  59 external cases
 today, up from 50.
 
+* Shared cache
+
+35. *The shared cache carries two distinct hashes.*  Schema version 2 at
+    =cache/glance.sqlite3= stores the raw file SHA-256 in =source.digest=,
+    =headline.digest= and =org_headline.digest=.  The org-glance projection
+    keeps its normalized content SHA-1 in =org_headline.content_hash=.
+    =org-glance-cache--project= writes both inside SQLite's immediate
+    transaction; =org-glance-cache:metadata= accepts a row only while both
+    hashes match their respective bytes and serialized metadata.  The graph's
+    post-append hook updates or deletes the projection after the WAL lands.
+    SQLite owns cross-process writer serialization.  The graph WAL remains the
+    read path through migration stage 4.
+
+    Pinned by =shared-cache-projects-distinct-digests=,
+    =shared-cache-follows-delete= and Glance's =relation-parser-parity= interop
+    case.  The latter opens a store written by org-glance under a running
+    Glance daemon and verifies schema version, both producers, both hashes and
+    the parsers' resolved typed edge.
+
 * Known hazards
 
 Costs the code ships WITH, deliberately.  Each was reproduced with a probe and each

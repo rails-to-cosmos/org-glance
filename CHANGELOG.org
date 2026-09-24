@@ -9,6 +9,9 @@ Notable user-facing changes.  Versions date-based
 - =C-u @= asks for the relation kind before asking for the referenced headline.
 
 ** Added
+- Shared cache: org-glance now maintains its full metadata projection beside
+  Glance's common rows in =cache/glance.sqlite3=.  Schema version 2 keeps the
+  raw file SHA-256 and org-glance content SHA-1 as separate validity keys.
 - Transient: =-a= (with archived) and =-c= (with completed) relax the
   headline pickers for materialize / open link / extract property; both default
   off, so those actions hide archived and done headlines unless the switch is set.

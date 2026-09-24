@@ -56,6 +56,7 @@
 (require 'org-glance-capture)
 (require 'org-glance-headline)
 (require 'org-glance-graph)
+(require 'org-glance-cache)
 (require 'org-glance-tag-metrics)
 (require 'org-glance-property-index)
 (require 'org-glance-view)
