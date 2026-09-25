@@ -50,6 +50,17 @@ A `*.jsonl' glob would also union the notification queue (invariant 8)."
                                               ".gitattributes")
                                       'utf-8)))))))
 
+(ert-deftest org-glance-test:merge-gitattributes-retires-the-broad-rule ()
+  "A legacy JSONL glob becomes the WAL allowlist without losing local lines."
+  (org-glance-test:with-graph graph
+    (let ((path (f-join (org-glance-graph:meta-path graph) ".gitattributes")))
+      (f-write-text "*.jsonl merge=union\n# local override\n" 'utf-8 path)
+      (org-glance-test:reopen graph)
+      (should (string= (concat "# local override\n"
+                               "headlines.jsonl merge=union\n"
+                               "seg-*.jsonl merge=union\n")
+                       (f-read-text path 'utf-8))))))
+
 (ert-deftest org-glance-test:merge-manifest-conflict-self-heal ()
   "A conflict-marked MANIFEST self-heals to canonical JSON on the next open.
 Every non-empty on-disk segment and its live records become visible again."

@@ -241,6 +241,18 @@ equal to the one already there and changes no answer."
     (should (eq 'tombstone (org-glance-graph:get-headline graph "id1")))
     (should (string= "" (org-glance-test:external-pending graph)))))
 
+(ert-deftest org-glance-test:external-refresh-adopts-an-unknown-stored-blob ()
+  "A WRITE for an unindexed blob derives its metadata, including new tags."
+  (org-glance-test:with-graph graph
+    (org-glance-test:write
+     (org-glance-graph:content-path graph "fresh")
+     (org-glance-test:org-with-id "* TODO fresh :newtag:" "fresh"))
+    (org-glance-test:external-write graph "fresh")
+    (should (= 1 (org-glance-graph:refresh-external graph)))
+    (should (equal '("newtag")
+                   (org-glance-headline-metadata:tag-strings
+                    (org-glance-graph:live-meta graph "fresh"))))))
+
 (ert-deftest org-glance-test:external-refresh-without-a-file ()
   "A store no external writer ever touched refreshes nothing and makes nothing."
   (org-glance-test:with-graph graph
@@ -1064,7 +1076,7 @@ spelled here would only agree with itself."
   (org-glance-test:with-graph graph
     ;; a directory pattern needs a directory to match, which retirement makes
     (f-mkdir-full-path (org-glance-graph--external-spent-path graph))
-    (should (equal '(t t t t t t nil)
+    (should (equal '(t t t t t t t nil)
                    (org-glance-test:git-ignores
                     graph
                     (org-glance-graph:external-path graph)
@@ -1075,6 +1087,8 @@ spelled here would only agree with itself."
                     (org-glance-graph--external-spent-path graph)
                     (org-glance-graph--external-spent-path
                      graph (org-glance-test:generation-name graph 1))
+                    (f-join (org-glance-graph:meta-path graph)
+                            "COMPLETIONS.jsonl")
                     (org-glance-graph:headline-meta-path graph))))))
 
 (ert-deftest org-glance-test:external-the-gitignore-retrofits-an-old-store ()

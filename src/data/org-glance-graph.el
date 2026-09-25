@@ -220,7 +220,7 @@ heal their own git conflicts here.  Errors are demoted (invariant 9).")
       (f-mkdir-full-path (org-glance-graph:data-path graph))
       (f-mkdir-full-path (org-glance-graph:meta-path graph))
       (f-touch (org-glance-graph:headline-meta-path graph))
-      (org-glance-graph--ensure-gitattributes graph)    ; git union merge for *.jsonl
+      (org-glance-graph--ensure-gitattributes graph)    ; invariant 8's WAL allowlist
       (org-glance-graph--ensure-gitignore graph)         ; cache/ is per-machine
       (org-glance-graph--resolve-jsonl-conflicts graph)  ; heal markers a pre-driver sync left
       (org-glance-graph--migrate-maybe graph)      ; bootstrap MANIFEST / adopt legacy file
@@ -1204,19 +1204,29 @@ generations are not reached.  Return the count `refresh-external' folded."
     (f-write-text content 'utf-8 path)))
 
 (cl-defun org-glance-graph--ensure-gitattributes (graph)
-  "Write the built-in `merge=union' driver for GRAPH's WAL files, if absent.
-Names only the open segment and `--segment-stem'`*.jsonl', the resolver's
-allowlist (invariant 8); a `*.jsonl' glob would reach the notification family."
-  (org-glance-graph--write-if-absent
-   (f-join (org-glance-graph:meta-path graph) ".gitattributes")
-   (mapconcat (lambda (glob) (format "%s merge=union\n" glob))
-              (list (file-name-nondirectory
-                     (org-glance-graph--open-segment-path graph))
-                    (concat org-glance-graph--segment-stem "*.jsonl"))
-              "")))
+  "Keep GRAPH's WAL allowlist in `.gitattributes'.
+Remove the retired broad JSONL rule, preserve unrelated lines, and append any
+missing built-in WAL rule (invariant 8)."
+  (let* ((path (f-join (org-glance-graph:meta-path graph) ".gitattributes"))
+         (required (mapcar (lambda (glob) (format "%s merge=union" glob))
+                           (list (file-name-nondirectory
+                                  (org-glance-graph--open-segment-path graph))
+                                 (concat org-glance-graph--segment-stem "*.jsonl"))))
+         (text (if (f-exists? path) (f-read-text path 'utf-8) ""))
+         (lines (split-string text "\n" nil))
+         (kept (--remove (string= (string-trim it) "*.jsonl merge=union") lines))
+         (clean (mapconcat #'identity kept "\n"))
+         (have (split-string clean "\n" t "[ \t\r]+"))
+         (missing (--remove (member it have) required))
+         (next (concat clean
+                       (if (or (string-empty-p clean) (s-ends-with? "\n" clean)) "" "\n")
+                       (when missing (concat (mapconcat #'identity missing "\n") "\n")))))
+    (unless (string= text next)
+      (org-glance--atomic-write path next))))
 
 (defconst org-glance-graph--gitignore-lines
-  '("cache/" "meta/EXTERNAL*.jsonl" "meta/EXTERNAL*.cursor" "meta/spent/")
+  '("cache/" "meta/EXTERNAL*.jsonl" "meta/EXTERNAL*.cursor" "meta/spent/"
+    "meta/COMPLETIONS.jsonl")
   "Store-relative paths `--ensure-gitignore' keeps out of git.
 `cache/' and the notification family: the live file, rotated generations, their
 cursors and `meta/spent/' (invariant 34).")
