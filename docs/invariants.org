@@ -80,11 +80,11 @@ argument in [[file:proposals][docs/proposals/]].
    Measured: opening a graph over a 1 MiB notification file, 2.2 ms with the rule and
    31.1 ms without.
 
-   =.gitattributes= is written only if absent, naming THE SAME TWO PREDICATES —
-   =headlines.jsonl= and =seg-*.jsonl= — so the allowlist reaches the rule git obeys
-   and not only the reader; a =*.jsonl= glob gave the union driver every excluded
-   family, on the one cohort =--ensure-gitignore= cannot help (inv 34).  A store
-   already carrying the wide glob keeps it until a hand edit.
+   =.gitattributes= names THE SAME TWO PREDICATES — =headlines.jsonl= and
+   =seg-*.jsonl= — so the allowlist reaches the rule git obeys and not only the
+   reader.  Open removes the retired =*.jsonl= rule, appends either missing
+   allowlist line, and preserves unrelated lines.  A tracked notification path
+   still needs a one-time untrack because gitignore cannot reach it (inv 34).
 
    Tag metrics use writer-owned =meta/tag-metrics-seg-*.eld= components: counters
    SUM across distinct files; divergent snapshots of one component and migrated
@@ -542,13 +542,13 @@ ones IN THE LIVE DIRECTORY".
 
 ** The git ignore
 
-=--ensure-gitignore= keeps four things out of git — the live =meta/EXTERNAL.jsonl=,
-every rotated generation, every =.cursor= beside one, the =meta/spent/= directory — as
-two globs and a directory, beside the =cache/= line already there.  The family is a
-LOCAL HINT between the LOCAL daemon and the LOCAL Emacs; what crosses machines is the
-WAL RECORD the fold produces.  ON A STORE THAT NEVER TRACKED THE FAMILY it removes the
-union-merge door and the resolver's reach into this family (belt beside inv 8's braces);
-THE DIGEST STAYS, load-bearing on a store the ignore came too late for.
+=--ensure-gitignore= keeps the live =meta/EXTERNAL.jsonl=, every rotated generation,
+every =.cursor= beside one, the =meta/spent/= directory, Glance's
+=meta/COMPLETIONS.jsonl=, and =cache/= out of git.  The notification files are LOCAL
+HINTS between local processes; what crosses machines is the WAL RECORD the fold
+produces.  ON A STORE THAT NEVER TRACKED THE FAMILY it removes the union-merge door and
+the resolver's reach into this family (belt beside inv 8's braces); THE DIGEST STAYS,
+load-bearing on a store the ignore came too late for.
 
 THE RETROFIT IS AN APPEND, where every other bootstrap marker is write-if-absent:
 =--ensure-gitignore= adds each line the file LACKS and leaves order, comments and

@@ -62,8 +62,9 @@ evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
    `COMPLETIONS.jsonl`. The NAMES are the handle, the resolver running ahead of
    `--reconcile-manifest`. `--ensure-gitattributes` hands git THE SAME ALLOWLIST —
    `headlines.jsonl` and `seg-*.jsonl` off those two predicates, never a `*.jsonl` glob —
-   covering the one cohort the gitignore cannot reach, git applying no ignore rule to a
-   tracked path.
+   and repairs the retired broad rule while preserving unrelated lines. The gitignore
+   also covers Glance's local `COMPLETIONS.jsonl`; tracked paths still require a one-time
+   untrack because git applies no ignore rule to them.
 9. Side-index hooks, view refresh, occurrence snapshots and the plugin loader are
    error-demoted — they may never break a save, an open, a display or init;
    `org-glance-plugin-enable` is the deliberate loud counterpart.

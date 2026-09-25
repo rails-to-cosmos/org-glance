@@ -13,6 +13,11 @@ Notable user-facing changes.  Versions date-based
 - =C-u @= asks for the relation kind before asking for the referenced headline.
 
 ** Fixed
+- Opening an older store replaces the broad =*.jsonl merge=union= attribute
+  with the two WAL rules while preserving unrelated attributes; the local
+  =COMPLETIONS.jsonl= ledger is also restored to =.gitignore=.
+- External refresh adopts a stored blob whose id is absent from the WAL, so a
+  headline captured or newly tagged by Glance appears in org-glance.
 - =@= replaces an active material-buffer region with a reference link using
   the selected text as its title.
 

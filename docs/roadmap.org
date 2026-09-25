@@ -8,7 +8,7 @@ Proposal files hold design detail; [[file:../org-glance.org][org-glance.org]] re
 When work lands, mark its item =DONE=, rename its proposal from =.proposed= to
 =.done=, update [[file:../CHANGELOG.org][CHANGELOG.org]], and record the verification in the proposal.
 
-Last reviewed: 2026-09-24.  Proposal inventory: 28 resolved, 16 proposed; the
+Last reviewed: 2026-09-25.  Proposal inventory: 28 resolved, 16 proposed; the
 composable-tag-template proposal has one shipped phase and two proposed phases.
 
 * DONE 0. Reconcile roadmap status
@@ -27,6 +27,14 @@ CLOSED: [2026-09-25]
 - [X] Restore one exact payload after local SQLite loss and poison divergent keys.
 - [X] Add a one-store Glance/org-glance contract case.
 - [X] Keep the mutable WAL read path until the coordinated stage-5 cutover.
+
+* DONE 0.6. Close the Glance notification gaps
+CLOSED: [2026-09-25]
+
+- [X] Adopt a notified stored ID absent from the WAL, including its tags.
+- [X] Repair the retired broad JSONL merge rule on store open.
+- [X] Keep Glance's =COMPLETIONS.jsonl= ledger out of git.
+- [X] Pass the 16-case Glance/org-glance host contract.
 
 * TODO 1. Consolidate the view and table architecture
 
