@@ -179,19 +179,12 @@ COUNTER starts at 0; the stub returns RETURN."
      (unwind-protect (progn ,@body)
        (when (buffer-live-p ,buf) (kill-buffer ,buf)))))
 
-(cl-defmacro org-glance-test:with-table-filter (graph filter var context &rest body)
-  "Bind VAR to GRAPH's table for FILTER and CONTEXT around BODY, then kill it.
-CONTEXT is a reference context or nil; built on `org-glance-test:with-shown'."
-  (declare (indent 4))
-  `(org-glance-test:with-shown (,var)
-     (setq ,var (org-glance-table:visit ,graph ,filter :context ,context))
-     ,@body))
-
 (cl-defmacro org-glance-test:with-table ((graph &optional filter context) &rest body)
   "Run BODY in GRAPH's table for FILTER and reference CONTEXT, then kill it."
   (declare (indent 1) (debug ((form &optional form form) body)))
   (let ((buf (gensym "table-buf")))
-    `(org-glance-test:with-table-filter ,graph ,filter ,buf ,context
+    `(org-glance-test:with-shown (,buf)
+       (setq ,buf (org-glance-table:visit ,graph ,filter :context ,context))
        (with-current-buffer ,buf ,@body))))
 
 (cl-defun org-glance-test:table-col-keys (&optional (buf (current-buffer)))

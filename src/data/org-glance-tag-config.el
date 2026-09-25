@@ -12,6 +12,7 @@
 (require 'org-glance-headline)
 (require 'org-glance-graph)
 (require 'org-glance-filter)
+(require 'org-glance-utils)
 
 (require 'org-glance-core)
 
@@ -39,12 +40,8 @@ PRAGMA: SLOT's `#+PRAGMA:' keyword, or nil; EMIT?: rendered buffers emit it.")
 
 (cl-defun org-glance-tag-config--check-fields (slots fields)
   "Signal an error unless FIELDS lists struct SLOTS in order; else return t."
-  (let ((struct-slots (mapcar #'car slots))
-        (table-slots (mapcar #'car fields)))
-    (unless (equal struct-slots table-slots)
-      (error "org-glance: tag-config field table out of sync with the struct: %S vs %S"
-             table-slots struct-slots)))
-  t)
+  (org-glance--check-struct-field-order
+   :slots slots :fields fields :subject "tag-config"))
 
 (org-glance-tag-config--check-fields
  (cdr (cl-struct-slot-info 'org-glance-tag-config))

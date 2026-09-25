@@ -171,6 +171,10 @@ evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
     `meta/projections/PRODUCER/`, keyed by source-relative path, raw digest,
     semantic-config fingerprint, parser version and producer. Equal duplicates
     collapse; divergent payloads invalidate the key. SQLite remains local.
+37. Graph identity is the canonical full directory truename; path aliases share one
+    instance and one open pass.
+38. `org-glance-core` is a one-way base module and never requires top-level
+    `org-glance.el`.
 
 ## Known hazards
 

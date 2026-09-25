@@ -91,16 +91,20 @@ snapshots first merge by extrema, preserving their shared historical base."
                                   (_ (or v cur)))))))
     out))
 
+(cl-defun org-glance-tag-metrics--combine-maps (maps combine)
+  "Fold tag-metrics MAPS by applying COMBINE to matching tag plists."
+  (let (combined)
+    (dolist (map maps (nreverse combined))
+      (dolist (cell map)
+        (let ((existing (assoc (car cell) combined)))
+          (if existing
+              (setcdr existing (funcall combine (cdr existing) (cdr cell)))
+            (push (cons (car cell) (copy-sequence (cdr cell))) combined)))))))
+
 (cl-defun org-glance-tag-metrics--merge-maps (maps)
   "Fold tag-metrics MAPS (alists TAG-STRING -> plist) into one union map."
-  (let (merged)
-    (dolist (map maps (nreverse merged))
-      (dolist (cell map)
-        (let ((existing (assoc (car cell) merged)))
-          (if existing
-              (setcdr existing (org-glance-tag-metrics--merge-plists
-                                (cdr existing) (cdr cell)))
-            (push (cons (car cell) (copy-sequence (cdr cell))) merged)))))))
+  (org-glance-tag-metrics--combine-maps
+   maps #'org-glance-tag-metrics--merge-plists))
 
 (cl-defun org-glance-tag-metrics--sum-plists (a b)
   "Combine metrics from disjoint writer segments A and B."
@@ -111,14 +115,8 @@ snapshots first merge by extrema, preserving their shared historical base."
 
 (cl-defun org-glance-tag-metrics--sum-maps (maps)
   "Fold disjoint writer MAPS, summing counters and merging timestamps."
-  (let (sum)
-    (dolist (map maps (nreverse sum))
-      (dolist (cell map)
-        (let ((existing (assoc (car cell) sum)))
-          (if existing
-              (setcdr existing (org-glance-tag-metrics--sum-plists
-                                (cdr existing) (cdr cell)))
-            (push (cons (car cell) (copy-sequence (cdr cell))) sum)))))))
+  (org-glance-tag-metrics--combine-maps
+   maps #'org-glance-tag-metrics--sum-plists))
 
 (cl-defun org-glance-tag-metrics--migrate (graph)
   "Move GRAPH's legacy config singleton into a content-addressed baseline.

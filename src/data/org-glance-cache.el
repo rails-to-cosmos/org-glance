@@ -6,6 +6,7 @@
 ;;; Code:
 
 (require 'cl-lib)
+(require 'seq)
 (require 'sqlite)
 
 (require 'org-glance-graph)
@@ -49,20 +50,20 @@
 
 (cl-defun org-glance-cache--initialise (db)
   "Build DB's shared schema, replacing an incompatible version."
-  (let ((version (caar (sqlite-select db "PRAGMA user_version"))))
-    (unless (= version org-glance-cache:version)
+  (let* ((version (caar (sqlite-select db "PRAGMA user_version")))
+         (reset? (/= version org-glance-cache:version)))
+    (when reset?
       (dolist (table (sqlite-select
                       db
                       "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY CASE name WHEN 'edge' THEN 0 WHEN 'org_headline' THEN 1 WHEN 'headline' THEN 2 WHEN 'source' THEN 3 ELSE 4 END"))
         (sqlite-execute db
                         (format "DROP TABLE IF EXISTS \"%s\""
-                                (replace-regexp-in-string "\"" "\"\"" (car table)))))
-      (dolist (statement org-glance-cache--schema)
-        (sqlite-execute db statement))
-      (sqlite-execute db (format "PRAGMA user_version=%d"
-                                 org-glance-cache:version)))
+                                (replace-regexp-in-string "\"" "\"\"" (car table))))))
     (dolist (statement org-glance-cache--schema)
-      (sqlite-execute db statement))))
+      (sqlite-execute db statement))
+    (when reset?
+      (sqlite-execute db (format "PRAGMA user_version=%d"
+                                 org-glance-cache:version)))))
 
 (cl-defun org-glance-cache--prepare (db)
   "Configure DB for shared local writers."
@@ -170,16 +171,6 @@ Equal duplicates collapse.  Divergent duplicates invalidate the key."
                               (equal text (f-read-text alternate 'utf-8)))
                    (org-glance--atomic-write alternate text nil))))))))
 
-(cl-defun org-glance-cache--chunks (values size)
-  "Split VALUES into lists of at most SIZE elements."
-  (let (chunks)
-    (while values
-      (let (chunk)
-        (dotimes (_ size)
-          (when values (push (pop values) chunk)))
-        (push (nreverse chunk) chunks)))
-    (nreverse chunks)))
-
 (cl-defun org-glance-cache--write-segment (dir index records)
   "Write immutable packed RECORDS at INDEX under DIR and return its name."
   (let* ((text (concat (org-glance-cache--portable-text records) "\n"))
@@ -212,7 +203,7 @@ Equal duplicates collapse.  Divergent duplicates invalidate the key."
                       (format "%S" (org-glance-cache--portable-key right))))))
          names)
     (make-directory dir t)
-    (cl-loop for chunk in (org-glance-cache--chunks
+    (cl-loop for chunk in (seq-partition
                            records org-glance-cache--portable-segment-records)
              for index from 0
              do (push (org-glance-cache--write-segment dir index chunk) names))

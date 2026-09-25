@@ -23,6 +23,16 @@ Whitespace-only strings count as present (unlike `s-present?')."
   (sort (-distinct strings)               ; hash-backed O(N) dedup (was O(N^2))
         #'string<))
 
+(cl-defun org-glance--check-struct-field-order (&key slots fields subject)
+  "Signal unless FIELDS lists struct SLOTS in order; else return t.
+SUBJECT names the field table in the error."
+  (let ((struct-slots (mapcar #'car slots))
+        (table-slots (mapcar #'car fields)))
+    (unless (equal struct-slots table-slots)
+      (error "org-glance: %s field table out of sync with the struct: %S vs %S"
+             subject table-slots struct-slots)))
+  t)
+
 (cl-defun org-glance--file-mtime (path)
   "Return PATH's modification time, or nil when it does not exist."
   (and (f-exists? path)

@@ -10,12 +10,7 @@
 (require 'org-glance-utils)
 (require 'org-glance-headline)
 
-;; Hash and equality MUST canonicalize alike, else "foo" and "foo/" split.
-(define-hash-table-test 'org-glance-graph:test
-                        (lambda (a b) (f-equal? (file-truename a) (file-truename b)))
-                        (lambda (a) (secure-hash 'sha1 (file-truename a))))
-
-(defvar org-glance-graph:list (make-hash-table :test 'org-glance-graph:test)
+(defvar org-glance-graph:list (make-hash-table :test #'equal)
   "Registered instances of `org-glance-graph' in current session.")
 
 ;; invariant 7: single user, no mutex / locking.
@@ -87,21 +82,19 @@ fact.  Row order is the JSON key order: append new fields at the end.")
   "Signal unless FIELDS is a valid field table for struct SLOTS; else return t.
 Checks slot ORDER, known FROM facts and vector ENCODE kinds (invariant 4).
 SLOTS is `cl-struct-slot-info' minus its tag slot; runs at load."
-  (let ((struct-slots (mapcar #'car slots))
-        (table-slots (mapcar #'car fields)))
-    (unless (equal struct-slots table-slots)
-      (error "org-glance: metadata field table out of sync with the struct: %S vs %S"
-             table-slots struct-slots))
-    (cl-loop for (slot _json from encode) in fields
-             for type = (plist-get (cddr (assq slot slots)) :type)
-             do (when (and (keywordp from)
-                           (not (memq from org-glance-headline--content-fact-keys)))
-                  (error "org-glance: metadata field %S reads unknown content fact %S"
-                         slot from))
-                (when (and (eq type 'list) (not (memq encode '(strings-vector edges-vector))))
-                  (error "org-glance: list-valued metadata field %S needs a vector ENCODE kind, got %S"
-                         slot encode)))
-    t))
+  (org-glance--check-struct-field-order
+   :slots slots :fields fields :subject "metadata")
+  (cl-loop for (slot _json from encode) in fields
+           for type = (plist-get (cddr (assq slot slots)) :type)
+           do (when (and (keywordp from)
+                         (not (memq from org-glance-headline--content-fact-keys)))
+                (error "org-glance: metadata field %S reads unknown content fact %S"
+                       slot from))
+              (when (and (eq type 'list)
+                         (not (memq encode '(strings-vector edges-vector))))
+                (error "org-glance: list-valued metadata field %S needs a vector ENCODE kind, got %S"
+                       slot encode)))
+  t)
 
 (org-glance-headline-metadata--check-fields
  (cdr (cl-struct-slot-info 'org-glance-headline-metadata))
@@ -1197,11 +1190,6 @@ generations are not reached.  Return the count `refresh-external' folded."
     n))
 
 ;;; Store bootstrap / recovery / compaction
-
-(cl-defun org-glance-graph--write-if-absent (path content)
-  "Write CONTENT to PATH unless PATH exists, sparing hand edits (invariant 8)."
-  (unless (f-exists? path)
-    (f-write-text content 'utf-8 path)))
 
 (cl-defun org-glance-graph--ensure-gitattributes (graph)
   "Keep GRAPH's WAL allowlist in `.gitattributes'.

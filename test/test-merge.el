@@ -79,9 +79,7 @@ Every non-empty on-disk segment and its live records become visible again."
                                    (org-glance-graph--sealed-segments graph))
                                   #'string<)))
         (should (equal segs (org-glance-test-merge:seg-names graph)))
-        (should (equal '("a" "b" "c")
-                       (mapcar #'org-glance-headline-metadata:id
-                               (org-glance-graph:headlines graph))))
+        (should (equal '("a" "b" "c") (org-glance-test:ids graph)))
         (let* ((text (f-read-text manifest 'utf-8))
                (parsed (json-parse-string text :object-type 'plist)))
           (should (= 2 (plist-get parsed :version)))
@@ -109,9 +107,7 @@ The other machine's appended duplicate, being later, wins (invariant 1)."
       (should (string= "B-orig" (org-glance-test:field graph "b" title)))
       (should (string= "C-new" (org-glance-test:field graph "c" title)))
       (should (equal '("a" "b" "c")
-                     (sort (mapcar #'org-glance-headline-metadata:id
-                                   (org-glance-graph:headlines graph))
-                           #'string<))))))
+                     (sort (org-glance-test:ids graph) #'string<))))))
 
 (ert-deftest org-glance-test:merge-seal-on-both-adopted ()
   "Segments a conflicted MANIFEST omits are adopted on open, none deleted."
@@ -131,9 +127,7 @@ The other machine's appended duplicate, being later, wins (invariant 1)."
         (should (string= "Machine one" (org-glance-test:field graph "m1" title)))
         (should (string= "Machine two" (org-glance-test:field graph "m2" title)))
         (should (equal '("m1" "m2")
-                       (sort (mapcar #'org-glance-headline-metadata:id
-                                     (org-glance-graph:headlines graph))
-                             #'string<)))
+                       (sort (org-glance-test:ids graph) #'string<)))
         (should (f-exists? (f-join meta "seg-0000000001.jsonl")))
         (should (f-exists? (f-join meta "seg-0000000002.jsonl")))))))
 
@@ -155,9 +149,7 @@ Markers go, both sides' records stay, and the last record per id wins."
         (should-not (s-contains? "<<<<<<<" (f-read-text open 'utf-8)))
         (should-not (s-contains? "=======" (f-read-text open 'utf-8)))
         (should (equal '("a" "b" "c")
-                       (sort (mapcar #'org-glance-headline-metadata:id
-                                     (org-glance-graph:headlines graph))
-                             #'string<)))
+                       (sort (org-glance-test:ids graph) #'string<)))
         (let ((a (org-glance-graph:get-headline graph "a")))
           (should (string= "A-newer" (org-glance-headline-metadata:title a)))
           (should (string= "DONE" (org-glance-headline-metadata:state a))))))))
@@ -179,9 +171,7 @@ Declining errors and leaves the markers in place."
         (let ((graph (org-glance-test:reopen graph)))
           (should-not (s-contains? "<<<<<<<" (f-read-text open 'utf-8)))
           (should (equal '("a" "b")
-                         (sort (mapcar #'org-glance-headline-metadata:id
-                                       (org-glance-graph:headlines graph))
-                               #'string<))))))))
+                         (sort (org-glance-test:ids graph) #'string<))))))))
 
 (ert-deftest org-glance-test:merge-open-segment-conflict-nil-errors ()
   "With nil resolution a conflicted open segment errors and keeps its markers."

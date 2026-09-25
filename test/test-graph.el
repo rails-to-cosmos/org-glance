@@ -16,6 +16,12 @@
                          (org-glance-headline-metadata:hash meta)))
         (should (equal '("a" "b") (org-glance-headline-metadata:tags meta)))))))
 
+(ert-deftest org-glance-test:graph-directory-aliases-share-instance ()
+  "Directory spellings with the same truename return one graph instance."
+  (with-temp-directory dir
+    (should (eq (org-glance-graph dir)
+                (org-glance-graph (file-name-as-directory dir))))))
+
 (ert-deftest org-glance-test:graph-get-missing ()
   "Unknown ids return nil."
   (org-glance-test:with-graph graph

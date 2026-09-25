@@ -263,10 +263,14 @@ reload and unmark; a cleared state is a no-op.  With no marks, `C-c C-t' runs
                       (length changed) state
                       (if skipped (format " (%d skipped)" (length skipped)) "")))))))))
 
+(cl-defun org-glance-table--require-row-id (id)
+  "Return ID, or signal a `user-error' when point is outside a row."
+  (or id (user-error "Point is not on a row")))
+
 (cl-defun org-glance-table--act-tag (graph id)
   "Add a tag to headline ID in GRAPH (`:'), or remove one of its own (`C-u :').
 Adding offers the tags it lacks, or a new one; removal requires a match."
-  (unless id (user-error "Point is not on a row"))
+  (setq id (org-glance-table--require-row-id id))
   (let* ((line (line-number-at-pos))
          (remove current-prefix-arg)
          (own (org-glance-headline-metadata:tag-strings
@@ -287,7 +291,7 @@ Adding offers the tags it lacks, or a new one; removal requires a match."
 (cl-defun org-glance-table--act-crypt (graph id)
   "Toggle encryption of headline ID in GRAPH (`#'); `C-u #' re-keys it.
 Prompt for passwords, confirming new ones; plaintext cannot be re-keyed."
-  (unless id (user-error "Point is not on a row"))
+  (setq id (org-glance-table--require-row-id id))
   (let* ((line (line-number-at-pos))
          (encrypted (org-glance-headline-metadata:encrypted?
                      (org-glance-view:live-metadata graph id)))
@@ -649,14 +653,14 @@ persistent view saves config and schema now; other views signal `user-error'."
 
 (cl-defun org-glance-table--act-delete (graph id)
   "Delete headline ID from GRAPH (`D') after a referrer-aware confirmation."
-  (unless id (user-error "Point is not on a row"))
+  (setq id (org-glance-table--require-row-id id))
   (let ((line (line-number-at-pos)))
     (when (org-glance-material:delete graph id)
       (org-glance-table--finish id line "Headline deleted"))))
 
 (cl-defun org-glance-table--act-planning (graph id kind)
   "Set, or with `C-u' clear, KIND planning of headline ID in GRAPH (`s', `d')."
-  (unless id (user-error "Point is not on a row"))
+  (setq id (org-glance-table--require-row-id id))
   (let ((line (line-number-at-pos))
         (remove current-prefix-arg))
     (org-glance-material:set-planning graph id kind remove)
@@ -665,7 +669,7 @@ persistent view saves config and schema now; other views signal `user-error'."
 
 (cl-defun org-glance-table--act-duplicate (graph id)
   "Copy headline ID in GRAPH under a fresh id (`C-c p')."
-  (unless id (user-error "Point is not on a row"))
+  (setq id (org-glance-table--require-row-id id))
   (let ((line (line-number-at-pos))
         (new (org-glance-material:duplicate graph id)))
     (org-glance-table--finish new line "Headline copied")))
@@ -675,7 +679,7 @@ persistent view saves config and schema now; other views signal `user-error'."
 State, tags and planning reuse `C-c C-t', `:' (`C-u' removes) and
 `org-read-date'; title, priority and property cells prompt pre-filled; derived
 columns signal `user-error'."
-  (unless id (user-error "Point is not on a row"))
+  (setq id (org-glance-table--require-row-id id))
   (let ((key (org-glance-view:column-at-point))
         (line (line-number-at-pos)))
     (pcase key
@@ -710,7 +714,7 @@ columns signal `user-error'."
 
 (cl-defun org-glance-table--act-history (graph id)
   "Open one of ID's occurrence snapshots in GRAPH read-only (`l')."
-  (unless id (user-error "Point is not on a row"))
+  (setq id (org-glance-table--require-row-id id))
   (org-glance-view:pick-occurrence graph id))
 
 (cl-defun org-glance-table--act-deltag (graph id spec)
@@ -765,8 +769,8 @@ Marks survive."
                                                       (org-glance-capture:completing-read-tag))
                                                   "")))
         (cons "relations" (lambda (id _row)
-                            (unless id (user-error "Point is not on a row"))
-                            (org-glance-table:visit-relations graph id)))
+                            (org-glance-table:visit-relations
+                             graph (org-glance-table--require-row-id id))))
         (cons "tag"      (lambda (id _row) (org-glance-table--act-tag graph id)))
         (cons "crypt"    (lambda (id _row) (org-glance-table--act-crypt graph id)))
         (cons "history"  (lambda (id _row) (org-glance-table--act-history graph id)))

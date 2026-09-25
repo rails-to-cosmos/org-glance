@@ -718,6 +718,19 @@ today, up from 50.
     =portable-cache-packs-and-retires-loose-files= and Glance's
     =portable-projection-contract= interop case.
 
+37. *Graph identity is the canonical full directory truename.*  The constructor
+    canonicalizes every registry key before lookup.  Path aliases therefore share one
+    graph instance, cache and after-open pass.  Skipping that boundary splits one store
+    into multiple live instances and repeats recovery hooks.  Evidence:
+    [[https://github.com/rails-to-cosmos/org-glance/blob/32d20f3a939fa56ca1a86ce1a3f52ebb7a7e0b39/src/data/org-glance-graph.el#L214-L229][constructor at 32d20f3, lines 214–229]].  Pinned by
+    =graph-directory-aliases-share-instance=.
+
+38. *Core is a one-way base module.*  =org-glance-core= owns shared session state and
+    may be required by top-level =org-glance.el=; requiring top-level from core creates
+    a feature-load cycle.  Evidence:
+    [[https://github.com/rails-to-cosmos/org-glance/blob/32d20f3a939fa56ca1a86ce1a3f52ebb7a7e0b39/src/data/org-glance-core.el#L1-L8][core boundary at 32d20f3, lines 1–8]] and
+    [[file:proposals/2026-06-07-generalize-core-v2-module.done.org::*Problem][the module proposal]].
+
 * Known hazards
 
 Costs the code ships WITH, deliberately.  Each was reproduced with a probe and each

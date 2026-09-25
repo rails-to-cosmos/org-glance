@@ -11,19 +11,21 @@ here; ONE speller serves both shapes, which differ only in the third field."
   (format "{\"id\":\"%s\",\"at\":\"2026-08-03T04:21:07Z\"%s}\n"
           id (if tombstone ",\"tombstone\":true" "")))
 
-(cl-defun org-glance-test:external-write (graph &rest ids)
-  "Append a notification line for each of IDS to GRAPH's `EXTERNAL.jsonl'."
+(cl-defun org-glance-test--external-append (graph text)
+  "Append TEXT to GRAPH's live external-notification file."
   (let ((path (org-glance-graph:external-path graph)))
     (f-mkdir-full-path (f-dirname path))
-    (f-append-text (mapconcat #'org-glance-test:external-line ids "") 'utf-8 path)))
+    (f-append-text text 'utf-8 path)))
+
+(cl-defun org-glance-test:external-write (graph &rest ids)
+  "Append a notification line for each of IDS to GRAPH's `EXTERNAL.jsonl'."
+  (org-glance-test--external-append
+   graph (mapconcat #'org-glance-test:external-line ids "")))
 
 (cl-defun org-glance-test:external-delete (graph &rest ids)
   "Append a DELETE line for each of IDS to GRAPH's `EXTERNAL.jsonl'."
-  (let ((path (org-glance-graph:external-path graph)))
-    (f-mkdir-full-path (f-dirname path))
-    (f-append-text
-     (mapconcat (lambda (id) (org-glance-test:external-line id t)) ids "")
-     'utf-8 path)))
+  (org-glance-test--external-append
+   graph (mapconcat (lambda (id) (org-glance-test:external-line id t)) ids "")))
 
 (defconst org-glance-test:external-filler-id "aaaaaaaaaaaaaaaaaaaa"
   "Filler id whose WRITE line is as long as a three-character id's TOMBSTONE.
@@ -70,9 +72,7 @@ The two lines name `id1', which every caller has already added."
 (cl-defun org-glance-test:external-raw (graph line)
   "Append LINE verbatim to GRAPH's `EXTERNAL.jsonl'.
 For shapes the spellers cannot make: an unknown field, a non-true `tombstone'."
-  (let ((path (org-glance-graph:external-path graph)))
-    (f-mkdir-full-path (f-dirname path))
-    (f-append-text line 'utf-8 path)))
+  (org-glance-test--external-append graph line))
 
 (cl-defun org-glance-test:external-text (graph)
   "Return GRAPH's `EXTERNAL.jsonl' as text, or nil when there is no file."

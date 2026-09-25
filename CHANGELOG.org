@@ -5,6 +5,8 @@ Notable user-facing changes.  Versions date-based
 
 * Unreleased
 
+* 1.47.0.0.20260925.0
+
 ** Changed
 - Portable projection refreshes now pack current exact-key records into
   content-addressed 512-record segments and retire superseded loose files.
