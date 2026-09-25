@@ -706,11 +706,16 @@ today, up from 50.
     blob exists.  The key is source-relative path, raw SHA-256, semantic-config
     fingerprint, parser version and producer.  A local-cache miss accepts one
     unique payload for the exact key.  Equal duplicates collapse; different
-    payloads under one key make the key unusable.  SQLite remains under
-    git-ignored =cache/=.  Parser version 1 defines the current payload; no
-    compatibility adapter is implied.
+    payloads under one key make the key unusable.  Ordinary changes append
+    one-record level-zero segments.  A full refresh sorts the current keys and
+    packs them into content-addressed segments of at most 512 records, then
+    retires the files present before compaction; more than 256 loose files also
+    triggers that compaction.  SQLite remains under git-ignored =cache/=.
+    Parser version 1 defines the current payload; no compatibility adapter is
+    implied.
 
-    Pinned by =portable-cache-cold-clone-and-conflict= and Glance's
+    Pinned by =portable-cache-cold-clone-and-conflict=,
+    =portable-cache-packs-and-retires-loose-files= and Glance's
     =portable-projection-contract= interop case.
 
 * Known hazards

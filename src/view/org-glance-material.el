@@ -1112,16 +1112,25 @@ When WITH-KIND is non-nil, read KIND before choosing the target."
 (cl-defun org-glance-material:insert-reference (graph self &key with-kind)
   "Insert a reference edge at point, or self-insert `@'.
 At a word boundary in body or title, pick a GRAPH headline other than SELF
-and insert its `org-glance-material:' link.  WITH-KIND reads the kind first.  At
-a heading's column 0 (speed keys) or mid-word, self-insert as remapped."
-  (if (or (and (org-at-heading-p) (bolp))   ; the speed-command position
-          (not (or (bolp) (memq (char-before) '(?\s ?\t ?\n)))))
+and insert its `org-glance-material:' link.  An active region becomes the link
+title.  WITH-KIND reads the kind first.  At a heading's column 0 (speed keys)
+or mid-word, self-insert as remapped."
+  (let* ((region? (use-region-p))
+         (beg (and region? (region-beginning)))
+         (end (and region? (region-end)))
+         (region-title (and region?
+                            (buffer-substring-no-properties beg end))))
+    (if (and (not region?)
+             (or (and (org-at-heading-p) (bolp))
+                 (not (or (bolp) (memq (char-before) '(?\s ?\t ?\n))))))
       (call-interactively (or (command-remapping 'self-insert-command)
                               #'self-insert-command))
-    (pcase-let ((`(,id ,title ,kind)
-                 (org-glance-material--read-reference graph self
-                                                      :with-kind with-kind)))
-      (insert (org-glance--edge->string id kind title)))))
+      (pcase-let ((`(,id ,title ,kind)
+                   (org-glance-material--read-reference graph self
+                                                        :with-kind with-kind)))
+        (when region?
+          (delete-region beg end))
+        (insert (org-glance--edge->string id kind (or region-title title)))))))
 
 (cl-defun org-glance-material:refer (&optional arg)
   "Insert a reference to another headline at point, or self-insert `@'.

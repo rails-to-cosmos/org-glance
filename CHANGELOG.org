@@ -6,7 +6,15 @@ Notable user-facing changes.  Versions date-based
 * Unreleased
 
 ** Changed
+- Portable projection refreshes now pack current exact-key records into
+  content-addressed 512-record segments and retire superseded loose files.
+  Incremental edits remain immutable one-record segments and trigger packing
+  after 256 accumulate.
 - =C-u @= asks for the relation kind before asking for the referenced headline.
+
+** Fixed
+- =@= replaces an active material-buffer region with a reference link using
+  the selected text as its title.
 
 ** Added
 - Portable cache: immutable =meta/projections/org-glance/*.jsonl= records let

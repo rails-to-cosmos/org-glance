@@ -17,6 +17,10 @@
 (defconst org-glance-cache--portable-format 1)
 (defconst org-glance-cache--parser-version 1)
 (defconst org-glance-cache--producer "org-glance")
+(defconst org-glance-cache--portable-segment-records 512)
+(defconst org-glance-cache--portable-loose-allowance 256)
+(defvar org-glance-cache--defer-portable nil
+  "When non-nil, postpone portable writes until the enclosing refresh packs them.")
 (defconst org-glance-cache--config-key
   (secure-hash 'sha256 "org-glance:no-semantic-parser-config")
   "Fingerprint for the empty semantic parser configuration.")
@@ -120,7 +124,7 @@
 
 (cl-defun org-glance-cache--portable-payload (graph path digest)
   "Return GRAPH's one exact portable payload for PATH and DIGEST.
-Equal duplicates collapse. Divergent duplicates invalidate the key."
+Equal duplicates collapse.  Divergent duplicates invalidate the key."
   (when-let* ((relative (org-glance-cache--relative-path graph path))
               (key (list relative digest org-glance-cache--config-key
                          org-glance-cache--parser-version
@@ -132,15 +136,24 @@ Equal duplicates collapse. Divergent duplicates invalidate the key."
                      collect (plist-get record :payload)))))
       (when (= 1 (length payloads)) (car payloads)))))
 
-(cl-defun org-glance-cache--write-portable (graph path digest payload)
-  "Write GRAPH's immutable keyed projection for PATH, DIGEST and PAYLOAD."
+(cl-defun org-glance-cache--portable-record (graph path digest payload)
+  "Return GRAPH's portable envelope for PATH, DIGEST and PAYLOAD."
   (when-let* ((relative (org-glance-cache--relative-path graph path)))
-    (let* ((record (list :format org-glance-cache--portable-format
-                         :producer org-glance-cache--producer
-                         :parser org-glance-cache--parser-version
-                         :config org-glance-cache--config-key
-                         :path relative :digest digest :payload payload))
-           (text (concat (json-serialize record) "\n"))
+    (list :format org-glance-cache--portable-format
+          :producer org-glance-cache--producer
+          :parser org-glance-cache--parser-version
+          :config org-glance-cache--config-key
+          :path relative :digest digest :payload payload)))
+
+(cl-defun org-glance-cache--portable-text (records)
+  "Serialize portable RECORDS as JSON Lines."
+  (mapconcat (lambda (record) (json-serialize record)) records "\n"))
+
+(cl-defun org-glance-cache--write-portable (graph path digest payload)
+  "Write GRAPH's immutable level-zero projection for PATH, DIGEST and PAYLOAD."
+  (when-let* ((record (org-glance-cache--portable-record
+                       graph path digest payload)))
+    (let* ((text (concat (org-glance-cache--portable-text (list record)) "\n"))
            (stem (secure-hash
                   'sha256
                   (format "%S" (org-glance-cache--portable-key record))))
@@ -156,6 +169,70 @@ Equal duplicates collapse. Divergent duplicates invalidate the key."
                  (unless (and (file-exists-p alternate)
                               (equal text (f-read-text alternate 'utf-8)))
                    (org-glance--atomic-write alternate text nil))))))))
+
+(cl-defun org-glance-cache--chunks (values size)
+  "Split VALUES into lists of at most SIZE elements."
+  (let (chunks)
+    (while values
+      (let (chunk)
+        (dotimes (_ size)
+          (when values (push (pop values) chunk)))
+        (push (nreverse chunk) chunks)))
+    (nreverse chunks)))
+
+(cl-defun org-glance-cache--write-segment (dir index records)
+  "Write immutable packed RECORDS at INDEX under DIR and return its name."
+  (let* ((text (concat (org-glance-cache--portable-text records) "\n"))
+         (name (format "seg-%06d-%s.jsonl" index
+                       (secure-hash 'sha256 text)))
+         (path (f-join dir name)))
+    (cond ((not (file-exists-p path))
+           (org-glance--atomic-write path text nil))
+          ((not (equal text (f-read-text path 'utf-8)))
+           (error "Portable projection hash collision: %s" path)))
+    name))
+
+(cl-defun org-glance-cache--compact-portable (graph db)
+  "Replace GRAPH's org-glance projection files with packed DB records."
+  (let* ((dir (org-glance-cache--portable-path graph))
+         (old (when (file-directory-p dir)
+                (directory-files dir nil "\\.jsonl\\'")))
+         (records
+          (sort
+           (delq nil
+                 (mapcar
+                  (lambda (row)
+                    (org-glance-cache--portable-record
+                     graph (nth 0 row) (nth 1 row) (nth 2 row)))
+                  (sqlite-select
+                   db
+                   "SELECT path,digest,record FROM org_headline WHERE producer='org-glance'")))
+           (lambda (left right)
+             (string< (format "%S" (org-glance-cache--portable-key left))
+                      (format "%S" (org-glance-cache--portable-key right))))))
+         names)
+    (make-directory dir t)
+    (cl-loop for chunk in (org-glance-cache--chunks
+                           records org-glance-cache--portable-segment-records)
+             for index from 0
+             do (push (org-glance-cache--write-segment dir index chunk) names))
+    (dolist (name old)
+      (unless (member name names)
+        (ignore-errors (delete-file (f-join dir name)))))))
+
+(cl-defun org-glance-cache--compact-portable-maybe (graph db)
+  "Compact GRAPH from DB when its projection files exceed the allowance."
+  (let* ((dir (org-glance-cache--portable-path graph))
+         (files (if (file-directory-p dir)
+                    (directory-files dir nil "\\.jsonl\\'") nil))
+         (records (caar (sqlite-select
+                         db
+                         "SELECT count(*) FROM org_headline WHERE producer='org-glance'")))
+         (packed (/ (+ records org-glance-cache--portable-segment-records -1)
+                    org-glance-cache--portable-segment-records)))
+    (when (> (length files)
+             (+ packed org-glance-cache--portable-loose-allowance))
+      (org-glance-cache--compact-portable graph db))))
 
 (cl-defun org-glance-cache--tags (metadata)
   "Return METADATA's tags in Glance's colon-delimited form."
@@ -212,7 +289,7 @@ Equal duplicates collapse. Divergent duplicates invalidate the key."
        (vector id path digest content-hash
                payload
                "org-glance")))
-    (when (and digest payload)
+    (when (and digest payload (not org-glance-cache--defer-portable))
       (org-glance-cache--write-portable graph path digest payload))))
 
 (cl-defun org-glance-cache--project-edges (db metadata)
@@ -267,7 +344,8 @@ Equal duplicates collapse. Divergent duplicates invalidate the key."
                       (cl-some
                        (lambda (target) (member target touched))
                        (org-glance-headline-metadata:relation-targets metadata)))
-              (org-glance-cache--project-edges db metadata)))))))))
+              (org-glance-cache--project-edges db metadata)))))
+       (org-glance-cache--compact-portable-maybe graph db)))))
 
 (cl-defun org-glance-cache:refresh (graph)
   "Reconcile GRAPH's live headlines into the shared cache."
@@ -275,22 +353,24 @@ Equal duplicates collapse. Divergent duplicates invalidate the key."
     (org-glance-cache--with-db
      graph
      (lambda (db)
-       (org-glance-cache--transaction
-        db
-        (lambda ()
-          (let ((live (mapcar #'org-glance-headline-metadata:id headlines)))
-            (dolist (row (sqlite-select
-                          db "SELECT id,path FROM org_headline"))
-              (unless (member (car row) live)
-                (sqlite-execute db "DELETE FROM source WHERE path=?"
-                                (vector (cadr row))))))
-          (dolist (metadata headlines)
-            (org-glance-cache--project db graph metadata))
-          (dolist (metadata headlines)
-            (org-glance-cache--project-edges db metadata))
-          (sqlite-execute
-           db
-           "DELETE FROM source WHERE producer='org-glance' AND NOT EXISTS (SELECT 1 FROM headline WHERE headline.path=source.path)")))))))
+       (let ((org-glance-cache--defer-portable t))
+         (org-glance-cache--transaction
+          db
+          (lambda ()
+            (let ((live (mapcar #'org-glance-headline-metadata:id headlines)))
+              (dolist (row (sqlite-select
+                            db "SELECT id,path FROM org_headline"))
+                (unless (member (car row) live)
+                  (sqlite-execute db "DELETE FROM source WHERE path=?"
+                                  (vector (cadr row))))))
+            (dolist (metadata headlines)
+              (org-glance-cache--project db graph metadata))
+            (dolist (metadata headlines)
+              (org-glance-cache--project-edges db metadata))
+            (sqlite-execute
+             db
+             "DELETE FROM source WHERE producer='org-glance' AND NOT EXISTS (SELECT 1 FROM headline WHERE headline.path=source.path)"))))
+       (org-glance-cache--compact-portable graph db)))))
 
 (cl-defun org-glance-cache:metadata (graph id)
   "Return ID's valid org-glance projection from GRAPH's shared cache."

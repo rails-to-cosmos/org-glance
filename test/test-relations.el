@@ -106,6 +106,27 @@ Column-0 self-insert is owned by `material-refer-self-inserts-elsewhere'."
                            (buffer-substring (line-beginning-position)
                                              (line-end-position)))))))
 
+(ert-deftest org-glance-test:material-refer-uses-region-as-link-title ()
+  "`@' replaces the active region with a link carrying the region as title."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-test:headline "me" "* TODO Me" "Read this source today")
+      (org-glance-test:headline "other" "* TODO Other headline"))
+    (org-glance-test:with-material (buf graph "me")
+      (goto-char (point-min))
+      (search-forward "source")
+      (let ((end (point))
+            (transient-mark-mode t))
+        (goto-char (- end (length "source")))
+        (set-mark end)
+        (activate-mark)
+        (org-glance-test:offering (offered (caar offered))
+          (org-glance-material:refer)))
+      (should (s-contains?
+               "Read this [[org-glance-material:other][source]] today"
+               (buffer-string)))
+      (should-not (s-contains? "Other headline" (buffer-string))))))
+
 (ert-deftest org-glance-test:material-refer-duplicate-labels-injective ()
   "Same-titled candidates get a short-id suffix, and picking one targets ITS id."
   (org-glance-test:with-graph graph

@@ -79,6 +79,36 @@
         (ignore-errors (delete-file (concat cache suffix))))
       (should-not (org-glance-cache:metadata graph "a")))))
 
+(ert-deftest org-glance-test:portable-cache-packs-and-retires-loose-files ()
+  "A full refresh replaces loose projections with one packed current segment."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "a" "* Alpha"))
+    (org-glance-graph:add graph (org-glance-test:headline "b" "* Beta"))
+    (let* ((dir (org-glance-cache--portable-path graph))
+           (legacy (f-join dir "legacy.jsonl")))
+      (org-glance--atomic-write
+       legacy
+       (f-read-text (car (directory-files dir t "\\.jsonl\\'")) 'utf-8)
+       nil)
+      (org-glance-cache:refresh graph)
+      (let ((files (directory-files dir t "\\.jsonl\\'")))
+        (should (= 1 (length files)))
+        (should (string-prefix-p "seg-" (file-name-nondirectory (car files))))
+        (should (= 2 (length (split-string
+                              (f-read-text (car files) 'utf-8) "\n" t))))
+        (should-not (file-exists-p legacy))
+        (dotimes (index 256)
+          (org-glance--atomic-write
+           (f-join dir (format "loose-%03d.jsonl" index))
+           (f-read-text (car files) 'utf-8)
+           nil))
+        (org-glance-graph:add graph (org-glance-test:headline "c" "* Gamma"))
+        (setq files (directory-files dir t "\\.jsonl\\'"))
+        (should (= 1 (length files)))
+        (should (string-prefix-p "seg-" (file-name-nondirectory (car files))))
+        (should (= 3 (length (split-string
+                              (f-read-text (car files) 'utf-8) "\n" t))))))))
+
 (ert-deftest org-glance-test:shared-cache-follows-delete ()
   "Deleting a graph headline removes its shared source and incoming edges."
   (org-glance-test:with-graph graph
