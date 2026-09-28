@@ -3,31 +3,66 @@
 (require 'test-helpers)
 
 (ert-deftest org-glance-test:relations-edges-from-links ()
-  "Only material and legacy visit links yield edges, kinded or not, deduped."
+  "Material, legacy visit, and glance links yield distinct edges."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
       (org-glance-test:headline "src" "* TODO Source"
-        "[[org-glance-material:t1?kind=author][Ann]]"
-        "roasted by [[org-glance-material:t3?kind=roasted-by][Roastery]]"
-        "[[org-glance-material:t2][Base]]"
+        "[[glance:t1?kind=author][Ann]]"
+        "roasted by [[glance:t3?kind=roasted-by][Roastery]]"
+        "[[glance:t2][Base]]"
         "[[org-glance-visit:legacy1][Old note]]"
-        "[[org-glance-material:t1?kind=author][Ann again]]"   ; duplicate edge
+        "[[org-glance-material:legacy2][Older note]]"
+        "[[glance:external?kind=Roasted-By][New note]]"
+        "[[glance:t1?kind=author][Ann again]]"   ; duplicate edge
         "[[https://example.com][Web]]"))
-    (should (equal '(("t1" . "author") ("t3" . "roasted-by") ("t2" . nil) ("legacy1" . nil))
+    (should (equal '(("t1" . "author") ("t3" . "roasted-by") ("t2" . nil)
+                     ("legacy1" . nil) ("legacy2" . nil)
+                     ("external" . "roasted-by"))
                    (org-glance-test:field graph "src" relations)))))
+
+(ert-deftest org-glance-test:glance-link-follows-an-external-headline ()
+  "A glance link resolves an id adopted after the graph was initialized."
+  (org-glance-test:with-graph graph
+    (let ((org-glance-graph graph)
+          (org-glance-graph-external-poll-seconds 0))
+      (should-not (org-glance-graph:live-meta graph "fresh"))
+      (org-glance-test:write
+       (org-glance-graph:content-path graph "fresh")
+       (org-glance-test:org-with-id "* Pavel Ivakin :contact:" "fresh"))
+      (org-glance-test:external-write graph "fresh")
+      (let ((buffer (funcall (org-link-get-parameter "glance" :follow) "fresh" nil)))
+        (unwind-protect
+            (progn
+              (should (eq buffer (current-buffer)))
+              (should (equal "Pavel Ivakin"
+                             (org-glance-headline-metadata:title
+                              (org-glance-graph:live-meta graph "fresh")))))
+          (when (buffer-live-p buffer) (kill-buffer buffer)))))))
 
 (ert-deftest org-glance-test:relations-round-trip-deserialized ()
   "Relations survive a reopen and `:refers-to' matches deserialized structs."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
       (org-glance-test:headline "a" "* TODO A :book:"
-        "[[org-glance-material:b?kind=editor][B]]")
+        "[[glance:b?kind=editor][B]]")
       (org-glance-test:headline "b" "* TODO B"))
     (let* ((cold (org-glance-test:reopen graph))       ; re-read from disk
            (meta (org-glance-graph:get-headline cold "a")))
       (should (equal '(("b" . "editor"))
                      (org-glance-headline-metadata:relations meta)))
       (should (equal '("a") (org-glance-test:filter-ids cold '(:refers-to "b")))))))
+
+(ert-deftest org-glance-test:relations-reclassify-stored-glance-links ()
+  "Read old WAL records with glance links already listed as plain links."
+  (let ((meta (org-glance-headline-metadata:deserialize
+               '(:id "source" :tags [] :relations []
+                 :links ["[[glance:pavel][Pavel Ivakin]]"
+                         "[[glance:next?kind=Works-With][Next]]"
+                         "[[https://example.com][Web]]"]))))
+    (should (equal '(("pavel" . nil) ("next" . "works-with"))
+                   (org-glance-headline-metadata:relations meta)))
+    (should (equal '("[[https://example.com][Web]]")
+                   (org-glance-headline-metadata:links meta)))))
 
 (ert-deftest org-glance-test:relations-absent-field-reads-nil ()
   "A record serialized before the field existed deserializes relations = nil."
@@ -60,7 +95,7 @@ Self is never a candidate."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
       ;; me's own kinded edge seeds the graph's kind vocabulary ("author")
-      (org-glance-test:headline "me" "* TODO Me" "[[org-glance-material:other?kind=author][x]]")
+      (org-glance-test:headline "me" "* TODO Me" "[[glance:other?kind=author][x]]")
       (org-glance-test:headline "other" "* TODO Other headline"))
     (org-glance-test:with-material (buf graph "me")
       (goto-char (point-max))
@@ -70,7 +105,7 @@ Self is never a candidate."
         (let ((names (mapcar #'car offered)))
           (should (cl-some (lambda (c) (s-contains? "Other headline" c)) names))
           (should-not (cl-some (lambda (c) (s-contains? "Me" c)) names)))  ; self excluded
-        (should (s-contains? "[[org-glance-material:other][Other headline]]"
+        (should (s-contains? "[[glance:other][Other headline]]"
                              (buffer-string))))
       (insert "\n")
       (let (kind-coll prompts)
@@ -85,7 +120,7 @@ Self is never a candidate."
                        (nreverse prompts)))
         (should (member "author" kind-coll)))    ; seeded above via me's own edge
       (should (s-contains?
-               "roasted by [[org-glance-material:other?kind=roasted-by][Other headline]]"
+               "roasted by [[glance:other?kind=roasted-by][Other headline]]"
                (buffer-string))))))
 
 (ert-deftest org-glance-test:material-refer-in-title ()
@@ -102,7 +137,7 @@ Column-0 self-insert is owned by `material-refer-self-inserts-elsewhere'."
       (org-glance-test:offering (offered (caar offered))
         (org-glance-material:refer))
       (org-glance-material--goto-first-heading)
-      (should (s-contains? "Coffee from [[org-glance-material:other][Roaster]]"
+      (should (s-contains? "Coffee from [[glance:other][Roaster]]"
                            (buffer-substring (line-beginning-position)
                                              (line-end-position)))))))
 
@@ -123,7 +158,7 @@ Column-0 self-insert is owned by `material-refer-self-inserts-elsewhere'."
         (org-glance-test:offering (offered (caar offered))
           (org-glance-material:refer)))
       (should (s-contains?
-               "Read this [[org-glance-material:other][source]] today"
+               "Read this [[glance:other][source]] today"
                (buffer-string)))
       (should-not (s-contains? "Other headline" (buffer-string))))))
 
@@ -141,7 +176,7 @@ Column-0 self-insert is owned by `material-refer-self-inserts-elsewhere'."
           (offered (cl-find "dup-two-" (mapcar #'car offered) :test #'s-contains?))
         (org-glance-material:refer)
         (should (= 2 (cl-count "·" (mapcar #'car offered) :test #'s-contains?)))
-        (should (s-contains? "[[org-glance-material:dup-two-yy][Same title]]"
+        (should (s-contains? "[[glance:dup-two-yy][Same title]]"
                              (buffer-string)))))))
 
 (ert-deftest org-glance-test:material-refer-self-inserts-elsewhere ()
@@ -179,7 +214,7 @@ Column-0 self-insert is owned by `material-refer-self-inserts-elsewhere'."
 The filter is the bare `:id-any'; a headline related to nothing errors."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
-      (org-glance-test:headline "a" "* TODO A" "[[org-glance-material:b][B]]")
+      (org-glance-test:headline "a" "* TODO A" "[[glance:b][B]]")
       (org-glance-test:headline "b" "* DONE B")        ; DONE must stay visible
       (org-glance-test:headline "c" "* TODO C"))       ; related to nothing
     (let (calls)
@@ -206,9 +241,9 @@ A kind follows its arrow; rows merge both directions."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
       (org-glance-test:headline "a" "* TODO A"
-                                "roasted by [[org-glance-material:b?kind=roasted-by][B]]"
-                                "[[org-glance-material:c][C]]")
-      (org-glance-test:headline "b" "* TODO B" "[[org-glance-material:a][A]]")
+                                "roasted by [[glance:b?kind=roasted-by][B]]"
+                                "[[glance:c][C]]")
+      (org-glance-test:headline "b" "* TODO B" "[[glance:a][A]]")
       (org-glance-test:headline "c" "* TODO C"))
     (should (equal "> roasted by, <" (org-glance-table--relation-cell graph "a" "b")))
     (should (equal ">" (org-glance-table--relation-cell graph "a" "c")))
@@ -230,10 +265,10 @@ A kind follows its arrow; rows merge both directions."
     (org-glance-graph:add graph
       (org-glance-headline:encrypt
        (org-glance-test:headline "s" "* TODO Secret"
-         "[[org-glance-material:public-ref][Public]]"
+         "[[glance:public-ref][Public]]"
          "[[https://public.example][P]]"
          "#+begin_crypt"
-         "[[org-glance-material:secret-ref][Secret]]"
+         "[[glance:secret-ref][Secret]]"
          "[[https://secret.example][S]]"
          "#+end_crypt")
        "pw"))
@@ -250,9 +285,9 @@ A decrypted buffer's crypt-block link stays unindexed (invariant 27)."
       (org-glance-headline:encrypt
        (org-glance-test:headline "cs" "* TODO Secret"
          "editme"
-         "[[org-glance-material:public-ref][Public]]"
+         "[[glance:public-ref][Public]]"
          "#+begin_crypt"
-         "[[org-glance-material:secret-ref][Secret]]"
+         "[[glance:secret-ref][Secret]]"
          "#+end_crypt")
        "pw")
       (org-glance-test:headline "public-ref" "* TODO P"))
@@ -342,8 +377,8 @@ Cells join target titles with commas; a gone target shows its id."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
       (org-glance-test:headline "c1" "* TODO Kebena Decaf :coffee:"
-        "roasted by [[org-glance-material:r1?kind=roasted-by][Manhattan]]"
-        "also [[org-glance-material:gone?kind=roasted-by][Ghost]]")
+        "roasted by [[glance:r1?kind=roasted-by][Manhattan]]"
+        "also [[glance:gone?kind=roasted-by][Ghost]]")
       (org-glance-test:headline "c2" "* TODO Another Bean :coffee:")
       (org-glance-test:headline "r1" "* Manhattan Coffee Roasters"))
     (org-glance-test:with-table (graph 'coffee)
@@ -365,7 +400,7 @@ Cells join target titles with commas; a gone target shows its id."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
       (org-glance-test:headline-props "bk" "* TODO Book" '(("AUTHOR" . "Tolkien"))
-        "[[org-glance-material:t1?kind=author][Ann]]")
+        "[[glance:t1?kind=author][Ann]]")
       (org-glance-test:headline "t1" "* Ann the Author"))
     (let ((prop-col (org-glance-table--custom-column graph "AUTHOR"))
           (edge-col (org-glance-table--custom-column graph "author")))

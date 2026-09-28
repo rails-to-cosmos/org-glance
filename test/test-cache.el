@@ -8,7 +8,7 @@
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
       (org-glance-test:headline "a" "* TODO Alpha :work:"
-                                "[[org-glance-material:b?kind=blocks][Beta]]"))
+                                "[[glance:b?kind=blocks][Beta]]"))
     (org-glance-graph:add graph (org-glance-test:headline "b" "* Beta"))
     (let ((db (sqlite-open (org-glance-cache:path graph))))
       (unwind-protect
@@ -115,7 +115,7 @@
     (org-glance-graph:add graph (org-glance-test:headline "a" "* Alpha"))
     (org-glance-graph:add
      graph (org-glance-test:headline
-            "b" "* Beta" "[[org-glance-material:a][Alpha]]"))
+            "b" "* Beta" "[[glance:a][Alpha]]"))
     (org-glance-graph:delete graph "a")
     (let ((db (sqlite-open (org-glance-cache:path graph))))
       (unwind-protect

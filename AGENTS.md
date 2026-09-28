@@ -47,7 +47,8 @@ evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
    properties and the log drawers, and so does every derived fact (properties, links,
    relations). The property index is a pure cache — hash-guarded
    with O(N) blob fallback, dropped by reindex, never trusted in a durable write. The
-   `org-glance-material:` body link is canonical; `relations` AND `links` metadata are
+    `glance:` body link is canonical; `org-glance-material:` and `org-glance-visit:` are
+    deprecated aliases; `relations` AND `links` metadata are
    projections, never written independently. Occurrence snapshots are canonical content,
    GC'd with the id dir at compaction.
 6. Ids are path-safety-checked via `error` (never `cl-assert`) before any filesystem use.

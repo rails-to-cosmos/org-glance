@@ -59,7 +59,8 @@ rev:   BUMP := rev
 major minor patch build rev: bump-version
 
 bump-version:
-	@cur=`sed -n 's/^(package "org-glance" "\([0-9.]*\)".*/\1/p' Eask`; \
+	@set -e; \
+	cur=`sed -n 's/^(package "org-glance" "\([0-9.]*\)".*/\1/p' Eask`; \
 	test -n "$$cur" || { echo "error: could not read version from Eask"; exit 1; }; \
 	set -- `echo "$$cur" | tr '.' ' '`; \
 	maj=$${1:-0}; min=$${2:-0}; pat=$${3:-0}; bld=$${4:-0}; olddate=$${5:-0}; rev=$${6:-0}; \
@@ -73,8 +74,10 @@ bump-version:
 	  *) echo "usage: make major|minor|patch|build|rev"; exit 1 ;; \
 	esac; \
 	new="$$maj.$$min.$$pat.$$bld.$$today.$$rev"; \
-	sed -i "s/^(package \"org-glance\" \"$$cur\"/(package \"org-glance\" \"$$new\"/" Eask; \
-	sed -i "s/^;; Version: [0-9][0-9.]*/;; Version: $$new/" org-glance.el; \
+	ORG_GLANCE_OLD_VERSION="$$cur" ORG_GLANCE_NEW_VERSION="$$new" perl -pi -e \
+	  's/^(\(package "org-glance" ")\Q$$ENV{ORG_GLANCE_OLD_VERSION}\E(".*)/$$1.$$ENV{ORG_GLANCE_NEW_VERSION}.$$2/e' Eask; \
+	ORG_GLANCE_NEW_VERSION="$$new" perl -pi -e \
+	  's/^(;; Version: )[0-9][0-9.]*/$$1.$$ENV{ORG_GLANCE_NEW_VERSION}/e' org-glance.el; \
 	echo "org-glance: $$cur -> $$new"
 
 # --- Podman: reproducible Emacs on a pinned version --------------------------

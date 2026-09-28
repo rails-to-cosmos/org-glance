@@ -793,7 +793,7 @@ keeps the headline; the referrer's edge dangles harmlessly afterwards."
     (org-glance-graph:add graph
       (org-glance-test:headline "gone" "* TODO Doomed")
       (org-glance-test:headline "ref" "* TODO Referrer"
-        "[[org-glance-material:gone][Doomed]]"))
+        "[[glance:gone][Doomed]]"))
     (let (prompt)
       (cl-letf (((symbol-function 'yes-or-no-p)
                  (lambda (p) (setq prompt p) nil)))

@@ -48,7 +48,7 @@ argument in [[file:proposals][docs/proposals/]].
    (=org-glance-headline:hash-ignore-drawers=), so clocking never churns it or the
    caches keyed on it; every derived fact reads the same text
    (=--buffer-content-facts=, =--buffer-properties= delete the log drawers first), or
-   a clock-in changes a cached value under an unchanged hash.  The =org-glance-material:= body link is canonical; =relations=
+   a clock-in changes a cached value under an unchanged hash.  The =glance:= body link is canonical; =org-glance-material:= and =org-glance-visit:= are deprecated aliases; =relations=
    AND =links= metadata are projections recomputed on save/reindex.  Occurrence
    snapshots (=data/<id>/occurrences/=) are canonical content — immutable, GC'd with
    the id dir at compaction, so a tombstoned id's snapshots linger until then.

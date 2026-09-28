@@ -93,7 +93,7 @@ in that tag's overview / table to edit it directly).
 
 ** Relations
 
-In a materialized buffer — or while capturing (step 1) — =@= at the start of a word prompts for another headline and inserts a link to it; an active region becomes the link title. =C-u @= asks for the reference *kind* first, then the headline:
+In a materialized buffer — or while capturing (step 1) — =@= at the start of a word prompts for another headline and inserts a =glance:= link to it; an active region becomes the link title. =C-u @= asks for the reference *kind* first, then the headline. Older =org-glance-material:= and =org-glance-visit:= links still resolve as deprecated aliases:
 
 #+begin_src org
 roasted by [[glance:0e904834?kind=roasted-by][Manhattan Coffee Roasters]]
@@ -102,7 +102,7 @@ roasted by [[glance:0e904834?kind=roasted-by][Manhattan Coffee Roasters]]
 Clicking the link opens the roaster; the graph indexes it as a typed edge, and the views pick it up. The overview heading gains a relation line:
 
 #+begin_src org
-- roasted by [[org-glance-material:0e904834][Manhattan Coffee Roasters]]
+- roasted by [[glance:0e904834][Manhattan Coffee Roasters]]
 #+end_src
 
 and =C-c += in the table now offers a =Roasted by= column with the target titles:

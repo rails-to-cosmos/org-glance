@@ -5,6 +5,13 @@ Notable user-facing changes.  Versions date-based
 
 * Unreleased
 
+** Changed
+- =@= and Org link completion emit =glance:= links; =org-glance-material:= and =org-glance-visit:= remain deprecated aliases.
+
+** Fixed
+- =glance:= links follow newly added headlines; stored plain links project as relations on read.
+- =make major|minor|patch|build|rev= updates versions with portable Perl on macOS.
+
 * 1.47.0.0.20260925.0
 
 ** Changed

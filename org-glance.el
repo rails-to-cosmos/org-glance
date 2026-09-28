@@ -303,7 +303,7 @@ Never migrate or prompt; `M-x org-glance-migrate' converts."
 (defface org-glance-link-materialize-face
   '((((background dark)) (:inherit default :underline "MediumPurple3"))
     (t (:inherit default :underline "Magenta")))
-  "Face of `org-glance-material:'/`org-glance-visit:' links (follow = edit)."
+  "Face of `glance:' links and their deprecated aliases (follow = edit)."
   :group 'org-glance
   :group 'faces)
 
@@ -315,7 +315,7 @@ Never migrate or prompt; `M-x org-glance-migrate' converts."
   :group 'faces)
 
 (cl-defun org-glance-link:complete-material ()
-  "Complete an `org-glance-material:ID' link by picking a headline."
+  "Complete a `glance:ID' link by picking a headline."
   (org-glance-ensure-init)
   (org-glance--edge->link-path
    (org-glance-headline-metadata:id
@@ -333,13 +333,18 @@ Never migrate or prompt; `M-x org-glance-migrate' converts."
        (concat "org-glance-open:")))
 
 (org-link-set-parameters
- org-glance-link-material-type            ; "org-glance-material" -- the canonical edge
+ org-glance-link-edge-type
  :follow #'org-glance-link:material
  :face 'org-glance-link-materialize-face
  :complete #'org-glance-link:complete-material)
 
 (org-link-set-parameters
- "org-glance-visit"                       ; legacy edge type: followed, never completed
+ "org-glance-material"
+ :follow #'org-glance-link:material
+ :face 'org-glance-link-materialize-face)
+
+(org-link-set-parameters
+ "org-glance-visit"
  :follow #'org-glance-link:material
  :face 'org-glance-link-materialize-face)
 
@@ -354,8 +359,8 @@ Never migrate or prompt; `M-x org-glance-migrate' converts."
  :face 'org-glance-link-overview-face)
 
 (defun org-glance-link:material (path &optional _)
-  "Materialize the headline PATH refers to; a `?kind=' suffix is ignored.
-Serves both the material and the legacy visit link types."
+  "Materialize the headline PATH refers to; ignore a `?kind=' suffix.
+Serves `glance:' and its deprecated material and visit aliases."
   (org-glance-ensure-init)
   (switch-to-buffer
    (org-glance-material:open org-glance-graph (car (split-string path "[?]")))))

@@ -91,7 +91,7 @@ Finalize projects it into the captured headline's relations (invariant 5)."
         (org-glance-capture:refer '(4)))
       (should (equal '("Reference kind (empty for none): " "Refer to: ")
                      (nreverse prompts))))
-    (should (s-contains? "depends on [[org-glance-material:target?kind=depends-on][Target headline]]"
+    (should (s-contains? "depends on [[glance:target?kind=depends-on][Target headline]]"
                          (buffer-string)))
     (org-capture-finalize)
     (let ((captured (cl-find-if

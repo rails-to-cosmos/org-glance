@@ -147,7 +147,7 @@ path; a display-boundary refresh re-fills it and clears the flag."
 on it; a headline related to nothing errors instead."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
-      (org-glance-test:headline "a" "* TODO A" "[[org-glance-material:b][B]]")
+      (org-glance-test:headline "a" "* TODO A" "[[glance:b][B]]")
       (org-glance-test:headline "b" "* TODO B")
       (org-glance-test:headline "z" "* TODO Z"))       ; related to nothing
     (let (calls)
@@ -836,9 +836,9 @@ priority and property columns prompt for a string, derived columns refuse."
   "Two coffees each referencing one roaster."
   (org-glance-graph:add graph
     (org-glance-test:headline "c1" "* TODO Coffee1 :coffee:"
-      "[[org-glance-material:r1][R1]]")
+      "[[glance:r1][R1]]")
     (org-glance-test:headline "c2" "* TODO Coffee2 :coffee:"
-      "[[org-glance-material:r2][R2]]")
+      "[[glance:r2][R2]]")
     (org-glance-test:headline "r1" "* TODO Roaster1 :roaster:")
     (org-glance-test:headline "r2" "* TODO Roaster2 :roaster:")))
 
@@ -948,7 +948,7 @@ pair: the key is ANCHOR-tag > ROW-tag (invariant 18)."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
       (org-glance-test:headline "c3" "* TODO Coffee3 :coffee:decaf:"
-        "[[org-glance-material:r1][R1]]")
+        "[[glance:r1][R1]]")
       (org-glance-test:headline "r1" "* TODO Roaster1 :roaster:"))
     (let ((file (org-glance-table--refs-file graph)))
       (org-glance--eld-alist-set file "pair:relations:coffee>roaster"
@@ -965,7 +965,7 @@ pair: the key is ANCHOR-tag > ROW-tag (invariant 18)."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
       (org-glance-test:headline "c1" "* TODO Coffee1 :coffee:"
-        "[[org-glance-material:r1][R1]]")
+        "[[glance:r1][R1]]")
       (org-glance-test:headline-props "r1" "* TODO Roaster1 :roaster:"
                                       '(("ROAST" . "light"))))
     (org-glance--eld-alist-set

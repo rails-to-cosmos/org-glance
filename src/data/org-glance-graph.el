@@ -164,11 +164,27 @@ Total over fresh symbol tags and deserialized strings, even in a vector."
            append (list json (org-glance-headline-metadata--encode encode value))))
 
 (cl-defun org-glance-headline-metadata:deserialize (data)
+  "Decode DATA, treating stored `glance:' links as relations on read.
+Older records classified those links as plain links; this leaves the WAL
+untouched while making their relation view current (invariant 5)."
   (cl-check-type data list)
-  (apply #'make-org-glance-headline-metadata
-         (cl-loop for (slot json _from _encode decode) in org-glance-headline-metadata:fields
-                  append (list (intern (concat ":" (symbol-name slot)))
-                               (org-glance-headline-metadata--decode decode (plist-get data json))))))
+  (let (edges plain)
+    (dolist (link (append (plist-get data :links) nil))
+      (let ((edge (and (string-match
+                        "\\`\\[\\[glance:\\([^]]+\\)\\]\\(?:\\[[^]]*\\]\\)?\\]\\'" link)
+                       (org-glance--link-edge "glance" (match-string 1 link)))))
+        (if edge (push edge edges) (push link plain))))
+    (setq edges (nreverse edges)
+          plain (nreverse plain))
+    (apply #'make-org-glance-headline-metadata
+           (cl-loop for (slot json _from _encode decode) in org-glance-headline-metadata:fields
+                    for value = (org-glance-headline-metadata--decode
+                                 decode (plist-get data json))
+                    append (list (intern (concat ":" (symbol-name slot)))
+                                 (pcase slot
+                                   ('relations (delete-dups (append value edges)))
+                                   ('links plain)
+                                   (_ value)))))))
 
 (cl-defun org-glance-headline-metadata:done? (metadata)
   "Non-nil if METADATA's state is a done keyword (per `org-done-keywords')."

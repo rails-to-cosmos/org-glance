@@ -520,8 +520,8 @@ kinds, LIVE titles) and plain links, needing no materialization (invariant 20)."
     (org-glance-graph:add graph
       (org-glance-test:headline "c1" "* TODO [#A] Kebena Decaf :coffee:"
         "SCHEDULED: <2026-08-01 Sat> DEADLINE: <2026-08-10 Mon>"
-        "roasted by [[org-glance-material:r1?kind=roasted-by][Manhattan]]"
-        "see [[org-glance-material:r2][x]]"
+        "roasted by [[glance:r1?kind=roasted-by][Manhattan]]"
+        "see [[glance:r2][x]]"
         "[[https://example.com][Homepage]]")
       (org-glance-test:headline "r1" "* Manhattan Coffee Roasters")
       (org-glance-test:headline "r2" "* Water Notes"))
@@ -529,9 +529,9 @@ kinds, LIVE titles) and plain links, needing no materialization (invariant 20)."
       (should (s-contains? "* TODO [#A] Kebena Decaf" text))
       (should (s-contains? "DEADLINE: <2026-08-10 Mon> SCHEDULED: <2026-08-01 Sat>" text))
       (should (s-contains?
-               "- roasted by [[org-glance-material:r1?kind=roasted-by][Manhattan Coffee Roasters]]"
+               "- roasted by [[glance:r1?kind=roasted-by][Manhattan Coffee Roasters]]"
                text))
-      (should (s-contains? "\n- [[org-glance-material:r2][Water Notes]]" text))
+      (should (s-contains? "\n- [[glance:r2][Water Notes]]" text))
       ;; the edge link appears once -- never duplicated into the plain links.
       (should (s-contains? "- [[https://example.com][Homepage]]" text))
       (should (= 1 (s-count-matches "r1\\?kind" text))))))
@@ -543,7 +543,7 @@ kinds, LIVE titles) and plain links, needing no materialization (invariant 20)."
     (org-glance-graph:add graph
       (org-glance-test:headline "a" "* TODO A"
         "[[https://example.com][Web]]"
-        "[[org-glance-material:b][B]]"
+        "[[glance:b][B]]"
         "[[id:xyz][Note]]"))
     (let* ((cold (org-glance-test:reopen graph))
            (meta (org-glance-graph:get-headline cold "a")))

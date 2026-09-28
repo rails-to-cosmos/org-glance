@@ -168,14 +168,14 @@ name), write back and return MERGE-FN applied to the list of side forms."
                          (org-element-property :type link-element)
                          (org-element-property :path link-element))))
 
-;;; Relation edges: the `org-glance-material:' body link is canonical (inv 5).
+;;; Relation edges: the `glance:' body link is canonical (inv 5).
 
-(defconst org-glance-link-material-type "org-glance-material"
-  "Org link type materializing a headline by id; the canonical edge form.")
+(defconst org-glance-link-edge-type "glance"
+  "Canonical Org link type for a relation to a headline id.")
 
 (defconst org-glance--link-edge-types
-  (list org-glance-link-material-type "org-glance-visit")
-  "Link types that denote a relation edge to another headline.")
+  (list org-glance-link-edge-type "org-glance-material" "org-glance-visit")
+  "Canonical and deprecated link types denoting a relation edge.")
 
 (cl-defun org-glance--kind-slug (kind)
   "Return relation KIND as a slug: trimmed, downcased, blank spans to dashes.
@@ -197,7 +197,7 @@ Invariant 13 applies it at every boundary: \"Roasted By\" -> \"roasted-by\"."
 
 (cl-defun org-glance--edge->link-path (id &optional kind)
   "Return the link path TYPE:ID[?kind=SLUG] of an edge to ID of KIND."
-  (concat org-glance-link-material-type ":" id
+  (concat org-glance-link-edge-type ":" id
           (and kind (concat "?kind=" (org-glance--kind-slug kind)))))
 
 (cl-defun org-glance--edge->string (id kind title)

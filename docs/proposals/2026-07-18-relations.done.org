@@ -4,6 +4,14 @@
 Status: *done* · 2026-07-18 · design adversarially verified against the code
 (4 reviewers; findings folded in below).  Suite 269/269, compile warning-free.
 
+Current link spelling: =glance:ID[?kind=SLUG]=.  The original
+=org-glance-material:= spelling and =org-glance-visit:= remain deprecated
+read/follow aliases; the canonical speller, Org completion, and =@= emit
+=glance:=.  This lets headlines created by the glance MCP resolve in the
+same running Emacs session after the external notification fold.
+Records written before this spelling was recognized reclassify their stored
+=glance:= plain links as relations when metadata is read; the WAL stays intact.
+
 Supersedes the store half of
 [[file:2026-07-09-relations-edge-model.done.org][relations-edge-model]]: same
 field-table projection, but the *body link is the canonical edge* — no reverse
