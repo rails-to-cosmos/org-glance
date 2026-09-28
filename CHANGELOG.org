@@ -7,6 +7,7 @@ Notable user-facing changes.  Versions date-based
 
 ** Changed
 - =@= and Org link completion emit =glance:= links; =org-glance-material:= and =org-glance-visit:= remain deprecated aliases.
+- =C-c d= stores =ORG_GLANCE_PROJECT_DIR= with =~= for home paths and no trailing slash.
 
 ** Fixed
 - =glance:= links follow newly added headlines; stored plain links project as relations on read.

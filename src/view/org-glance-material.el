@@ -92,6 +92,12 @@ Set it with `org-glance-material:set-project-dir' (`C-c d').")
 (defvar-local org-glance-material--graph nil
   "Graph backing the current materialized buffer.")
 
+(defvar-local org-glance-material--id nil
+  "ORG_GLANCE_ID of the headline materialized in the current buffer.")
+
+(defvar-local org-glance-material--encrypted nil
+  "Non-nil when this materialized buffer's stored blob is encrypted.")
+
 (cl-defun org-glance-material--ensure ()
   "Signal a `user-error' unless the current buffer is a materialized headline."
   (unless (and org-glance-material--graph org-glance-material--id)
@@ -102,9 +108,6 @@ Set it with `org-glance-material:set-project-dir' (`C-c d').")
 Plugins use it instead of the buffer-local internals."
   (org-glance-material--ensure)
   (cons org-glance-material--graph org-glance-material--id))
-
-(defvar-local org-glance-material--id nil
-  "ORG_GLANCE_ID of the headline materialized in the current buffer.")
 
 (defvar-local org-glance-material--cycle nil
   "Per-tag `#+TODO:'-style cycle string for this buffer's headline, or nil.")
@@ -236,8 +239,6 @@ Expiry makes the next save re-prompt; `org-glance-material:lock' forgets early."
   :group 'org-glance
   :type 'integer)
 
-(defvar-local org-glance-material--encrypted nil
-  "Non-nil when this materialized buffer's stored blob is encrypted.")
 (defvar-local org-glance-material--password nil
   "Cached password of an encrypted materialized buffer, or nil when forgotten.")
 (defvar-local org-glance-material--password-timer nil
@@ -418,7 +419,7 @@ before block: a sealed buffer's point sits inside its ciphertext block."
 
 (cl-defun org-glance-material:set-project-dir (dir)
   "Set the materialized headline's project directory (`C-c d') to DIR and save.
-Stored in `org-glance-project-dir-property' sans trailing slash; `C-u' clears."
+Store home paths with `~' and no trailing slash; `C-u' clears."
   (interactive
    (list (unless current-prefix-arg
            (expand-file-name
@@ -429,14 +430,16 @@ Stored in `org-glance-project-dir-property' sans trailing slash; `C-u' clears."
                  (file-name-as-directory cur)
                "./"))))))
   (org-glance-material--ensure)
-  (save-excursion
-    (org-glance-material--goto-first-heading)
-    (if (org-glance--present-string? dir)
-        (org-entry-put nil org-glance-project-dir-property
-                       (directory-file-name dir))
-      (org-entry-delete nil org-glance-project-dir-property)))
-  (let ((inhibit-message t)) (save-buffer))
-  (message "Project dir %s" (if (org-glance--present-string? dir) dir "cleared")))
+  (let ((stored (when (org-glance--present-string? dir)
+                  (directory-file-name
+                   (abbreviate-file-name (expand-file-name dir))))))
+    (save-excursion
+      (org-glance-material--goto-first-heading)
+      (if stored
+          (org-entry-put nil org-glance-project-dir-property stored)
+        (org-entry-delete nil org-glance-project-dir-property)))
+    (let ((inhibit-message t)) (save-buffer))
+    (message "Project dir %s" (or stored "cleared"))))
 
 (defcustom org-glance-material-hidden-properties org-glance-headline:hash-ignore-properties
   "Uppercase drawer property keys org-glance manages in material buffers.

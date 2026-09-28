@@ -190,7 +190,8 @@ Optional features ship as SEPARATE packages.  Two steps, and they belong to diff
 - [[https://github.com/rails-to-cosmos/org-glance-llm][*org-glance-llm*]] — LLM sessions per headline.  =l= opens an
   [[https://github.com/rails-to-cosmos/agnostic-llm][agnostic-llm]] session in the
   headline's data directory (or its =:ORG_GLANCE_PROJECT_DIR:=, set with
-  =C-c d= in a materialized buffer); =L= lists every session (running /
+  =C-c d= in a materialized buffer and stored with =~= for home paths and no
+  trailing slash); =L= lists every session (running /
   exited / stopped), derived live at each refresh; =C-c l= opens the session for
   the headline at hand.  It depends on =agnostic-llm= (also on the
   =rails-to-cosmos= archive), which pulls in =vterm= — loaded lazily on

@@ -932,7 +932,7 @@ plaintext at rest and the metadata keeps `linked?' alongside `encrypted?'."
 
 (ert-deftest org-glance-test:material-set-project-dir ()
   "`set-project-dir' writes, then clears, the headline's ORG_GLANCE_PROJECT_DIR,
-dropping a trailing slash; the reader, the `llm' plugin, tests in its repo."
+abbreviating home and dropping a trailing slash."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "d" "* TODO Doc" "body"))
     (org-glance-test:with-material (buffer graph "d")
@@ -943,6 +943,14 @@ dropping a trailing slash; the reader, the `llm' plugin, tests in its repo."
       ;; `read-directory-name' always hands over a trailing slash.
       (org-glance-material:set-project-dir "/tmp/proj-y/")
       (should (equal "/tmp/proj-y"
+                     (org-glance-headline:node-property
+                      "ORG_GLANCE_PROJECT_DIR" (org-glance-graph:headline graph "d"))))
+      (org-glance-material:set-project-dir (expand-file-name "~/projects/foo/"))
+      (should (equal "~/projects/foo"
+                     (org-glance-headline:node-property
+                      "ORG_GLANCE_PROJECT_DIR" (org-glance-graph:headline graph "d"))))
+      (org-glance-material:set-project-dir (file-name-as-directory (expand-file-name "~")))
+      (should (equal "~"
                      (org-glance-headline:node-property
                       "ORG_GLANCE_PROJECT_DIR" (org-glance-graph:headline graph "d"))))
       (org-glance-material:set-project-dir nil)

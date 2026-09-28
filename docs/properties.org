@@ -21,7 +21,8 @@ Set in a headline's =:PROPERTIES:= drawer.
 - =ORG_GLANCE_PROJECT_DIR= — a project directory for =org-glance-llm= to open its
   session in, instead of the content data dir.  Set/clear from a materialized
   buffer with =C-c d= (=org-glance-material:set-project-dir=); read by
-  =org-glance-llm--dir=.  =~= is expanded; the dir is created if missing.
+  =org-glance-llm--dir=.  Paths under home are stored with =~= and without a
+  trailing slash; =~= is expanded on read and the dir is created if missing.
 - =ORG_GLANCE_TITLE= (or =TITLE=) — overrides the displayed title; otherwise the
   heading text is used.  Read in =org-glance-headline--from-element=.
 - =ORG_GLANCE_REPEAT_HISTORY_DEPTH= — per-headline override of
