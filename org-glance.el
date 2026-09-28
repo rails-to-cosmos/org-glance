@@ -6,7 +6,7 @@
 
 ;; Author: Dmitry Akatov <dmitry.akatov@protonmail.com>
 ;; Created: 29 September, 2018
-;; Version: 1.47.0.0.20260925.0
+;; Version: 1.48.0.0.20260928.0
 ;; Package-Requires: ((emacs "29.1") (org) (aes) (dash) (f) (s) (transient) (table-view "0"))
 ;; Keywords: org-mode, outlines, data, database, store, projections
 ;; Homepage: https://github.com/rails-to-cosmos/org-glance
