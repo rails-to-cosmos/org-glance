@@ -5,6 +5,12 @@ Notable user-facing changes.  Versions date-based
 
 * Unreleased
 
+* 1.49.0.0.20260930.0
+
+** Fixed
+- Org overviews, captures and material buffers read =config/system.org= TODO states alongside per-tag =#+TODO:= sequences.
+- Untagged headlines keep their system/global TODO states when other tags define custom cycles.
+
 * 1.48.0.0.20260928.0
 
 ** Changed

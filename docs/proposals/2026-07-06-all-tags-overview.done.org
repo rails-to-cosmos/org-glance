@@ -121,10 +121,9 @@ sidecar* the store updates as events happen:
 (Per the request to surface config here.)  =org-glance-tag-config:resolve graph
 tag= returns the tag's config struct or nil; from it: presence, the =:todo= cycle
 string (=#+TODO:=-style), and its done-keyword split.  A *Config* column shows the
-cycle (or "—" when unconfigured); optionally a *Skeleton?* flag.  Caveat: all tag
-configs share one file (=config/tags.org=), so there is *no per-tag config mtime*
-— a "config modified" column would be identical for every configured tag and is
-not offered.
+cycle (or "—" when unconfigured); optionally a *Skeleton?* flag.  Current
+tag configs live in =config/tags/<tag>.org=, while =config/system.org= adds a
+graph-wide TODO sequence.  The overview emits each applicable sequence.
 
 * Row actions
 
@@ -190,9 +189,8 @@ Clone the table's non-file pattern (=table.el:139-200,483-523=):
   =headlines.jsonl= mtime — this catches capture / delete / retag / reindex /
   another Emacs by one stat.  The tag-metrics sidecar is written on the SAME
   append that bumps =headlines.jsonl=, so the metric columns refresh with this one
-  STALE-FN — no extra source.  *If "+"/"-" also touch =tags.org=*, the STALE-FN
-  must ALSO watch =config/tags.org= mtime (as the overview does), else a
-  config-only change won't refresh.
+  STALE-FN — no extra source.  A config-dependent view also watches
+  =config/system.org= and =config/tags/*.org= mtimes, as the overview does.
 - RELOAD-FN re-fills, re-applies sort, restores point (id-then-line), and calls
   =org-glance-view:mark-fresh=.
 - Buffer =*org-glance-tags*=; =default-directory= = graph root; =:fill-frame= last.

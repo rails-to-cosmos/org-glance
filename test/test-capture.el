@@ -10,9 +10,21 @@
         (should (org-glance-headline-metadata:id meta))
         (should (string= "Hello" (org-glance-headline-metadata:title meta)))
         (should (member "test" (org-glance-headline-metadata:tag-strings meta)))
-        (should (s-contains? "Hello" (org-glance-graph:get-content
-                                      org-glance-graph
-                                      (org-glance-headline-metadata:id meta))))))))
+        (let* ((id (org-glance-headline-metadata:id meta))
+               (content (org-glance-graph:get-content org-glance-graph id))
+               (stamp (and (string-match
+                            ":ORG_GLANCE_CREATION_TIME: \\[[0-9]\\{4\\}-[0-9][0-9]-[0-9][0-9] [A-Za-z]\\{3\\} [0-9][0-9]:[0-9][0-9]\\]"
+                            content)
+                           (match-string 0 content))))
+          (should stamp)
+          (should (s-contains? "Hello" content))
+          (org-glance-test:with-material (buffer org-glance-graph id)
+            (should-not (s-contains? stamp (buffer-string)))
+            (goto-char (point-max))
+            (insert "body\n")
+            (org-glance-test:save))
+          (should (s-contains? stamp (org-glance-graph:get-content
+                                      org-glance-graph id))))))))
 
 (ert-deftest org-glance-test:kill-buffer-noconfirm ()
   "`org-glance--kill-buffer-noconfirm' clears the modified flag and returns t.

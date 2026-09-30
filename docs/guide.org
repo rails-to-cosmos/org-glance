@@ -85,11 +85,16 @@ Act on the row/heading at point without opening anything:
 
 Column layout, sort and added columns persist per tag.  Optionally give a tag
 its own config: todo cycle and capture template (=C= in the transient — or =C=
-in that tag's overview / table to edit it directly).
+in that tag's overview / table to edit it directly). =config/system.org= supplies
+a graph-wide TODO cycle; tag cycles appear as additional =#+TODO:= lines.
 
 ** Edit a headline
 
 =RET= on a row/heading (or =C-x j m= anywhere) *materializes* it: its file opens in a normal org buffer. Everything org can do works here. =C-x C-s= saves and re-indexes; open views refresh on their next display.  Bookkeeping properties such as =:ORG_GLANCE_ID:= stay out of the buffer and are written back on every save.
+
+=org-glance-capture= stamps =ORG_GLANCE_CREATION_TIME= when the capture is
+finalized. The stamp stays in the stored =data.org= and is hidden in the
+material buffer with the other managed properties.
 
 ** Relations
 

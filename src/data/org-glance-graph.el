@@ -648,9 +648,9 @@ The read-only collapse of `org-glance-graph:get-headline' (invariant 30)."
 Parses the stored contents; nil for an unknown or tombstoned ID."
   (cl-check-type graph org-glance-graph)
   (cl-check-type id string)
-  (when (org-glance-graph:live-meta graph id)
-    (-some-> (org-glance-graph:get-content graph id)
-      (org-glance-headline--from-string))))
+  (when-let* ((meta (org-glance-graph:live-meta graph id)))
+    (when-let* ((contents (org-glance-graph:get-content graph id)))
+      (org-glance-graph--reparse-blob graph meta contents))))
 
 (cl-defun org-glance-graph--tombstone-spec (graph id)
   "Return the record deleting ID in GRAPH, or nil if it is unknown or deleted.
@@ -756,7 +756,7 @@ at the end.  Return the number of headlines re-indexed."
                for contents = (org-glance-graph:get-content graph id)
                when contents
                do (push (org-glance-headline:metadata*
-                         (org-glance-headline--from-string contents))
+                         (org-glance-graph--reparse-blob graph meta contents))
                         batch)
                   (cl-incf n)
                   (when (= org-glance-graph--reindex-batch (cl-incf fill)) (flush))
@@ -1166,7 +1166,9 @@ then the file may rotate.  Return the number of entries refreshed."
                               (and contents
                                    (ignore-errors
                                      (org-glance-headline:metadata*
-                                      (org-glance-headline--from-string contents))))))
+                                      (org-glance-graph--reparse-blob
+                                       graph (make-org-glance-headline-metadata :tags [])
+                                       contents))))))
                    (record (and contents basis
                                 (org-glance-graph--reparse-blob graph basis contents))))
               (setq spec (and record (org-glance-headline:metadata* record))
