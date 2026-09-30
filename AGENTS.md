@@ -78,7 +78,8 @@ evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
 13. Tags are canonical downcased interned symbols at the boundary; deserialized metadata
     carries STRING tags — coerce with `(downcase (format "%s" tag))` or read via
     `tag-strings`. Case-twins collapse at every boundary (parse, read, retag, material
-    save); `org-tag-re` validation runs ONLY at creation boundaries, never on
+    save); stored headings downcase, deduplicate and sort tags on every write;
+    `org-tag-re` validation runs ONLY at creation boundaries, never on
     read/removal. Relation kinds are canonical dash-slugs at every boundary
     (encode/decode/deserialize); spaced form is display-only.
 14. Crypt: plaintext never touches disk; `#+begin_crypt` markers are the persistent
@@ -114,7 +115,7 @@ evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
     — the buffer never changes to restore them. A material buffer reverts with its modes
     preserved (`--revert`); a mode re-run kills the stash the next write needs.
 22. Material saves rewrite user content only through announced normalize hooks (a
-    hand-typed managed line dropped, case-twin tag collapse — each warns — and the crypt
+    hand-typed managed line dropped, tag normalization — each warns — and the crypt
     seal).
 23. LLM session state (running/exited/stopped, buffer names, titles) derives live at fill
     from the provider's recorded sessions for this graph overlaid with live `*llm:…*`

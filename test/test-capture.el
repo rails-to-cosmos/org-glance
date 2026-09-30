@@ -26,6 +26,15 @@
           (should (s-contains? stamp (org-glance-graph:get-content
                                       org-glance-graph id))))))))
 
+(ert-deftest org-glance-test:capture-sorts-heading-tags ()
+  "Capture stores downcased, distinct, sorted tags on every heading."
+  (org-glance-test:with-graph graph
+    (org-glance-test:capture graph "* A :Wrike:ai:WRike:\n** Child :Z:ai:\n")
+    (let* ((id (car (org-glance-test:ids graph)))
+           (content (org-glance-graph:get-content graph id)))
+      (should (string-match-p "\\* A[ \t]+:ai:wrike:" content))
+      (should (string-match-p "\\*\\* Child[ \t]+:ai:z:" content)))))
+
 (ert-deftest org-glance-test:kill-buffer-noconfirm ()
   "`org-glance--kill-buffer-noconfirm' clears the modified flag and returns t.
 Buffer-local on `kill-buffer-query-functions', it skips the kill confirmation."

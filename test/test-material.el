@@ -980,8 +980,7 @@ state and tags kept, ORG_GLANCE_ID replaced, source untouched."
         (should-not (string-match-p ":ORG_GLANCE_ID:[ \t]+a$" content))))))
 
 (ert-deftest org-glance-test:material-case-duplicate-tags ()
-  "Case-twin tags collapse at every boundary: parse, legacy records, retag in
-both directions, and material save rewriting the heading (invariant 13)."
+  "Capture and material saves write sorted, downcased, distinct tags."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
                           (org-glance-test:headline "a" "* TODO A :Food:food:"))
@@ -997,15 +996,16 @@ both directions, and material save rewriting the heading (invariant 13)."
     (org-glance-graph:add graph
                           (org-glance-test:headline "b" "* TODO B :Food:food:"))
     (org-glance-test:with-material (buf graph "b")
-      (set-buffer-modified-p t)                 ; force the save hooks to run
+      (org-glance-material--goto-first-heading)
+      (org-set-tags '("Wrike" "ai" "AI"))
       (org-glance-test:save)
       (org-glance-material--goto-first-heading)
-      (should (equal '("food") (org-get-tags nil t))))
+      (should (equal '("ai" "wrike") (org-get-tags nil t))))
     (let ((content (with-temp-buffer
                      (insert-file-contents (org-glance-graph:content-path graph "b"))
                      (buffer-string))))
-      (should (s-contains? ":food:" content))
-      (should-not (s-contains? "Food" content)))))
+      (should (s-contains? ":ai:wrike:" content))
+      (should-not (s-contains? "Wrike" content)))))
 
 (ert-deftest org-glance-test:material-extract-here ()
   "`C-c e' in a material buffer copies a body KEY: value to the kill ring."

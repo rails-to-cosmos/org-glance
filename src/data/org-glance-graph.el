@@ -619,6 +619,11 @@ Return the file path, or nil if HEADLINE has no id."
 Full headlines also persist their contents (invariant 5)."
   (cl-check-type graph org-glance-graph)
   (when headlines
+    (setq headlines (mapcar (lambda (headline)
+                              (if (org-glance-headline? headline)
+                                  (org-glance-headline--normalized-tags headline)
+                                headline))
+                            headlines))
     ;; invariant 5: metadata FIRST, so a projection error writes nothing.
     (let ((specs (mapcar #'org-glance-headline:metadata* headlines)))
       (dolist (headline headlines)
@@ -1427,6 +1432,7 @@ ORG_GLANCE_CREATION_TIME, then add them all to GRAPH."
   (cl-check-type graph org-glance-graph)
   (with-current-buffer buffer
     (org-with-wide-buffer
+     (org-glance-tag:normalize-buffer)
      (org-map-entries
       (lambda ()
         ;; Marker: the first put drifts point, so nil pom reads the NEXT entry.

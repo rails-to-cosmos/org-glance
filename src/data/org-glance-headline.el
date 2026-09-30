@@ -252,6 +252,13 @@ blocks hide theirs (invariant 14)."
             :-facts (cons parsed (org-glance-headline--buffer-content-facts)))
         headline))))
 
+(cl-defun org-glance-headline--normalized-tags (headline)
+  "Return HEADLINE with canonical heading tags in its stored contents."
+  (org-glance-headline:with-contents headline
+    (if (zerop (org-glance-tag:normalize-buffer))
+        headline
+      (org-glance-headline--from-string (buffer-string)))))
+
 (cl-defun org-glance-headline--from-lines (&rest lines)
   (declare (indent 0))
   (org-glance-headline--from-string (s-join "\n" lines)))

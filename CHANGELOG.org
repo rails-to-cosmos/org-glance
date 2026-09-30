@@ -5,6 +5,9 @@ Notable user-facing changes.  Versions date-based
 
 * Unreleased
 
+** Changed
+- Capture, =graph:add= and material saves store downcased, deduplicated, sorted headline tags.
+
 * 1.49.0.0.20260930.0
 
 ** Fixed
