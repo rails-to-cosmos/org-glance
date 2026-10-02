@@ -138,7 +138,8 @@ argument in [[file:proposals][docs/proposals/]].
     collapse at every boundary: parse (=org-glance-headline--from-element= dedupes),
     read (=tag-strings= downcases + dedupes legacy records), retag compares
     canonically.  Capture, =graph:add= and material saves persist sorted,
-    downcased, distinct heading tags via =org-glance-tag:normalize-buffer=.
+    downcased, distinct ordinary heading tags via
+    =org-glance-tag:normalize-buffer=; Org's =ARCHIVE= marker stays uppercase.
     Validation (=org-glance-tag:validate-string=,
     org's tag grammar) runs ONLY at creation boundaries — capture prompt, programmatic
     capture, retag add — never on read or removal.  Violation: mixed-case duplicates

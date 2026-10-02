@@ -35,6 +35,14 @@
       (should (string-match-p "\\* A[ \t]+:ai:wrike:" content))
       (should (string-match-p "\\*\\* Child[ \t]+:ai:z:" content)))))
 
+(ert-deftest org-glance-test:tag-normalization-keeps-archive-marker ()
+  "Normalizing regular tags preserves Org's uppercase ARCHIVE marker."
+  (with-temp-buffer
+    (org-mode)
+    (insert "* A :z:ARCHIVE:AI:\n")
+    (should (= 1 (org-glance-tag:normalize-buffer)))
+    (should (string-match-p ":ARCHIVE:ai:z:" (buffer-string)))))
+
 (ert-deftest org-glance-test:kill-buffer-noconfirm ()
   "`org-glance--kill-buffer-noconfirm' clears the modified flag and returns t.
 Buffer-local on `kill-buffer-query-functions', it skips the kill confirmation."

@@ -6,7 +6,7 @@ Notable user-facing changes.  Versions date-based
 * Unreleased
 
 ** Changed
-- Capture, =graph:add= and material saves store downcased, deduplicated, sorted headline tags.
+- Capture, =graph:add= and material saves store downcased, deduplicated, sorted ordinary headline tags; =ARCHIVE= stays uppercase.
 
 * 1.49.0.0.20260930.0
 

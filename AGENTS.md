@@ -78,7 +78,8 @@ evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
 13. Tags are canonical downcased interned symbols at the boundary; deserialized metadata
     carries STRING tags — coerce with `(downcase (format "%s" tag))` or read via
     `tag-strings`. Case-twins collapse at every boundary (parse, read, retag, material
-    save); stored headings downcase, deduplicate and sort tags on every write;
+    save); stored headings downcase, deduplicate and sort ordinary tags on every
+    write, preserving Org's uppercase `ARCHIVE` marker;
     `org-tag-re` validation runs ONLY at creation boundaries, never on
     read/removal. Relation kinds are canonical dash-slugs at every boundary
     (encode/decode/deserialize); spaced form is display-only.
