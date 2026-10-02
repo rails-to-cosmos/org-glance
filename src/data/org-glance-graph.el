@@ -1230,10 +1230,10 @@ missing built-in WAL rule (invariant 8)."
 
 (defconst org-glance-graph--gitignore-lines
   '("cache/" "meta/EXTERNAL*.jsonl" "meta/EXTERNAL*.cursor" "meta/spent/"
-    "meta/COMPLETIONS.jsonl")
+    "meta/COMPLETIONS.jsonl" "meta/projections/")
   "Store-relative paths `--ensure-gitignore' keeps out of git.
-`cache/' and the notification family: the live file, rotated generations, their
-cursors and `meta/spent/' (invariant 34).")
+`cache/' and `meta/projections/' are derived; the notification family includes
+the live file, rotated generations, their cursors and `meta/spent/'.")
 
 (cl-defun org-glance-graph--ensure-gitignore (graph)
   "Git-ignore GRAPH's per-machine files, appending any line the store lacks.

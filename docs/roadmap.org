@@ -8,7 +8,7 @@ Proposal files hold design detail; [[file:../org-glance.org][org-glance.org]] re
 When work lands, mark its item =DONE=, rename its proposal from =.proposed= to
 =.done=, update [[file:../CHANGELOG.org][CHANGELOG.org]], and record the verification in the proposal.
 
-Last reviewed: 2026-09-25.  Proposal inventory: 28 resolved, 16 proposed; the
+Last reviewed: 2026-10-01.  Proposal inventory: 29 resolved, 16 proposed; the
 composable-tag-template proposal has one shipped phase and two proposed phases.
 
 * DONE 0. Reconcile roadmap status
@@ -35,6 +35,16 @@ CLOSED: [2026-09-25]
 - [X] Repair the retired broad JSONL merge rule on store open.
 - [X] Keep Glance's =COMPLETIONS.jsonl= ledger out of git.
 - [X] Pass the 16-case Glance/org-glance host contract.
+
+* DONE 0.7. Retire portable parser projections
+CLOSED: [2026-10-01]
+
+- [X] Keep org-glance parser payloads only in local SQLite.
+- [X] Stop reading and writing =meta/projections/org-glance/=.
+- [X] Ignore =meta/projections/= without deleting existing user files.
+- [X] Replace the portable interop case with a local-index contract.
+
+[[file:proposals/2026-10-01-local-cache-retires-portable-projections.done.org][Proposal: local cache retires portable projections]]
 
 * TODO 1. Consolidate the view and table architecture
 

@@ -5,11 +5,13 @@ Status: *done*
 
 * Decision
 
-org-glance and the optional Glance daemon share
+At implementation time, org-glance and the optional Glance daemon shared
 =.org-glance/cache/glance.sqlite3=.  SQLite serializes writers.  Org files stay
 canonical and the graph WAL remains the compatibility reader during migration
-stage 4.  Each producer also writes immutable portable projections under
-=meta/projections/PRODUCER/=; SQLite stays local.
+stage 4.  Each producer also wrote immutable portable projections under
+=meta/projections/PRODUCER/= while SQLite stayed local.  The
+[[file:2026-10-01-local-cache-retires-portable-projections.done.org][local-cache retirement]]
+later removed that portable half.
 
 * Schema boundary
 
@@ -66,4 +68,5 @@ part of version 1.
 
 Stage 5 makes the shared cache the org-glance read path, retires the legacy
 mutable WAL index after every supported client carries the contract, and
-removes the external notification relay.  Portable JSONL projections remain.
+removes the external notification relay.  Portable JSONL projections were
+retired separately on 2026-10-01.

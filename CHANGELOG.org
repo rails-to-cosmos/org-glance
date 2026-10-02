@@ -5,6 +5,10 @@ Notable user-facing changes.  Versions date-based
 
 * Unreleased
 
+** Removed
+- Portable parser projections under =meta/projections/=; the shared SQLite
+  index is local and rebuilds from canonical graph data.
+
 * 1.48.0.0.20260928.0
 
 ** Changed

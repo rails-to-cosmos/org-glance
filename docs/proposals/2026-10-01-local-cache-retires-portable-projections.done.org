@@ -1,0 +1,38 @@
+#+TITLE: Local cache retires portable parser projections
+#+DATE: 2026-10-01
+
+Status: *done*
+
+* Decision
+
+Keep parser payloads in =.org-glance/cache/glance.sqlite3=.  Stop reading and
+writing =.org-glance/meta/projections/org-glance/=.  Org documents, blobs and
+the graph WAL remain canonical; losing SQLite costs a local rebuild.
+
+Ordinary edits now touch canonical store data and local cache state only.  A
+fresh clone rebuilds its cache from canonical data instead of hydrating parser
+records committed by another machine.
+
+* Migration
+
+Store open appends =meta/projections/= to =.org-glance/.gitignore=.  Existing
+projection files remain untouched because automatic deletion could discard
+uncommitted user state or create a large Git deletion.  Repository owners can
+remove tracked projections in one reviewed migration after every consumer runs
+the local-index contract.
+
+The shared schema stays at version 2.  =org_headline.record= remains the local
+org-glance payload, and =org-glance-cache:metadata= accepts it only when the raw
+file digest and normalized content hash match.  A missing local database returns
+no cached metadata; =org-glance-cache:refresh= reconstructs it from the graph.
+
+* Verification
+
+- =shared-cache-loss-rebuilds-without-touching-portable-files= deletes SQLite,
+  observes the cache miss, refreshes from the graph and verifies that a legacy
+  projection remains byte-identical.
+- Glance's =local-index-contract= checks that org-glance writes no portable
+  directory, installs the shared ignore rule and still serves its local row.
+- The edited Elisp files pass a string/comment-aware parenthesis check.  The
+  ERT suite could not run in this workspace: Eask and Emacs are absent, the
+  Podman VM is stopped, and no Docker daemon is active.

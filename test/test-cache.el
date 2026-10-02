@@ -34,7 +34,6 @@
     (let ((metadata (org-glance-cache:metadata graph "a")))
       (should (org-glance-headline-metadata? metadata))
       (should (equal "Alpha" (org-glance-headline-metadata:title metadata))))
-    (delete-directory (org-glance-cache--portable-path graph) t)
     (let ((db (sqlite-open (org-glance-cache:path graph))))
       (unwind-protect
           (sqlite-execute
@@ -52,62 +51,24 @@
         (sqlite-close db)))
     (should-not (org-glance-cache:metadata graph "a"))))
 
-(ert-deftest org-glance-test:portable-cache-cold-clone-and-conflict ()
-  "An exact portable row survives a local-cache loss; disagreement poisons it."
+(ert-deftest org-glance-test:shared-cache-loss-rebuilds-without-touching-portable-files ()
+  "A lost local cache rebuilds without writing or deleting portable files."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "a" "* TODO Alpha :work:"))
-    (let* ((dir (org-glance-cache--portable-path graph))
-           (files (directory-files dir t "\\.jsonl\\'"))
-           (record (json-parse-string (f-read-text (car files) 'utf-8)
-                                      :object-type 'plist))
-           (cache (org-glance-cache:path graph)))
-      (should (= 1 (length files)))
-      (should (equal "org-glance" (plist-get record :producer)))
-      (should (equal 1 (plist-get record :parser)))
-      (should (equal ".org-glance/data/a/data.org"
-                     (plist-get record :path)))
+    (let ((portable (f-join (org-glance-graph:meta-path graph) "projections"))
+          (cache (org-glance-cache:path graph)))
+      (should-not (file-exists-p portable))
       (dolist (suffix '("" "-shm" "-wal"))
         (ignore-errors (delete-file (concat cache suffix))))
+      (should-not (org-glance-cache:metadata graph "a"))
+      (make-directory portable t)
+      (org-glance--atomic-write (f-join portable "legacy.jsonl") "legacy\n")
+      (org-glance-cache:refresh graph)
       (should (equal "Alpha"
                      (org-glance-headline-metadata:title
                       (org-glance-cache:metadata graph "a"))))
-      (setf (plist-get record :payload) "{}")
-      (org-glance--atomic-write
-       (f-join dir "conflict.jsonl")
-       (concat (json-serialize record) "\n"))
-      (dolist (suffix '("" "-shm" "-wal"))
-        (ignore-errors (delete-file (concat cache suffix))))
-      (should-not (org-glance-cache:metadata graph "a")))))
-
-(ert-deftest org-glance-test:portable-cache-packs-and-retires-loose-files ()
-  "A full refresh replaces loose projections with one packed current segment."
-  (org-glance-test:with-graph graph
-    (org-glance-graph:add graph (org-glance-test:headline "a" "* Alpha"))
-    (org-glance-graph:add graph (org-glance-test:headline "b" "* Beta"))
-    (let* ((dir (org-glance-cache--portable-path graph))
-           (legacy (f-join dir "legacy.jsonl")))
-      (org-glance--atomic-write
-       legacy
-       (f-read-text (car (directory-files dir t "\\.jsonl\\'")) 'utf-8)
-       nil)
-      (org-glance-cache:refresh graph)
-      (let ((files (directory-files dir t "\\.jsonl\\'")))
-        (should (= 1 (length files)))
-        (should (string-prefix-p "seg-" (file-name-nondirectory (car files))))
-        (should (= 2 (length (split-string
-                              (f-read-text (car files) 'utf-8) "\n" t))))
-        (should-not (file-exists-p legacy))
-        (dotimes (index 256)
-          (org-glance--atomic-write
-           (f-join dir (format "loose-%03d.jsonl" index))
-           (f-read-text (car files) 'utf-8)
-           nil))
-        (org-glance-graph:add graph (org-glance-test:headline "c" "* Gamma"))
-        (setq files (directory-files dir t "\\.jsonl\\'"))
-        (should (= 1 (length files)))
-        (should (string-prefix-p "seg-" (file-name-nondirectory (car files))))
-        (should (= 3 (length (split-string
-                              (f-read-text (car files) 'utf-8) "\n" t))))))))
+      (should (equal "legacy\n"
+                     (f-read-text (f-join portable "legacy.jsonl") 'utf-8))))))
 
 (ert-deftest org-glance-test:shared-cache-follows-delete ()
   "Deleting a graph headline removes its shared source and incoming edges."

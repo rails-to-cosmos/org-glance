@@ -168,13 +168,9 @@ evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
     SHA-256 values; `org_headline.content_hash` is org-glance's normalized
     content SHA-1. SQLite serializes its writers. The graph WAL remains the
     compatibility reader until the coordinated stage-5 cutover.
-36. Portable parser projections are immutable JSONL records under
-    `meta/projections/PRODUCER/`, keyed by source-relative path, raw digest,
-    semantic-config fingerprint, parser version and producer. Equal duplicates
-    collapse; divergent payloads invalidate the key. SQLite remains local.
-37. Graph identity is the canonical full directory truename; path aliases share one
+36. Graph identity is the canonical full directory truename; path aliases share one
     instance and one open pass.
-38. `org-glance-core` is a one-way base module and never requires top-level
+37. `org-glance-core` is a one-way base module and never requires top-level
     `org-glance.el`.
 
 ## Known hazards
