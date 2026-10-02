@@ -525,29 +525,11 @@ is a string when the caller writes one; nothing is added then."
         (list (org-glance-material--drawer-splice
                (apply #'concat org-glance-material--reserved-lines)))))))
 
-(cl-defun org-glance-material--dedupe-tags ()
-  "Collapse case-twin heading tags to the downcased one, with a warning.
-Buffer-local `before-save-hook'; a tag without a case-twin keeps its case."
+(cl-defun org-glance-material--normalize-tags ()
+  "Canonicalize heading tags before saving, and warn when they change."
   (when org-glance-material--id
-    (save-excursion
-      (org-glance-material--goto-first-heading)
-      (let ((seen (make-hash-table :test 'equal))
-            dups new)
-        (dolist (tag (org-get-tags nil t))
-          (let ((canon (downcase tag)))
-            (cond ((not (gethash canon seen))
-                   (puthash canon tag seen)
-                   (push tag new))
-                  (t (push canon dups)
-                     (setq new (cl-substitute canon (gethash canon seen) new
-                                              :test #'equal))
-                     (puthash canon canon seen)))))
-        (when dups
-          (org-set-tags (nreverse new))
-          (display-warning 'org-glance
-                           (format "case-duplicate tag%s collapsed: %s"
-                                   (if (cdr dups) "s" "")
-                                   (s-join ", " (delete-dups dups)))))))))
+    (when (> (org-glance-tag:normalize-buffer) 0)
+      (display-warning 'org-glance "heading tags downcased, deduplicated and sorted"))))
 
 (defvar revert-buffer-preserve-modes)  ; files.el: special only in its own file
 
@@ -611,7 +593,7 @@ reused.  Signal a `user-error' when ID is dead or has no stored blob."
           (setq-local revert-buffer-function #'org-glance-material--revert)
           (add-hook 'after-revert-hook #'org-glance-material--strip-reserved nil t)
           (add-hook 'before-save-hook #'org-glance-material--drop-hand-typed-reserved nil t)
-          (add-hook 'before-save-hook #'org-glance-material--dedupe-tags nil t)
+          (add-hook 'before-save-hook #'org-glance-material--normalize-tags nil t)
           (when decrypt (org-glance-material--maybe-decrypt meta buffer)))
         buffer))))
 

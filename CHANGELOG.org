@@ -9,6 +9,15 @@ Notable user-facing changes.  Versions date-based
 - Portable parser projections under =meta/projections/=; the shared SQLite
   index is local and rebuilds from canonical graph data.
 
+** Changed
+- Capture, =graph:add= and material saves store downcased, deduplicated, sorted ordinary headline tags; =ARCHIVE= stays uppercase.
+
+* 1.49.0.0.20260930.0
+
+** Fixed
+- Org overviews, captures and material buffers read =config/system.org= TODO states alongside per-tag =#+TODO:= sequences.
+- Untagged headlines keep their system/global TODO states when other tags define custom cycles.
+
 * 1.48.0.0.20260928.0
 
 ** Changed

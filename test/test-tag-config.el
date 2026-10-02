@@ -96,13 +96,14 @@ CONFIGS is an alist (TAG-STRING . CONTENTS); the cache resets around BODY."
       (should-not (s-contains? "#+TODO:" template)))))
 
 (ert-deftest org-glance-test:tag-config-cycle-for-filter ()
-  "A single configured cycle wins; 0 or >1 distinct cycles fall back to nil."
+  "Every relevant tag cycle remains a separate TODO sequence."
   (org-glance-test:with-tag-config
       (list (cons "book" "#+TITLE: Book\n#+TODO: TODO READING | READ\n\n* Book\n")
             (cons "film" "#+TITLE: Film\n#+TODO: TODO WATCHING | WATCHED\n\n* Film\n"))
     (should (equal "TODO READING | READ"
                    (org-glance-tag-config:cycle-for-filter nil '(:tags ("book")))))
-    (should (null (org-glance-tag-config:cycle-for-filter nil '(:tags ("book" "film")))))
+    (should (equal "TODO READING | READ\nTODO WATCHING | WATCHED"
+                   (org-glance-tag-config:cycle-for-filter nil '(:tags ("book" "film")))))
     (should (null (org-glance-tag-config:cycle-for-filter nil '(:tags ("task")))))))
 
 (ert-deftest org-glance-test:tag-config-not-in-content-tags ()
@@ -116,7 +117,7 @@ CONFIGS is an alist (TAG-STRING . CONTENTS); the cache resets around BODY."
       (should (org-glance-tag-config:resolve nil 'book)))))
 
 (ert-deftest org-glance-test:tag-config-overview-todo-header ()
-  "The overview emits `#+TODO:' only for a single configured tag."
+  "The overview emits TODO lines for each tag present in its scope."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "b1" "* READING Dune :book:"))
     (org-glance-test:with-tag-config (org-glance-test:one-config "book" org-glance-test:book-config)
@@ -124,7 +125,60 @@ CONFIGS is an alist (TAG-STRING . CONTENTS); the cache resets around BODY."
         (should (s-contains? "#+TODO: TODO READING | READ ABANDONED" text))
         (should (s-contains? "Dune" text)))
       (let ((text (org-glance-overview:render graph nil)))
-        (should-not (s-contains? "#+TODO:" text))))))
+        (should (s-contains? "#+TODO: TODO READING | READ ABANDONED" text))))))
+
+(ert-deftest org-glance-test:tag-config-system-and-tag-cycles ()
+  "System and per-tag TODO lines drive overview, parsing and capture."
+  (org-glance-test:with-graph graph
+    (org-glance-test:write
+     (org-glance-tag-config:system-file graph)
+     "#+TODO: DELEGATED REVIEW TODO | DONE CANCELLED\n")
+    (org-glance-test:with-tag-config
+        (list (cons "book" "#+TODO: READING | READ\n\n* Book\n")
+              (cons "film" "#+TODO: WATCHING | WATCHED\n\n* Film\n"))
+      (let ((cycle (org-glance-tag-config:cycle-for-filter
+                    graph '(:tags ("wrike" "book" "film")))))
+        (should (equal (split-string cycle "\n")
+                       '("DELEGATED REVIEW TODO | DONE CANCELLED"
+                         "READING | READ" "WATCHING | WATCHED")))
+        (should (equal '("DONE" "CANCELLED" "READ" "WATCHED")
+                       (org-glance-tag-config:done-keywords cycle))))
+      (should (equal "DELEGATED REVIEW TODO | DONE CANCELLED"
+                     (org-glance-tag-config:cycle-for-filter graph '(:tags nil))))
+      (let ((text (org-glance-overview:render graph '(:tags ("wrike" "book")))))
+        (should (s-contains? "#+TODO: DELEGATED REVIEW TODO | DONE CANCELLED\n#+TODO: READING | READ\n" text)))
+      (let ((template (let ((org-glance-graph graph))
+                        (org-glance-capture:template 'wrike "Review this"))))
+        (should (string-prefix-p "#+TODO: DELEGATED REVIEW TODO | DONE CANCELLED\n"
+                                 template)))
+      (let ((org-todo-keywords
+             (org-glance-tag-config:cycle->keywords
+              (org-glance-tag-config:cycle-for-filter graph '(:tags ("wrike"))))))
+        (org-glance-graph:add
+         graph (org-glance-test:headline "review-1" "* REVIEW Inspect :wrike:")))
+      (should (equal "REVIEW" (org-glance-headline-metadata:state
+                                (org-glance-graph:live-meta graph "review-1"))))
+      (org-glance-test:with-material (buffer graph "review-1")
+        (should (equal "REVIEW" (org-get-todo-state))))
+      (should (equal "Inspect" (org-glance-headline:title
+                                (org-glance-graph:headline graph "review-1"))))
+      (org-glance-graph:reindex graph)
+      (should (equal "REVIEW" (org-glance-headline-metadata:state
+                                (org-glance-graph:live-meta graph "review-1")))))))
+
+(ert-deftest org-glance-test:tag-config-system-edit-refreshes-overview ()
+  "An edit to system.org invalidates a cached overview at runtime."
+  (org-glance-test:with-graph graph
+    (let ((system (org-glance-tag-config:system-file graph))
+          (filter '(:tags ("wrike"))))
+      (org-glance-test:write system "#+TODO: TODO | DONE\n")
+      (let ((file (org-glance-overview:cached-file graph filter)))
+        (should (s-contains? "#+TODO: TODO | DONE" (f-read-text file 'utf-8)))
+        (org-glance-test:write system "#+TODO: REVIEW TODO | DONE\n")
+        (set-file-times system (time-add (current-time) 100))
+        (should (s-contains? "#+TODO: REVIEW TODO | DONE"
+                             (f-read-text (org-glance-overview:cached-file graph filter)
+                                          'utf-8)))))))
 
 (ert-deftest org-glance-test:tag-config-materialize-state-roundtrip ()
   "A per-tag state survives a material save without folding into the title."
@@ -269,7 +323,7 @@ The load-time guard rejects a mismatch; both preamble builders derive from it."
 
 (ert-deftest org-glance-test:tag-config-preamble ()
   "`:preamble' renders a config's emittable pragmas.
-`:preamble-for-filter' renders a value only when the filtered tags AGREE on it."
+`:preamble-for-filter' emits each distinct relevant TODO sequence."
   (org-glance-test:with-tag-config
       (list (cons "book" "#+TITLE: Book\n#+TODO: TODO READING | READ\n\n* Book\n")
             (cons "note" "#+TITLE: Note\n#+TODO: TODO READING | READ\n\n* Note\n")
@@ -284,7 +338,8 @@ The load-time guard rejects a mismatch; both preamble builders derive from it."
                    (org-glance-tag-config:preamble-for-filter nil '(:tags ("book")))))
     (should (equal "#+TODO: TODO READING | READ\n"
                    (org-glance-tag-config:preamble-for-filter nil '(:tags ("book" "note")))))
-    (should-not (org-glance-tag-config:preamble-for-filter nil '(:tags ("book" "film"))))
+    (should (equal "#+TODO: TODO READING | READ\n#+TODO: TODO WATCHING | WATCHED\n"
+                   (org-glance-tag-config:preamble-for-filter nil '(:tags ("book" "film")))))
     (should-not (org-glance-tag-config:preamble-for-filter nil '(:tags ("bare"))))))
 
 (provide 'test-tag-config)

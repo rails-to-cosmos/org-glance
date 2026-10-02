@@ -619,6 +619,11 @@ Return the file path, or nil if HEADLINE has no id."
 Full headlines also persist their contents (invariant 5)."
   (cl-check-type graph org-glance-graph)
   (when headlines
+    (setq headlines (mapcar (lambda (headline)
+                              (if (org-glance-headline? headline)
+                                  (org-glance-headline--normalized-tags headline)
+                                headline))
+                            headlines))
     ;; invariant 5: metadata FIRST, so a projection error writes nothing.
     (let ((specs (mapcar #'org-glance-headline:metadata* headlines)))
       (dolist (headline headlines)
@@ -648,9 +653,9 @@ The read-only collapse of `org-glance-graph:get-headline' (invariant 30)."
 Parses the stored contents; nil for an unknown or tombstoned ID."
   (cl-check-type graph org-glance-graph)
   (cl-check-type id string)
-  (when (org-glance-graph:live-meta graph id)
-    (-some-> (org-glance-graph:get-content graph id)
-      (org-glance-headline--from-string))))
+  (when-let* ((meta (org-glance-graph:live-meta graph id)))
+    (when-let* ((contents (org-glance-graph:get-content graph id)))
+      (org-glance-graph--reparse-blob graph meta contents))))
 
 (cl-defun org-glance-graph--tombstone-spec (graph id)
   "Return the record deleting ID in GRAPH, or nil if it is unknown or deleted.
@@ -756,7 +761,7 @@ at the end.  Return the number of headlines re-indexed."
                for contents = (org-glance-graph:get-content graph id)
                when contents
                do (push (org-glance-headline:metadata*
-                         (org-glance-headline--from-string contents))
+                         (org-glance-graph--reparse-blob graph meta contents))
                         batch)
                   (cl-incf n)
                   (when (= org-glance-graph--reindex-batch (cl-incf fill)) (flush))
@@ -1166,7 +1171,9 @@ then the file may rotate.  Return the number of entries refreshed."
                               (and contents
                                    (ignore-errors
                                      (org-glance-headline:metadata*
-                                      (org-glance-headline--from-string contents))))))
+                                      (org-glance-graph--reparse-blob
+                                       graph (make-org-glance-headline-metadata :tags [])
+                                       contents))))))
                    (record (and contents basis
                                 (org-glance-graph--reparse-blob graph basis contents))))
               (setq spec (and record (org-glance-headline:metadata* record))
@@ -1425,6 +1432,7 @@ ORG_GLANCE_CREATION_TIME, then add them all to GRAPH."
   (cl-check-type graph org-glance-graph)
   (with-current-buffer buffer
     (org-with-wide-buffer
+     (org-glance-tag:normalize-buffer)
      (org-map-entries
       (lambda ()
         ;; Marker: the first put drifts point, so nil pom reads the NEXT entry.

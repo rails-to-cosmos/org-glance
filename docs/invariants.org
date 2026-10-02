@@ -137,8 +137,10 @@ argument in [[file:proposals][docs/proposals/]].
     =org-glance-headline-metadata:tag-strings=, the one total coercion.  Case-twins
     collapse at every boundary: parse (=org-glance-headline--from-element= dedupes),
     read (=tag-strings= downcases + dedupes legacy records), retag compares
-    canonically, material save collapses =:Food:food:= in the heading
-    (=org-glance-material--dedupe-tags=).  Validation (=org-glance-tag:validate-string=,
+    canonically.  Capture, =graph:add= and material saves persist sorted,
+    downcased, distinct ordinary heading tags via
+    =org-glance-tag:normalize-buffer=; Org's =ARCHIVE= marker stays uppercase.
+    Validation (=org-glance-tag:validate-string=,
     org's tag grammar) runs ONLY at creation boundaries — capture prompt, programmatic
     capture, retag add — never on read or removal.  Violation: mixed-case duplicates
     fragment filters and caches, or a stored tag becomes untouchable.
@@ -239,8 +241,8 @@ argument in [[file:proposals][docs/proposals/]].
 
 22. *Material saves rewrite user content only through announced normalize hooks.*  The
     =before-save-hook= rewrites are exactly: dropping a hand-typed managed line
-    (=org-glance-material--drop-hand-typed-reserved=), the case-twin tag collapse
-    (=org-glance-material--dedupe-tags=) — each raising a =display-warning= — and the
+    (=org-glance-material--drop-hand-typed-reserved=), tag normalization
+    (=org-glance-material--normalize-tags=) — each raising a =display-warning= — and the
     crypt seal (inv 14).  Violation: a silent rewrite clobbers user text with no trace
     (collides with inv 11).
 

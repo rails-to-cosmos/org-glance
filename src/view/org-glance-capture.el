@@ -36,20 +36,20 @@ before the target."
 
 (cl-defun org-glance-capture:template (tags &optional (title ""))
   "Return the `org-capture' template for a headline with TAGS, titled TITLE.
-TAGS is a tag symbol or a list of them.  A single configured tag renders its
-config's skeleton prefixed with its pragmas; others get `* TITLE%?  :tags:'."
+TAGS is a tag symbol or a list of them.  A configured tag supplies its
+skeleton; system and tag TODO declarations prefix every template."
   (cl-check-type title string)
   (let* ((tags (org-glance-tag:as-list tags))
          (config (when (= 1 (length tags))
                    (org-glance-tag-config:resolve org-glance-graph (car tags)))))
-    (if config
-        (let ((body (org-glance-tag-config:render config title tags))
-              (preamble (org-glance-tag-config:preamble config)))
-          (if (and preamble (not (s-contains? "#+TODO:" body)))
-              (concat preamble body)
-            body))
-      (format "* %s%%?  :%s:" title
-              (mapconcat #'org-glance-tag:to-string tags ":")))))
+    (let ((body (if config
+                    (org-glance-tag-config:render config title tags)
+                  (format "* %s%%?  :%s:" title
+                          (mapconcat #'org-glance-tag:to-string tags ":")))))
+      (concat (unless (s-contains? "#+TODO:" body)
+                (org-glance-tag-config:preamble-for-filter
+                 org-glance-graph (list :tags tags)))
+              body))))
 
 (cl-defun org-glance-capture:completing-read-tag ()
   "Prompt for a tag among the graph's live tags; a new tag is allowed.
@@ -75,7 +75,8 @@ PREAMBLE holds the file keywords, which an `entry' capture cannot take."
 ;;;###autoload
 (cl-defun org-glance-capture (tags title &key template finalize)
   "Capture a headline titled TITLE, tagged with TAGS (a symbol or list of them).
-TEMPLATE overrides `org-glance-capture:template'; FINALIZE finishes at once."
+TEMPLATE overrides `org-glance-capture:template'; FINALIZE finishes at once.
+Finalization stores an inactive ORG_GLANCE_CREATION_TIME in the headline."
   (declare (indent 2))
 
   (interactive (list (org-glance-capture:completing-read-tag)

@@ -34,18 +34,24 @@ Set in a headline's =:PROPERTIES:= drawer.
   skipped by the tag-config lint, managed in material buffers.  Internal — do
   not set by hand.
 
+* TODO configuration
+
+=<store>/config/system.org= supplies the graph-wide =#+TODO:= sequence.
+Each applicable =config/tags/<tag>.org= adds a separate =#+TODO:= sequence after it.
+Overviews, captures, material buffers and state pickers read the same sequences.
+
 * Tag-config files
 
 One file per tag, =<store>/config/tags/<tag>.org= (see
 [[file:../src/data/org-glance-tag-config.el][org-glance-tag-config]]); the file
 name is the tag.  Every pragma is OPTIONAL — a freshly stubbed file carries only
-the capture template (comments plus a =* %?= heading), so the tag inherits every
-global default.  Pragmas, above the first =*= heading, override those defaults:
+the capture template (comments plus a =* %?= heading).  Pragmas sit above the
+first =*= heading:
 
 - =#+TITLE:= — the tag's human label (default: the tag name).
 - =#+TODO:= — the tag's todo cycle, e.g. =TODO READING | READ ABANDONED=; an
-  ordinary org file keyword, prepended to the capture buffer and emitted in the
-  overview/agenda header (absent = the global =org-todo-keywords=).
+  ordinary org file keyword emitted after the system cycle in the capture and
+  overview/agenda headers (absent = the system cycle or =org-todo-keywords=).
 - =#+CATEGORY:= (planned) — agenda category, default the tag name.
 - =#+AUTHOR:= (planned).
 

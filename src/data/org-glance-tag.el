@@ -35,4 +35,24 @@ Checks `org-tag-re'; callers are tag CREATION boundaries only (invariant 13)."
 Trim, downcase and intern it; the inverse of `org-glance-tag:to-string'."
   (->> value (format "%s") s-trim downcase intern))
 
+(cl-defun org-glance-tag:normalize-buffer ()
+  "Downcase, deduplicate and sort every heading's own tags in this buffer.
+Return the number of headings changed."
+  (let ((changed 0))
+    (org-with-wide-buffer
+     (org-map-entries
+      (lambda ()
+        (let* ((tags (org-get-tags nil t))
+               (normalized (sort (delete-dups
+                                  (mapcar (lambda (tag)
+                                            (if (string= (downcase tag) (downcase org-archive-tag))
+                                                org-archive-tag
+                                              (downcase tag)))
+                                          tags))
+                                 #'string<)))
+          (unless (equal tags normalized)
+            (org-set-tags normalized)
+            (cl-incf changed))))))
+    changed))
+
 (provide 'org-glance-tag)

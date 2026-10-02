@@ -1,7 +1,5 @@
 ;; -*- lexical-binding: t -*-
-;; `org-glance-tag-config' -- optional per-tag config (capture skeleton, todo
-;; cycle) in one Org file per tag.  It lives OUTSIDE the content graph, so it
-;; never reaches tag discovery, overviews or the capture picker.
+;; `org-glance-tag-config' -- system TODO cycle and optional per-tag config.
 
 (require 's)
 (require 'org)
@@ -66,14 +64,22 @@ With EMITTING, only those a rendered buffer emits."
   (when-let* ((dir (org-glance-tag-config:dir graph)))
     (f-join dir (concat (org-glance-tag:to-string tag) ".org"))))
 
+(cl-defun org-glance-tag-config:system-file (graph)
+  "Return GRAPH's system config file, or nil without a graph."
+  (when (org-glance-graph? graph)
+    (org-glance-graph:config-file graph "system.org")))
+
 (cl-defun org-glance-tag-config:source-mtime (graph)
-  "Return the newest mtime of GRAPH's tag config files, or nil if none exist.
-Overview caches compare against it, so a cycle edit invalidates them."
-  (cl-loop for (_name mtime _size) in (org-glance-tag-config--snapshot
-                                       (org-glance-tag-config:dir graph))
-           with newest = nil
-           do (when (or (null newest) (time-less-p newest mtime)) (setq newest mtime))
-           finally return newest))
+  "Return the newest mtime of GRAPH's system and tag config files."
+  (let* ((system (org-glance-tag-config:system-file graph))
+         (times (append (and system (list (org-glance--file-mtime system)))
+                        (mapcar #'cadr (org-glance-tag-config--snapshot
+                                        (org-glance-tag-config:dir graph))))))
+    (cl-loop for mtime in times
+             with newest = nil
+             when (and mtime (or (null newest) (time-less-p newest mtime)))
+             do (setq newest mtime)
+             finally return newest)))
 
 (cl-defun org-glance-tag-config--file-keyword (key)
   "Return the buffer's first `#+KEY:' value trimmed, or nil if absent or blank."
@@ -149,13 +155,14 @@ Called after in-process writes, which mtime granularity could hide."
 
 (cl-defun org-glance-tag-config:resolve (graph tag)
   "Resolve TAG to its `org-glance-tag-config' in GRAPH, or nil if it has none.
-Nil means TAG uses the default capture template and global todo keywords."
+Nil means TAG uses the default capture template and system TODO cycle."
   (cl-check-type tag org-glance-tag)
   (gethash tag (org-glance-tag-config--by-tag graph)))
 
 (cl-defun org-glance-tag-config:cycle->keywords (cycle)
-  "Return the `org-todo-keywords' value for tag CYCLE string: one `sequence'."
-  (list (cons 'sequence (split-string cycle))))
+  "Return `org-todo-keywords' sequences for newline-separated CYCLE strings."
+  (mapcar (lambda (line) (cons 'sequence (split-string line)))
+          (split-string cycle "\n" t)))
 
 (cl-defun org-glance-tag-config:cycle->keywords-or (cycle default)
   "Return CYCLE's `org-todo-keywords' form, or DEFAULT when CYCLE is nil."
@@ -163,7 +170,7 @@ Nil means TAG uses the default capture template and global todo keywords."
 
 (cl-defun org-glance-tag-config:done-keywords-for-filter (graph filter)
   "Return the done keywords FILTER's views honour in GRAPH.
-Those of FILTER's sole configured cycle, else `org-glance--done-keywords'.
+Those of its system and tag cycles, else `org-glance--done-keywords'.
 Bind `org-done-keywords' to it to build a `:done' predicate or a badge split."
   (if-let* ((cycle (org-glance-tag-config:cycle-for-filter graph filter)))
       (org-glance-tag-config:done-keywords cycle)
@@ -178,21 +185,32 @@ Org derives them, so the split matches what a `#+TODO:' header produces."
         (delay-mode-hooks (org-mode))
         (copy-sequence org-done-keywords)))))
 
-(cl-defun org-glance-tag-config--sole-value (graph filter slot)
-  "Return SLOT's value across FILTER's tags in GRAPH, if exactly one exists.
-Else nil: merging keyword sequences would corrupt the active/done split."
-  (let ((values (cl-remove-duplicates
-                 (delq nil (mapcar (lambda (tag)
-                                     (when-let* ((c (org-glance-tag-config:resolve graph tag)))
-                                       (cl-struct-slot-value 'org-glance-tag-config slot c)))
-                                   (org-glance-filter:tags filter)))
-                 :test #'string=)))
-    (when (= 1 (length values))
-      (car values))))
+(cl-defun org-glance-tag-config--tag-values (graph filter slot)
+  "Return distinct SLOT values for FILTER's configured tags in GRAPH."
+  (delete-dups
+   (delq nil (mapcar (lambda (tag)
+                       (when-let* ((c (org-glance-tag-config:resolve graph tag)))
+                         (cl-struct-slot-value 'org-glance-tag-config slot c)))
+                     (if filter
+                         (org-glance-filter:tags filter)
+                       (and (org-glance-graph? graph)
+                            (mapcar #'org-glance-tag:from-string
+                                    (org-glance-graph:tags graph))))))))
+
+(cl-defun org-glance-tag-config:cycles-for-filter (graph filter)
+  "Return system then distinct tag TODO sequences for FILTER in GRAPH."
+  (let* ((path (org-glance-tag-config:system-file graph))
+         (system (and path (file-readable-p path)
+                      (with-temp-buffer
+                        (insert-file-contents path)
+                        (org-glance-tag-config--file-keyword "TODO")))))
+    (delete-dups
+     (delq nil (cons system (org-glance-tag-config--tag-values graph filter 'todo))))))
 
 (cl-defun org-glance-tag-config:cycle-for-filter (graph filter)
-  "Return the sole distinct todo cycle across FILTER's tags in GRAPH, or nil."
-  (org-glance-tag-config--sole-value graph filter 'todo))
+  "Return GRAPH's system and FILTER's tag TODO cycles, newline-separated."
+  (when-let* ((cycles (org-glance-tag-config:cycles-for-filter graph filter)))
+    (mapconcat #'identity cycles "\n")))
 
 (cl-defun org-glance-tag-config:preamble (config)
   "Return CONFIG's emittable pragmas as `#+KEY: VALUE' lines, or nil."
@@ -202,11 +220,10 @@ Else nil: merging keyword sequences would corrupt the active/done split."
                                                        slot config)))))
 
 (cl-defun org-glance-tag-config:preamble-for-filter (graph filter)
-  "Return the `#+KEY: VALUE' lines FILTER's tags in GRAPH agree on, or nil.
-A pragma agrees when it has exactly one distinct value (`--sole-value')."
+  "Return separate `#+TODO:' lines for system and FILTER's tags in GRAPH."
   (org-glance-tag-config--preamble-lines
-   (cl-loop for (slot . pragma) in (org-glance-tag-config--pragma-slots t)
-            collect (cons pragma (org-glance-tag-config--sole-value graph filter slot)))))
+   (mapcar (lambda (cycle) (cons "TODO" cycle))
+           (org-glance-tag-config:cycles-for-filter graph filter))))
 
 (cl-defun org-glance-tag-config--preamble-lines (pairs)
   "Return PAIRS ((PRAGMA . VALUE)...) as `#+PRAGMA: VALUE' lines, or nil.
@@ -308,10 +325,10 @@ Comments listing the optional pragmas, none active, then a bare capture entry."
      "# Config for the `" name "' tag (the file name is the tag).\n"
      "# Below the comments is the org-capture template only.\n"
      "#\n"
-     "# Optional pragmas to add ABOVE the `*' heading (each overrides a default):\n"
+     "# Optional pragmas to add ABOVE the `*' heading:\n"
      "#   #+TITLE:    a human label for the tag (default: the tag name).\n"
-     "#   #+TODO:     a per-tag todo cycle, e.g. `TODO DOING | DONE'\n"
-     "#               (absent = the global `org-todo-keywords').\n"
+     "#   #+TODO:     another todo sequence, e.g. `DOING | DONE'\n"
+     "#               (absent = the system cycle or `org-todo-keywords').\n"
      "#   #+CATEGORY: agenda category, default the tag name (planned).\n"
      "#   #+AUTHOR:   planned.\n"
      "#\n"
