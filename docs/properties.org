@@ -112,6 +112,11 @@ Org link types org-glance registers; all follow with the ordinary =C-c C-o=.
 
 * Crypt blocks and materialization
 
+Material buffers project current outgoing and incoming graph relations into
+the root headline's =LOGBOOK=.  Plain entries are =Refers to= / =Referred by=;
+typed entries use =<type> <reference>=.  The projection refreshes on open,
+revert and save, and the save hooks remove it before writing the source blob.
+
 A headline whose blob carries sealed =#+begin_crypt= blocks materializes
 AS-IS: the ciphertext is what you see, no password is requested, and the
 buffer is NOT hardened (nothing secret is in it yet).  Decrypt explicitly

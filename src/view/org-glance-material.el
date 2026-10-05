@@ -455,6 +455,109 @@ Fixed for the buffer's life; an option change applies to later buffers.")
   "Managed drawer lines removed from this buffer at open, verbatim.
 `org-glance-material--reserved-annotations' writes them back on every save.")
 
+(defconst org-glance-material--derived-relation-property
+  'org-glance-derived-relation
+  "Text property marking live relation lines in a material buffer.")
+
+(cl-defun org-glance-material--relation-line (graph id kind direction)
+  "Return one derived logbook line for ID and KIND in DIRECTION in GRAPH."
+  (let ((label (if kind
+                   (org-glance--kind-pretty kind)
+                 (if (eq direction 'out) "Refers to" "Referred by"))))
+    (concat "- " label " "
+            (org-link-make-string
+             (org-glance--edge->link-path id (and (eq direction 'out) kind))
+             (org-glance-graph:title-or-id graph id))
+            "\n")))
+
+(cl-defun org-glance-material--relation-lines (graph id)
+  "Return current outgoing and incoming relation log lines for ID in GRAPH."
+  (let ((meta (org-glance-graph:live-meta graph id)))
+    (concat
+     (apply #'concat
+            (cl-loop for (target . kind) in (and meta
+                                                  (org-glance-headline-metadata:relations meta))
+                     unless (equal target id)
+                     collect (org-glance-material--relation-line
+                              graph target kind 'out)))
+     (apply #'concat
+            (cl-loop for source in (org-glance-graph:headlines graph)
+                     for source-id = (org-glance-headline-metadata:id source)
+                     unless (equal source-id id)
+                     append
+                     (cl-loop for (target . kind) in
+                              (org-glance-headline-metadata:relations source)
+                              when (equal target id)
+                              collect (org-glance-material--relation-line
+                                       graph source-id kind 'in)))))))
+
+(cl-defun org-glance-material--remove-derived-relations ()
+  "Remove every live relation region from the current material buffer."
+  (let ((inhibit-read-only t)
+        (property org-glance-material--derived-relation-property)
+        (pos (point-min)))
+    (while (< pos (point-max))
+      (if (get-text-property pos property)
+          (delete-region pos (next-single-property-change
+                              pos property nil (point-max)))
+        (setq pos (next-single-property-change
+                   pos property nil (point-max)))))))
+
+(cl-defun org-glance-material--own-logbook ()
+  "Return the first heading's own LOGBOOK drawer element, or nil."
+  (save-excursion
+    (org-glance-material--goto-first-heading)
+    (let* ((root (org-element-at-point))
+           (root-beg (org-element-property :begin root)))
+      (org-element-map root 'drawer
+        (lambda (drawer)
+          (let ((owner (org-element-lineage drawer '(headline) t)))
+            (when (and owner
+                       (= root-beg (org-element-property :begin owner))
+                       (string-equal-ignore-case
+                        "LOGBOOK" (org-element-property :drawer-name drawer)))
+              drawer)))
+        nil t))))
+
+(cl-defun org-glance-material--relation-insert-position ()
+  "Return the position for a fresh derived LOGBOOK in this material buffer."
+  (save-excursion
+    (org-glance-material--goto-first-heading)
+    (forward-line 1)
+    (when (looking-at-p org-planning-line-re) (forward-line 1))
+    (when-let* ((body (org-get-property-block)))
+      (goto-char (cdr body))
+      (forward-line 1))
+    (point)))
+
+(cl-defun org-glance-material--refresh-derived-relations ()
+  "Rebuild the material buffer's display-only relation logbook entries."
+  (when (and org-glance-material--graph org-glance-material--id)
+    (let ((buffer-undo-list t)
+          (inhibit-read-only t)
+          (modified (buffer-modified-p)))
+      (save-excursion
+        (org-glance-material--remove-derived-relations)
+        (when-let* ((lines (org-glance-material--relation-lines
+                            org-glance-material--graph org-glance-material--id))
+                    ((not (string-empty-p lines))))
+          (let* ((drawer (org-glance-material--own-logbook))
+                 (text (if drawer lines (concat ":LOGBOOK:\n" lines ":END:\n")))
+                 (beg (if drawer
+                          (progn
+                            (goto-char (org-element-property :end drawer))
+                            (line-beginning-position 0))
+                        (org-glance-material--relation-insert-position))))
+            (goto-char beg)
+            (let ((start (point)))
+              (insert text)
+              (add-text-properties
+               start (point)
+               (list org-glance-material--derived-relation-property t
+                     'read-only "Relations are refreshed from the graph"
+                     'rear-nonsticky '(read-only org-glance-derived-relation)))))))
+      (set-buffer-modified-p modified))))
+
 (cl-defun org-glance-material--line-key (line)
   "Return the uppercase property key of drawer LINE, or nil."
   (when (string-match "^[ \t]*:\\([A-Za-z0-9_-]+\\):" line)
@@ -565,6 +668,8 @@ reused.  Signal a `user-error' when ID is dead or has no stored blob."
         (user-error "No stored content for id %s" id))
       (when-let* ((existing (find-buffer-visiting path)))
         (when (equal id (buffer-local-value 'org-glance-material--id existing))
+          (with-current-buffer existing
+            (org-glance-material--refresh-derived-relations))
           (when decrypt (org-glance-material--maybe-decrypt meta existing))
           (cl-return-from org-glance-material:open existing)))
       (let* ((cycle (org-glance-tag-config:cycle-for-filter
@@ -592,8 +697,15 @@ reused.  Signal a `user-error' when ID is dead or has no stored blob."
                     #'org-glance-material--reserved-annotations nil t)
           (setq-local revert-buffer-function #'org-glance-material--revert)
           (add-hook 'after-revert-hook #'org-glance-material--strip-reserved nil t)
+          (add-hook 'after-revert-hook
+                    #'org-glance-material--refresh-derived-relations t t)
+          (add-hook 'before-save-hook
+                    #'org-glance-material--remove-derived-relations nil t)
+          (add-hook 'after-save-hook
+                    #'org-glance-material--refresh-derived-relations t t)
           (add-hook 'before-save-hook #'org-glance-material--drop-hand-typed-reserved nil t)
           (add-hook 'before-save-hook #'org-glance-material--normalize-tags nil t)
+          (org-glance-material--refresh-derived-relations)
           (when decrypt (org-glance-material--maybe-decrypt meta buffer)))
         buffer))))
 

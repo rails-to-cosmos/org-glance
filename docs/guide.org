@@ -126,6 +126,12 @@ In a materialized buffer:
 | =C-u @= | same, plus a reference kind (=roasted by=, …)    |
 | =C-c @= | table of everything this headline relates to   |
 
+The =LOGBOOK= also shows live relation entries.  Plain links use =Refers to=
+and =Referred by=; typed links use =<type> <reference>=, such as =blocked by
+[[glance:abc][Other headline]]=.  These entries refresh from the graph on open,
+revert and save.  They are a material-buffer projection and stay out of the
+stored headline.
+
 A relation table lists both directions in one view — the headlines this one refers to AND the ones referring to it — and its =Relation= column names each row's direction and kind (=> roasted by=, =<=).  =@= on a row in the table or the overview opens the same view for that headline.
 
 Relation tables open with the default layout; edits to it are not saved automatically (an echo-area nudge reminds you) — =C-c C-c= applies the layout (columns, order, sort) to a scope of your choice: this headline, or a tag pair (=coffee → roaster=, the anchor's tag first).  Every later relation table matching the scope restores it.

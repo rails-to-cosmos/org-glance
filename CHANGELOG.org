@@ -5,6 +5,12 @@ Notable user-facing changes.  Versions date-based
 
 * Unreleased
 
+* 1.52.0.0.20261005.0
+
+** Added
+- Material buffers show live outgoing and incoming relations as derived
+  =LOGBOOK= entries.
+
 * 1.51.0.0.20261005.0
 
 ** Removed

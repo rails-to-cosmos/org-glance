@@ -174,6 +174,9 @@ evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
     instance and one open pass.
 37. `org-glance-core` is a one-way base module and never requires top-level
     `org-glance.el`.
+38. Material relation logbook entries derive live on open, revert and save; the
+    before-save hook removes them, preserving authored blob content alone. Plain
+    edges use `Refers to` / `Referred by`; typed edges use `<type> <reference>`.
 
 ## Known hazards
 

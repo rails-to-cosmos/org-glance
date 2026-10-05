@@ -132,6 +132,49 @@ a save persists to the graph and survives re-materializing."
               (kill-buffer))))))
     (should (string= "DONE" (org-glance-test:field graph "e2e1" state)))))
 
+(ert-deftest org-glance-test:material-relations-actualize-in-logbook ()
+  "Materialization shows live relation lines and keeps them out of the blob."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-test:headline "a" "* TODO Alpha"
+        ":LOGBOOK:" "- Kept" ":END:"
+        "[[glance:b][Bee]]"
+        "[[glance:c?kind=blocked-by][Cee]]")
+      (org-glance-test:headline "b" "* TODO Bee")
+      (org-glance-test:headline "c" "* TODO Cee")
+      (org-glance-test:headline "d" "* TODO Delta" "[[glance:a][Alpha]]")
+      (org-glance-test:headline "e" "* TODO Echo"
+                                "[[glance:a?kind=reviewed-by][Alpha]]"))
+    (org-glance-test:with-material (buffer graph "b")
+      (should (s-contains?
+               ":LOGBOOK:\n- Referred by [[glance:a][Alpha]]\n:END:"
+               (buffer-string)))
+      (should-not (buffer-modified-p)))
+    (org-glance-test:with-material (buffer graph "a")
+      (let ((shown (buffer-string)))
+        (should (s-contains? "- Kept" shown))
+        (should (s-contains? "- Refers to [[glance:b][Bee]]" shown))
+        (should (s-contains?
+                 "- blocked by [[glance:c?kind=blocked-by][Cee]]" shown))
+        (should (s-contains? "- Referred by [[glance:d][Delta]]" shown))
+        (should (s-contains? "- reviewed by [[glance:e][Echo]]" shown))
+        (should-not (buffer-modified-p)))
+      (goto-char (point-min))
+      (search-forward ":END:\n")
+      (search-forward "[[glance:b][Bee]]")
+      (replace-match "[[glance:d][Delta]]" t t)
+      (org-glance-test:save)
+      (should-not (s-contains? "- Refers to [[glance:b][Bee]]" (buffer-string)))
+      (should (s-contains? "- Refers to [[glance:d][Delta]]" (buffer-string)))
+      (should-not (buffer-modified-p)))
+    (let ((blob (org-glance-graph:get-content graph "a")))
+      (should (s-contains? "- Kept" blob))
+      (should (s-contains? "[[glance:d][Delta]]" blob))
+      (should-not (s-contains? "Refers to" blob))
+      (should-not (s-contains? "Referred by" blob))
+      (should-not (s-contains? "- blocked by" blob))
+      (should-not (s-contains? "- reviewed by" blob)))))
+
 (ert-deftest org-glance-test:material-open-missing ()
   "Materializing an unknown id errors."
   (org-glance-test:with-graph graph

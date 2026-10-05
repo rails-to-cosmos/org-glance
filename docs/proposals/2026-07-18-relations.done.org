@@ -54,6 +54,15 @@ Inserting/killing a reference is an ordinary body edit: save → new content has
 → metadata recomputed — edges can never drift from content; atomic commit, WAL,
 compaction, reindex backfill all apply unchanged.
 
+** Material logbook projection
+
+Material buffers derive current outgoing and incoming relation entries in the
+root headline's =LOGBOOK= on open, revert and save.  Plain links use =Refers to=
+and =Referred by=; typed links use =<type> <reference>=.  The projection is
+read-only and removed before every write, leaving the blob as the sole canonical
+edge source.  Incoming entries carry a plain =glance:= link so parsing the
+projection cannot reverse the source edge.
+
 ** =@= in the material buffer
 
 Bound in =org-glance-material-mode-map=.  Behavior (verifier-corrected):

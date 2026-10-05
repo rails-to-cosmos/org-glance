@@ -716,6 +716,14 @@ today, up from 50.
     [[https://github.com/rails-to-cosmos/org-glance/blob/32d20f3a939fa56ca1a86ce1a3f52ebb7a7e0b39/src/data/org-glance-core.el#L1-L8][core boundary at 32d20f3, lines 1–8]] and
     [[file:proposals/2026-06-07-generalize-core-v2-module.done.org::*Problem][the module proposal]].
 
+38. *Material relation logbook entries are a live projection.*  Materialization
+    derives outgoing and incoming entries from graph metadata on open, revert and
+    save.  The before-save hook removes every projected byte; source blobs retain
+    authored logbook content alone.  Plain edges render as =Refers to= /
+    =Referred by= and typed edges as =<type> <reference>=.  Incoming links omit
+    the kind query so scanning the projection cannot create a reversed edge.
+    Pinned by =material-relations-actualize-in-logbook=.
+
 * Known hazards
 
 Costs the code ships WITH, deliberately.  Each was reproduced with a probe and each
