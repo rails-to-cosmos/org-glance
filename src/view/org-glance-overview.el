@@ -100,7 +100,7 @@ Prefix the pragmas FILTER's tags agree on; select by their cycle's done-set."
     ;; Join ONCE: `cl-loop ... concat' re-copies the accumulator -- O(N^2).
     (apply #'concat
            org-glance-overview:header
-           (or (org-glance-tag-config:preamble-for-filter graph filter) "")
+           (or (org-glance-tag-config:preamble-for-filter graph filter t) "")
            (cl-loop for meta in (org-glance-graph:headlines graph)
                     when (funcall keep? meta)
                     collect (org-glance-overview:render-headline graph meta)))))

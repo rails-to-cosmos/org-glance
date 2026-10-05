@@ -5,12 +5,15 @@ Notable user-facing changes.  Versions date-based
 
 * Unreleased
 
+* 1.51.0.0.20261005.0
+
 ** Removed
 - Portable parser projections under =meta/projections/=; the shared SQLite
   index is local and rebuilds from canonical graph data.
 
 ** Changed
 - Capture, =graph:add= and material saves store downcased, deduplicated, sorted ordinary headline tags; =ARCHIVE= stays uppercase.
+- Overview =#+TODO:= lines carry comments naming every source config file.
 
 * 1.49.0.0.20260930.0
 

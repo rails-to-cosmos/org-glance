@@ -122,6 +122,12 @@ CONFIGS is an alist (TAG-STRING . CONTENTS); the cache resets around BODY."
     (org-glance-graph:add graph (org-glance-test:headline "b1" "* READING Dune :book:"))
     (org-glance-test:with-tag-config (org-glance-test:one-config "book" org-glance-test:book-config)
       (let ((text (org-glance-overview:render graph '(:tags ("book")))))
+        (should (s-contains?
+                 (format "# TODO source: %s\n"
+                         (file-relative-name
+                          (org-glance-tag-config:file graph 'book)
+                          (org-glance-graph:store-path graph)))
+                 text))
         (should (s-contains? "#+TODO: TODO READING | READ ABANDONED" text))
         (should (s-contains? "Dune" text)))
       (let ((text (org-glance-overview:render graph nil)))
@@ -135,6 +141,7 @@ CONFIGS is an alist (TAG-STRING . CONTENTS); the cache resets around BODY."
      "#+TODO: DELEGATED REVIEW TODO | DONE CANCELLED\n")
     (org-glance-test:with-tag-config
         (list (cons "book" "#+TODO: READING | READ\n\n* Book\n")
+              (cons "note" "#+TODO: READING | READ\n\n* Note\n")
               (cons "film" "#+TODO: WATCHING | WATCHED\n\n* Film\n"))
       (let ((cycle (org-glance-tag-config:cycle-for-filter
                     graph '(:tags ("wrike" "book" "film")))))
@@ -145,8 +152,24 @@ CONFIGS is an alist (TAG-STRING . CONTENTS); the cache resets around BODY."
                        (org-glance-tag-config:done-keywords cycle))))
       (should (equal "DELEGATED REVIEW TODO | DONE CANCELLED"
                      (org-glance-tag-config:cycle-for-filter graph '(:tags nil))))
-      (let ((text (org-glance-overview:render graph '(:tags ("wrike" "book")))))
-        (should (s-contains? "#+TODO: DELEGATED REVIEW TODO | DONE CANCELLED\n#+TODO: READING | READ\n" text)))
+      (let* ((text (org-glance-overview:render
+                    graph '(:tags ("wrike" "book" "note"))))
+             (store (org-glance-graph:store-path graph))
+             (system-source (file-relative-name
+                             (org-glance-tag-config:system-file graph) store))
+             (book-source (file-relative-name
+                           (org-glance-tag-config:file graph 'book) store))
+             (note-source (file-relative-name
+                           (org-glance-tag-config:file graph 'note) store)))
+        (should
+         (s-contains?
+          (format (concat "# TODO source: %s\n"
+                          "#+TODO: DELEGATED REVIEW TODO | DONE CANCELLED\n"
+                          "# TODO source: %s\n"
+                          "# TODO source: %s\n"
+                          "#+TODO: READING | READ\n")
+                  system-source book-source note-source)
+          text)))
       (let ((template (let ((org-glance-graph graph))
                         (org-glance-capture:template 'wrike "Review this"))))
         (should (string-prefix-p "#+TODO: DELEGATED REVIEW TODO | DONE CANCELLED\n"

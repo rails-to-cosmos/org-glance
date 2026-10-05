@@ -86,7 +86,8 @@ Act on the row/heading at point without opening anything:
 Column layout, sort and added columns persist per tag.  Optionally give a tag
 its own config: todo cycle and capture template (=C= in the transient — or =C=
 in that tag's overview / table to edit it directly). =config/system.org= supplies
-a graph-wide TODO cycle; tag cycles appear as additional =#+TODO:= lines.
+a graph-wide TODO cycle; tag cycles appear as additional =#+TODO:= lines. Each
+overview line carries preceding comments naming its source config files.
 
 ** Edit a headline
 

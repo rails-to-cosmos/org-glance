@@ -38,6 +38,7 @@ Set in a headline's =:PROPERTIES:= drawer.
 
 =<store>/config/system.org= supplies the graph-wide =#+TODO:= sequence.
 Each applicable =config/tags/<tag>.org= adds a separate =#+TODO:= sequence after it.
+Overview comments before each sequence name every contributing config file.
 Overviews, captures, material buffers and state pickers read the same sequences.
 
 * Tag-config files

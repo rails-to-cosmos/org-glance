@@ -185,27 +185,39 @@ Org derives them, so the split matches what a `#+TODO:' header produces."
         (delay-mode-hooks (org-mode))
         (copy-sequence org-done-keywords)))))
 
-(cl-defun org-glance-tag-config--tag-values (graph filter slot)
-  "Return distinct SLOT values for FILTER's configured tags in GRAPH."
-  (delete-dups
-   (delq nil (mapcar (lambda (tag)
-                       (when-let* ((c (org-glance-tag-config:resolve graph tag)))
-                         (cl-struct-slot-value 'org-glance-tag-config slot c)))
-                     (if filter
-                         (org-glance-filter:tags filter)
-                       (and (org-glance-graph? graph)
-                            (mapcar #'org-glance-tag:from-string
-                                    (org-glance-graph:tags graph))))))))
+(cl-defun org-glance-tag-config--tags-for-filter (graph filter)
+  "Return FILTER's tags, or every live tag in GRAPH when FILTER is nil."
+  (if filter
+      (org-glance-filter:tags filter)
+    (and (org-glance-graph? graph)
+         (mapcar #'org-glance-tag:from-string (org-glance-graph:tags graph)))))
+
+(cl-defun org-glance-tag-config--cycle-sources (graph filter)
+  "Return distinct TODO cycles and their source files for FILTER in GRAPH.
+Each result is (CYCLE SOURCE...), ordered system first and then by tag."
+  (let ((system-file (org-glance-tag-config:system-file graph))
+        groups)
+    (cl-labels ((add (cycle source)
+                  (when cycle
+                    (if-let* ((group (assoc cycle groups)))
+                        (push source (cdr group))
+                      (push (list cycle source) groups)))))
+      (when (and system-file (file-readable-p system-file))
+        (with-temp-buffer
+          (insert-file-contents system-file)
+          (add (org-glance-tag-config--file-keyword "TODO") system-file)))
+      (dolist (tag (org-glance-tag-config--tags-for-filter graph filter))
+        (when-let* ((config (org-glance-tag-config:resolve graph tag)))
+          (add (org-glance-tag-config:todo config)
+               (org-glance-tag-config:file graph tag)))))
+    (setq groups (nreverse groups))
+    (dolist (group groups)
+      (setcdr group (nreverse (cdr group))))
+    groups))
 
 (cl-defun org-glance-tag-config:cycles-for-filter (graph filter)
   "Return system then distinct tag TODO sequences for FILTER in GRAPH."
-  (let* ((path (org-glance-tag-config:system-file graph))
-         (system (and path (file-readable-p path)
-                      (with-temp-buffer
-                        (insert-file-contents path)
-                        (org-glance-tag-config--file-keyword "TODO")))))
-    (delete-dups
-     (delq nil (cons system (org-glance-tag-config--tag-values graph filter 'todo))))))
+  (mapcar #'car (org-glance-tag-config--cycle-sources graph filter)))
 
 (cl-defun org-glance-tag-config:cycle-for-filter (graph filter)
   "Return GRAPH's system and FILTER's tag TODO cycles, newline-separated."
@@ -219,11 +231,30 @@ Org derives them, so the split matches what a `#+TODO:' header produces."
             collect (cons pragma (cl-struct-slot-value 'org-glance-tag-config
                                                        slot config)))))
 
-(cl-defun org-glance-tag-config:preamble-for-filter (graph filter)
-  "Return separate `#+TODO:' lines for system and FILTER's tags in GRAPH."
-  (org-glance-tag-config--preamble-lines
-   (mapcar (lambda (cycle) (cons "TODO" cycle))
-           (org-glance-tag-config:cycles-for-filter graph filter))))
+(cl-defun org-glance-tag-config:preamble-for-filter
+    (graph filter &optional source-comments)
+  "Return separate `#+TODO:' lines for system and FILTER's tags in GRAPH.
+With SOURCE-COMMENTS, prefix each line with comments naming its config files."
+  (if source-comments
+      (when-let* ((groups (org-glance-tag-config--cycle-sources graph filter)))
+        (apply
+         #'concat
+         (mapcar
+          (lambda (group)
+            (concat
+             (mapconcat
+              (lambda (source)
+                (format "# TODO source: %s"
+                        (if (org-glance-graph? graph)
+                            (file-relative-name
+                             source (org-glance-graph:store-path graph))
+                          (abbreviate-file-name source))))
+              (cdr group) "\n")
+             "\n#+TODO: " (car group) "\n"))
+          groups)))
+    (org-glance-tag-config--preamble-lines
+     (mapcar (lambda (cycle) (cons "TODO" cycle))
+             (org-glance-tag-config:cycles-for-filter graph filter)))))
 
 (cl-defun org-glance-tag-config--preamble-lines (pairs)
   "Return PAIRS ((PRAGMA . VALUE)...) as `#+PRAGMA: VALUE' lines, or nil.
