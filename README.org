@@ -82,6 +82,20 @@ org-glance indexes the link as a typed edge and can show it as a table column.
 - =org-glance-filter-spec= sets the filter applied to every view.
 - =org-glance-repeat-history-depth= controls retained occurrence snapshots.
 
+* Plugins
+
+Plugins are separate packages.  Install the package, list its suffix in
+=org-glance-plugins=, and initialize org-glance after loading it.  This example
+loads the LLM plugin at Emacs startup:
+
+#+begin_src emacs-lisp
+(use-package org-glance
+  :demand t
+  :ensure org-glance-llm
+  :custom (org-glance-plugins '(llm))
+  :config (org-glance-init))
+#+end_src
+
 * Documentation
 
 - [[file:docs/guide.org][User guide]]: views, editing, relations, encryption, repetition, plugins, and maintenance

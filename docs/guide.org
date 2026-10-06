@@ -190,13 +190,19 @@ Example — org-text views, everything visible, daily history for a year:
 
 * Plugins
 
-Optional features ship as SEPARATE packages.  Two steps, and they belong to different tools: your package manager installs the package, org-glance enables it.  Install it, then list it in =org-glance-plugins= — or press =I= in the transient (=U= disables).  The transient's *System* heading lists what is enabled and marks any plugin whose library failed to load:
+Optional features ship as SEPARATE packages.  Your package manager installs the
+package; org-glance enables it.  Install it, then list it in
+=org-glance-plugins= — or press =I= in the transient (=U= disables).  Eagerly
+load and initialize org-glance to load enabled plugins at Emacs startup.  The
+transient's *System* heading lists what is enabled and marks any plugin whose
+library failed to load:
 
 #+begin_src emacs-lisp
-(use-package org-glance-llm
-  :after org-glance
-  :ensure t
-  :init (setq org-glance-plugins '(llm)))
+(use-package org-glance
+  :demand t
+  :ensure org-glance-llm
+  :custom (org-glance-plugins '(llm))
+  :config (org-glance-init))
 #+end_src
 
 - [[https://github.com/rails-to-cosmos/org-glance-llm][*org-glance-llm*]] — LLM sessions per headline.  =l= opens an
