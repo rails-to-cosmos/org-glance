@@ -5,6 +5,11 @@ Notable user-facing changes.  Versions date-based
 
 * Unreleased
 
+** Added
+- The shared immutable headline-version contract: UUIDv7 snapshots, deterministic
+  UUIDv5 migration roots, parent-derived leaves, SHA-256 verification, and tombstones.
+  Legacy =data.org= remains active until the coordinated Glance migration.
+
 * 1.52.0.0.20261005.0
 
 ** Added

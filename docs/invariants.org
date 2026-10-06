@@ -724,6 +724,14 @@ today, up from 50.
     the kind query so scanning the projection cannot create a reversed edge.
     Pinned by =material-relations-actualize-in-logbook=.
 
+39. *Immutable version metadata is shared with Glance.*  Schema 1 records a UUIDv7
+    version id, logical headline id, =snapshot= or =tombstone= kind, sorted parent
+    ids, optional SHA-256 content digest, UTC creation time, and producer.  Version
+    directories publish by sibling-directory rename; leaves are versions absent from
+    every parent set.  Migration roots use deterministic UUIDv5 ids.  Pinned by the
+    =org-glance-test:version-= cases.  Legacy =data.org= reads as an implicit root and
+    remains the active writer until both programs switch in one coordinated migration.
+
 * Known hazards
 
 Costs the code ships WITH, deliberately.  Each was reproduced with a probe and each

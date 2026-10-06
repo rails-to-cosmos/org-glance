@@ -9,6 +9,7 @@
 (require 'org-glance-core)
 (require 'org-glance-utils)
 (require 'org-glance-headline)
+(require 'org-glance-version)
 
 (defvar org-glance-graph:list (make-hash-table :test #'equal)
   "Registered instances of `org-glance-graph' in current session.")

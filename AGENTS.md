@@ -177,6 +177,10 @@ evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
 38. Material relation logbook entries derive live on open, revert and save; the
     before-save hook removes them, preserving authored blob content alone. Plain
     edges use `Refers to` / `Referred by`; typed edges use `<type> <reference>`.
+39. Immutable headline-version metadata is schema 1: UUIDv7 id, logical headline
+    id, kind, sorted parents, SHA-256 content digest, UTC creation time, and producer.
+    Leaves derive from parent references. Legacy `data.org` remains the active writer
+    until the coordinated Glance/org-glance migration switches both readers.
 
 ## Known hazards
 
