@@ -11,6 +11,7 @@ Notable user-facing changes.  Versions date-based
   Legacy =data.org= remains active until the coordinated Glance migration.
 - The offline migration primitive publishes and verifies an immutable root before
   removing legacy =data.org=.
+- Immutable migration metadata is byte-identical to Glance output.
 
 * 1.52.0.0.20261005.0
 

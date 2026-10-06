@@ -91,7 +91,17 @@
       (let ((migrated (org-glance-version:migrate-legacy dir "alpha")))
         (should-not (f-exists? data))
         (should (f-file? (f-join (org-glance-version:directory migrated) "data.org")))
-        (should (f-file? (f-join (org-glance-version:directory migrated) "meta.json")))
+        (let ((meta (f-join (org-glance-version:directory migrated) "meta.json")))
+          (should (f-file? meta))
+          (should (equal
+                   (concat
+                    "{\"version\":1,\"headline\":\"alpha\","
+                    "\"id\":\"3d7dd5f9-53b5-5684-afd2-e38b5d09f093\","
+                    "\"kind\":\"snapshot\",\"parents\":[],"
+                    "\"contentSha256\":\"fbebdc976740079bdaa52a59f81ee64b936ac629ad20a006d77486a1e0578bb5\","
+                    "\"created\":\"1970-01-01T00:00:00Z\","
+                    "\"producer\":\"migration\"}\n")
+                   (f-read-text meta 'utf-8))))
         (let ((stored (car (org-glance-version:read dir "alpha"))))
           (should (equal (org-glance-version:id migrated)
                          (org-glance-version:id stored)))

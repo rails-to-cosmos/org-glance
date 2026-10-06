@@ -27,6 +27,9 @@ reuses an already-published root after interruption, and removes =data.org=
 only after publication.  No command invokes it before the coordinated writer
 cutover.
 
+Migration metadata uses one canonical compact JSON field order and trailing
+newline.  The Glance and org-glance tests pin the same complete byte vector.
+
 * Remaining coordinated switch
 
 Update material saves so they create children instead of mutating a leaf.

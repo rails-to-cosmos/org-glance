@@ -179,8 +179,9 @@ evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
     edges use `Refers to` / `Referred by`; typed edges use `<type> <reference>`.
 39. Immutable headline-version metadata is schema 1: UUIDv7 id, logical headline
     id, kind, sorted parents, SHA-256 content digest, UTC creation time, and producer.
-    Leaves derive from parent references. Legacy `data.org` remains the active writer
-    until the coordinated Glance/org-glance migration switches both readers.
+    Its compact JSON field order and trailing newline are canonical across Glance and
+    org-glance. Leaves derive from parent references. Legacy `data.org` remains the
+    active writer until the coordinated Glance/org-glance migration switches both readers.
 
 ## Known hazards
 

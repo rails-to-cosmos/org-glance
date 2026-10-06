@@ -728,7 +728,8 @@ today, up from 50.
     version id, logical headline id, =snapshot= or =tombstone= kind, sorted parent
     ids, optional SHA-256 content digest, UTC creation time, and producer.  Version
     directories publish by sibling-directory rename; leaves are versions absent from
-    every parent set.  Migration roots use deterministic UUIDv5 ids.  Pinned by the
+    every parent set.  Compact JSON field order and the trailing newline are canonical
+    across both producers.  Migration roots use deterministic UUIDv5 ids.  Pinned by the
     =org-glance-test:version-= cases.  Legacy =data.org= reads as an implicit root and
     remains the active writer until both programs switch in one coordinated migration.
     Offline migration publishes and verifies the root before removing =data.org=.
