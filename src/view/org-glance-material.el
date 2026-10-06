@@ -112,6 +112,42 @@ Plugins use it instead of the buffer-local internals."
 (defvar-local org-glance-material--cycle nil
   "Per-tag `#+TODO:'-style cycle string for this buffer's headline, or nil.")
 
+(cl-defun org-glance-material--write-version ()
+  "Publish this material buffer as an immutable child snapshot."
+  (when (and org-glance-material--graph org-glance-material--id)
+    (when (org-glance-version:file-p buffer-file-name)
+      (let* ((dir (org-glance-graph:headline-data-path
+                   org-glance-material--graph org-glance-material--id))
+             (selected (f-filename (f-parent buffer-file-name)))
+             (current (mapcar #'org-glance-version:id
+                              (org-glance-version:leaves
+                               (org-glance-version:read
+                                dir org-glance-material--id)))))
+        (unless (member selected current)
+          (user-error "Headline %s changed to another current version"
+                      org-glance-material--id))))
+    (let ((temp (make-temp-file "org-glance-material-")))
+      (unwind-protect
+          (progn
+            (let ((coding-system-for-write 'utf-8-unix))
+              (write-region (point-min) (point-max) temp nil 'silent))
+            (let* ((headline (org-glance-headline--from-string
+                              (f-read-text temp 'utf-8)))
+                   (id (org-glance-headline:id headline)))
+              (unless (equal id org-glance-material--id)
+                (user-error "org-glance: %s lost its ORG_GLANCE_ID drawer"
+                            org-glance-material--id))
+              (let ((path (org-glance-graph:put-content
+                           org-glance-material--graph headline)))
+                (set-visited-file-name path t)
+                (setq-local revert-buffer-function #'org-glance-material--revert)
+                (add-hook 'write-file-functions
+                          #'org-glance-material--write-version nil t)
+                (set-visited-file-modtime)
+                (set-buffer-modified-p nil))))
+        (when (f-exists? temp) (delete-file temp))))
+    t))
+
 (cl-defun org-glance-material:sync ()
   "Append the just-saved file's metadata to the graph's WAL; flag views stale.
 Buffer-local `after-save-hook'.  Parses the FILE: only it holds the managed
@@ -688,6 +724,7 @@ reused.  Signal a `user-error' when ID is dead or has no stored blob."
           ;; NEVER `setq-local' `org-todo-keywords': `sync' binds it globally.
           (setq-local org-glance-material--cycle cycle)
           (add-hook 'after-save-hook #'org-glance-material:sync nil t)
+          (add-hook 'write-file-functions #'org-glance-material--write-version nil t)
           (org-glance-material-mode 1)
           ;; invariant 21: managed keys live in the file, never in the buffer.
           (setq-local org-glance-material--managed-keys

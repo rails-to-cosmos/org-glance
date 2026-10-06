@@ -42,8 +42,8 @@ evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
    JSON key order). A list-valued field MUST encode to a JSON vector (`--append`'s
    `json-serialize` runs outside the error-demoted hook); the load-time guard
    (`--check-fields`) checks slot ORDER, known FROM facts and vector ENCODE kinds.
-5. Blobs are canonical; indexes are derived and rebuildable; metadata computes before any
-   write, blob lands before its WAL record. The content hash ignores the id/hash
+5. Immutable snapshot blobs are canonical; indexes are derived and rebuildable; metadata
+   computes before any write, the snapshot lands before its WAL record. The content hash ignores the id/hash
    properties and the log drawers, and so does every derived fact (properties, links,
    relations). The property index is a pure cache — hash-guarded
    with O(N) blob fallback, dropped by reindex, never trusted in a durable write. The
@@ -180,8 +180,8 @@ evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
 39. Immutable headline-version metadata is schema 1: UUIDv7 id, logical headline
     id, kind, sorted parents, SHA-256 content digest, UTC creation time, and producer.
     Its compact JSON field order and trailing newline are canonical across Glance and
-    org-glance. Leaves derive from parent references. Legacy `data.org` remains the
-    active writer until the coordinated Glance/org-glance migration switches both readers.
+    org-glance. Leaves derive from parent references. Writers publish immutable children;
+    legacy `data.org` is an implicit root and migrates before its next write.
 
 ## Known hazards
 
@@ -197,11 +197,8 @@ H1. CLOSED 2026-08-12 by inv 34 — the external fold's truncate race ate a tomb
     union merge only where git does not already track the family (inv 34, at the cost of
     H3) — on a store that predates the ignore it is live, and the digest is what stands
     there.
-H2. A folded delete is undone by the id's open material buffer: the tombstone arm touches
-    no buffer, so the next save's `material:sync` appends a LIVE record and writes the
-    blob back, and the occurrence history stays behind. Open because a fold runs in the
-    BACKGROUND, and `material:delete`'s consent-when-dirty guard (inv 11) exists because
-    discarding a dirty buffer needs a human.
+H2. CLOSED 2026-10-06 by inv 39 — material saves publish from their selected current
+    version. A newer snapshot or tombstone makes the open buffer stale and refuses save.
 H3. A daemon HERE cannot notify an Emacs THERE: the notification family is git-ignored —
     once git stops tracking it, which on a store made before the ignore takes a
     `git rm --cached` — so machine B folds nothing A's daemon announced. Free where the

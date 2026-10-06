@@ -94,10 +94,18 @@
   (org-glance-headline:with-contents headline
     (org-entry-get nil property inherit)))
 
+(cl-defun org-glance-cache--row-id (id path)
+  "Return the shared cache identity for logical ID stored at PATH."
+  (if (org-glance-version:file-p path)
+      (concat id "/" (file-name-nondirectory
+                       (directory-file-name (file-name-directory path))))
+    id))
+
 (cl-defun org-glance-cache--project (db graph metadata)
   "Project METADATA from GRAPH into DB."
   (let* ((id (org-glance-headline-metadata:id metadata))
          (path (org-glance-graph:content-path graph id))
+         (row-id (org-glance-cache--row-id id path))
          (contents (org-glance-graph:get-content graph id))
          (headline (and contents (org-glance-headline--from-string contents)))
          (digest (and contents (org-glance-cache--file-digest path)))
@@ -115,7 +123,7 @@
       (sqlite-execute
        db
        "INSERT INTO headline(id,path,digest,org_id,org_id_property,title,state,priority,tags,scheduled,deadline,closed,category,created,producer) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET path=excluded.path,digest=excluded.digest,org_id=excluded.org_id,org_id_property=excluded.org_id_property,title=excluded.title,state=excluded.state,priority=excluded.priority,tags=excluded.tags,scheduled=excluded.scheduled,deadline=excluded.deadline,closed=excluded.closed,category=excluded.category,created=excluded.created,producer=excluded.producer"
-       (vector id path digest id
+       (vector row-id path digest id
                (org-glance-headline:node-property "ID" headline)
                (org-glance-headline-metadata:title metadata)
                (org-glance-headline-metadata:state metadata)
@@ -131,23 +139,26 @@
       (sqlite-execute
        db
        "INSERT INTO org_headline(id,path,digest,content_hash,record,producer) VALUES(?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET path=excluded.path,digest=excluded.digest,content_hash=excluded.content_hash,record=excluded.record,producer=excluded.producer"
-       (vector id path digest content-hash payload "org-glance")))))
+       (vector row-id path digest content-hash payload "org-glance")))))
 
 (cl-defun org-glance-cache--project-edges (db metadata)
   "Replace METADATA's resolved outgoing edges in DB."
-  (let ((id (org-glance-headline-metadata:id metadata)))
-    (sqlite-execute db "DELETE FROM edge WHERE src=?" (vector id))
+  (let* ((id (org-glance-headline-metadata:id metadata))
+         (src (caar (sqlite-select db "SELECT id FROM headline WHERE org_id=?"
+                                   (vector id)))))
+    (when src (sqlite-execute db "DELETE FROM edge WHERE src=?" (vector src)))
     (dolist (edge (org-glance-headline-metadata:relations metadata))
-      (when (sqlite-select db "SELECT 1 FROM headline WHERE id=?"
-                           (vector (car edge)))
+      (when-let* ((dst (caar (sqlite-select db "SELECT id FROM headline WHERE org_id=?"
+                                            (vector (car edge))))))
         (sqlite-execute
          db "INSERT OR REPLACE INTO edge(src,dst,kind,via) VALUES(?,?,?,?)"
-         (vector id (car edge) (cdr edge) "row"))))))
+         (vector src dst (cdr edge) "row"))))))
 
 (cl-defun org-glance-cache--delete (db graph id)
   "Delete ID's source projection from GRAPH's DB."
-  (sqlite-execute db "DELETE FROM source WHERE path=?"
-                  (vector (org-glance-graph:content-path graph id))))
+  (ignore graph)
+  (dolist (row (sqlite-select db "SELECT path FROM headline WHERE org_id=?" (vector id)))
+    (sqlite-execute db "DELETE FROM source WHERE path=?" (vector (car row)))))
 
 (cl-defun org-glance-cache--headlines (graph)
   "Return GRAPH's live metadata without starting an external fold."
@@ -197,7 +208,7 @@
         db
         (lambda ()
           (let ((live (mapcar #'org-glance-headline-metadata:id headlines)))
-            (dolist (row (sqlite-select db "SELECT id,path FROM org_headline"))
+            (dolist (row (sqlite-select db "SELECT headline.org_id,org_headline.path FROM org_headline JOIN headline USING(id)"))
               (unless (member (car row) live)
                 (sqlite-execute db "DELETE FROM source WHERE path=?"
                                 (vector (cadr row))))))
@@ -219,8 +230,8 @@
                          (org-glance-cache--file-digest path)))
             (row (car (sqlite-select
                        db
-                       "SELECT digest,content_hash,record FROM org_headline WHERE id=?"
-                       (vector id))))
+                       "SELECT org_headline.digest,content_hash,record FROM org_headline JOIN headline USING(id) WHERE headline.org_id=? AND org_headline.path=?"
+                       (vector id path))))
             (payload (and row digest (equal (nth 0 row) digest) (nth 2 row)))
             (record (and payload
                          (ignore-errors

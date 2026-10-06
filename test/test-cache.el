@@ -21,7 +21,7 @@
             (pcase-let ((`((,digest ,content-hash ,producer))
                          (sqlite-select
                           db
-                          "SELECT digest,content_hash,producer FROM org_headline WHERE id='a'")))
+                          "SELECT org_headline.digest,content_hash,org_headline.producer FROM org_headline JOIN headline USING(id) WHERE headline.org_id='a'")))
               (should (= 64 (length digest)))
               (should (= 40 (length content-hash)))
               (should-not (equal digest content-hash))
@@ -29,7 +29,7 @@
             (should (equal '(("a" "b" "blocks" "row"))
                            (sqlite-select
                             db
-                            "SELECT src,dst,kind,via FROM edge"))))
+                            "SELECT src_headline.org_id,dst_headline.org_id,kind,via FROM edge JOIN headline AS src_headline ON edge.src=src_headline.id JOIN headline AS dst_headline ON edge.dst=dst_headline.id"))))
         (sqlite-close db)))
     (let ((metadata (org-glance-cache:metadata graph "a")))
       (should (org-glance-headline-metadata? metadata))
@@ -37,7 +37,7 @@
     (let ((db (sqlite-open (org-glance-cache:path graph))))
       (unwind-protect
           (sqlite-execute
-           db "UPDATE org_headline SET digest='stale' WHERE id='a'")
+           db "UPDATE org_headline SET digest='stale' WHERE id=(SELECT id FROM headline WHERE org_id='a')")
         (sqlite-close db)))
     (should-not (org-glance-cache:metadata graph "a"))
     (let ((db (sqlite-open (org-glance-cache:path graph))))
@@ -45,9 +45,9 @@
           (progn
             (sqlite-execute
              db
-             "UPDATE org_headline SET digest=(SELECT digest FROM headline WHERE id='a') WHERE id='a'")
+             "UPDATE org_headline SET digest=(SELECT digest FROM headline WHERE org_id='a') WHERE id=(SELECT id FROM headline WHERE org_id='a')")
             (sqlite-execute
-             db "UPDATE org_headline SET content_hash='stale' WHERE id='a'"))
+             db "UPDATE org_headline SET content_hash='stale' WHERE id=(SELECT id FROM headline WHERE org_id='a')"))
         (sqlite-close db)))
     (should-not (org-glance-cache:metadata graph "a"))))
 
@@ -81,8 +81,8 @@
     (let ((db (sqlite-open (org-glance-cache:path graph))))
       (unwind-protect
           (progn
-            (should-not (sqlite-select db "SELECT id FROM headline WHERE id='a'"))
-            (should-not (sqlite-select db "SELECT * FROM edge WHERE dst='a'")))
+            (should-not (sqlite-select db "SELECT id FROM headline WHERE org_id='a'"))
+            (should-not (sqlite-select db "SELECT * FROM edge WHERE dst IN (SELECT id FROM headline WHERE org_id='a')")))
         (sqlite-close db)))))
 
 (ert-deftest org-glance-test:shared-cache-open-repairs-a-missed-delete ()
@@ -94,7 +94,7 @@
     (let ((db (sqlite-open (org-glance-cache:path graph))))
       (unwind-protect
           (should (equal '(("a"))
-                         (sqlite-select db "SELECT id FROM headline")))
+                         (sqlite-select db "SELECT org_id FROM headline")))
         (sqlite-close db)))
     (org-glance-test:reopen graph)
     (let ((db (sqlite-open (org-glance-cache:path graph))))

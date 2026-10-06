@@ -23,7 +23,13 @@ here; ONE speller serves both shapes, which differ only in the third field."
    graph (mapconcat #'org-glance-test:external-line ids "")))
 
 (cl-defun org-glance-test:external-delete (graph &rest ids)
-  "Append a DELETE line for each of IDS to GRAPH's `EXTERNAL.jsonl'."
+  "Publish and announce an outside writer tombstone for each of IDS."
+  (dolist (id ids)
+    (let* ((dir (org-glance-graph:headline-data-path graph id))
+           (leaves (org-glance-version:leaves (org-glance-version:read dir id))))
+      (when leaves
+        (org-glance-version:write-tombstone
+         dir id (mapcar #'org-glance-version:id leaves) "glance"))))
   (org-glance-test--external-append
    graph (mapconcat (lambda (id) (org-glance-test:external-line id t)) ids "")))
 
@@ -160,10 +166,13 @@ tracks nothing, so the patterns are the whole answer; a tracked path says nil."
             paths)))
 
 (cl-defun org-glance-test:edit-blob (graph id from to)
-  "Replace FROM with TO in ID's blob in GRAPH, as an outside writer does.
-Bypasses `org-glance-graph:add': the blob moves and the WAL does not."
-  (let ((path (org-glance-graph:content-path graph id)))
-    (f-write-text (s-replace from to (f-read-text path 'utf-8)) 'utf-8 path)))
+  "Publish FROM replaced by TO as an outside writer's immutable child."
+  (let* ((dir (org-glance-graph:headline-data-path graph id))
+         (leaves (org-glance-version:leaves (org-glance-version:read dir id)))
+         (path (org-glance-graph:content-path graph id)))
+    (org-glance-version:write-snapshot
+     dir id (mapcar #'org-glance-version:id leaves) "glance"
+     (s-replace from to (f-read-text path 'utf-8)))))
 
 (ert-deftest org-glance-test:external-refresh-folds-the-edit-in ()
   "A blob edited outside Emacs reaches the WAL through `refresh-external'."
@@ -1138,46 +1147,36 @@ the offset is under test."
                        (org-glance-test:external-pending graph)))
       (should (= 1 (org-glance-graph:refresh-external graph))))))
 
-;;; Known hazards: these pin TODAY's behaviour -- H2 in docs/invariants.org.
-
-(ert-deftest org-glance-test:external-delete-is-undone-by-an-open-buffer ()
-  "H2: a folded delete spares the id's open material buffer, and its next save
-appends a LIVE record and writes the blob back, minus the occurrence history.
-`org-glance-test:material-delete-referrer-aware' pins the discarding path."
+(ert-deftest org-glance-test:external-delete-refuses-an-open-stale-buffer ()
+  "A material buffer cannot publish over a newer external tombstone."
   (org-glance-test:with-graph graph
     (let* ((id "id1")
-           (path (org-glance-graph:content-path graph id))
-           (snapshot (f-join (f-dirname path) "occurrences" "20260803T042107.org")))
+           (path nil))
       (org-glance-graph:add graph (org-glance-test:headline id "* TODO foo"))
-      (org-glance-test:write snapshot "* DONE foo\n")
+      (setq path (org-glance-graph:content-path graph id))
       (org-glance-test:with-material (buffer graph id)
-        (f-delete (f-dirname path) t)                ; the daemon takes the blob dir
         (org-glance-test:external-delete graph id)
         (should (= 1 (org-glance-graph:refresh-external graph)))
         (should (eq 'tombstone (org-glance-graph:get-headline graph id)))
         (should (buffer-live-p buffer))
         (goto-char (point-max))
         (insert "typed after the delete\n")
-        (org-glance-test:answering ((y-or-n-p t))
-          (org-glance-test:save)))
-      (should (org-glance-graph:live-meta graph id))
-      (should (f-exists? path))
-      (should-not (f-exists? snapshot)))))
+        (should-error (org-glance-test:save) :type 'user-error))
+      (should (eq 'tombstone (org-glance-graph:get-headline graph id)))
+      (should (f-exists? path)))))
 
-(ert-deftest org-glance-test:external-delete-after-a-save-strands-the-blob ()
-  "H2's visible half: a save landing BEFORE the fold leaves a tombstone over a
-blob back on disk, which `glance''s scan counts as unindexed."
+(ert-deftest org-glance-test:external-delete-refuses-before-fold ()
+  "A stored tombstone blocks a stale save before its notification is folded."
   (org-glance-test:with-graph graph
     (let* ((id "id1")
-           (path (org-glance-graph:content-path graph id)))
+           (path nil))
       (org-glance-graph:add graph (org-glance-test:headline id "* TODO foo"))
+      (setq path (org-glance-graph:content-path graph id))
       (org-glance-test:with-material (buffer graph id)
-        (f-delete (f-dirname path) t)
         (org-glance-test:external-delete graph id)
         (goto-char (point-max))
         (insert "typed before the fold\n")
-        (org-glance-test:answering ((y-or-n-p t))
-          (org-glance-test:save)))
+        (should-error (org-glance-test:save) :type 'user-error))
       (should (= 1 (org-glance-graph:refresh-external graph)))
       (should (eq 'tombstone (org-glance-graph:get-headline graph id)))
       (should (f-exists? path)))))

@@ -119,4 +119,38 @@
                          (org-glance-version:directory resumed)))
           (should-not (f-exists? data)))))))
 
+(ert-deftest org-glance-test:graph-writes-immutable-children ()
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "alpha" "* TODO Before"))
+    (let* ((dir (org-glance-graph:headline-data-path graph "alpha"))
+           (first (car (org-glance-version:leaves
+                        (org-glance-version:read dir "alpha"))))
+           (before (f-read-text (f-join (org-glance-version:directory first)
+                                        "data.org") 'utf-8)))
+      (should-not (f-file? (f-join dir "data.org")))
+      (org-glance-graph:add graph (org-glance-test:headline "alpha" "* DONE After"))
+      (let ((leaves (org-glance-version:leaves
+                     (org-glance-version:read dir "alpha"))))
+        (should (= 1 (length leaves)))
+        (should (equal (list (org-glance-version:id first))
+                       (org-glance-version:parents (car leaves))))
+        (should (equal before
+                       (f-read-text (f-join (org-glance-version:directory first)
+                                            "data.org") 'utf-8)))))))
+
+(ert-deftest org-glance-test:graph-refuses-an-ambiguous-version-family ()
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "alpha" "* TODO Root"))
+    (let* ((dir (org-glance-graph:headline-data-path graph "alpha"))
+           (root (car (org-glance-version:leaves
+                       (org-glance-version:read dir "alpha"))))
+           (parent (list (org-glance-version:id root))))
+      (org-glance-version:write-snapshot dir "alpha" parent "glance" "* TODO Left\n")
+      (org-glance-version:write-tombstone dir "alpha" parent "org-glance")
+      (should-error (org-glance-graph:content-path graph "alpha") :type 'user-error)
+      (should-error
+       (org-glance-graph:add graph (org-glance-test:headline "alpha" "* TODO Merge"))
+       :type 'user-error)
+      (should-error (org-glance-graph:delete graph "alpha") :type 'user-error))))
+
 ;;; test-version.el ends here

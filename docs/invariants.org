@@ -36,7 +36,8 @@ argument in [[file:proposals][docs/proposals/]].
    *every* save.  Violation: silent drift (always-nil field, match-everything filter),
    broken on-disk byte order, an unsaveable store.
 
-5. *Canonical blobs, derived indexes.*  =data/<id>/data.org= is canonical; metadata,
+5. *Canonical blobs, derived indexes.*  Immutable =data/<id>/versions/<version>/data.org=
+   snapshots are canonical; metadata,
    caches and sidecars are rebuildable (=org-glance-reindex=).  Write order: metadata
    first (fail before any write), blob before WAL append (=org-glance-graph:add=).  The
    property index (=cache/property-index.eld=) is a PURE derived cache — every read
@@ -731,8 +732,8 @@ today, up from 50.
     every parent set.  Compact JSON field order and the trailing newline are canonical
     across both producers.  Migration roots use deterministic UUIDv5 ids.  Pinned by the
     =org-glance-test:version-= cases.  Legacy =data.org= reads as an implicit root and
-    remains the active writer until both programs switch in one coordinated migration.
-    Offline migration publishes and verifies the root before removing =data.org=.
+    migrates before its next write.  Material saves, graph writes, and deletes publish
+    immutable children; ambiguous current leaves refuse mutation.
 
 * Known hazards
 
@@ -774,32 +775,11 @@ comparing them (=external-keeps-a-byte-identical-note=).
 
 ** H2 -- a folded delete is undone by the id's open material buffer
 
-=org-glance-material:delete= discards the id's open material buffer, naming unsaved edits
-in its consent prompt (inv 11).  The fold's tombstone arm inserts the spec and touches no
-buffer, so that buffer survives a folded delete and the next save's
-=org-glance-material:sync= appends a LIVE record over the tombstone.  Reproduced
-(=external-delete-is-undone-by-an-open-buffer=), both ways: with the blob directory left
-standing the save is silent; with it removed — as the daemon leaves it — the save asks
-org's own "Directory does not exist; create?" and a =yes= puts the blob back too.  A =no=
-aborts the save, so =after-save-hook= never runs and the tombstone stands: the record and
-the blob never come back apart.  What does not come back is the blob's occurrence
-history, canonical content under inv 5.
-
-- *Costs:* one live record and one recreated blob per delete of an id somebody had open,
-  minus that id's =occurrences/=.  Record and document come back together, so no
-  store-level counter moves in the ordinary interleaving.  It IS visible in one: a save
-  landing BEFORE the fold reads leaves the tombstone standing over a blob back on disk,
-  which =glance='s scan counts as an unindexed blob (=Data.Org.Index.driftOf=,
-  =dfUnindexed=) — pinned as =external-delete-after-a-save-strands-the-blob=.  Deleting
-  the resurrected id through =glance= again is refused, its trash destination already
-  holding that id (=Data.Org.Trash=, "the trash already holds"); =M-x org-glance-delete=
-  clears the record.
-- *Would close it:* discarding the buffer in the tombstone arm, as =material:delete=
-  does; or discarding only CLEAN buffers and leaving a dirty one with a warning.
-- *Open because:* a fold runs in the BACKGROUND, off any read, and =material:delete='s
-  consent-when-dirty guard exists precisely because discarding a dirty buffer needs a
-  human.  Silently discarding one during a background fold breaks inv 11 to save a record
-  =M-x org-glance-delete= clears in one command.
+CLOSED 2026-10-06.  A material buffer stays attached to the immutable version it opened.
+Its save publishes a child only while that version remains current; a newer snapshot or
+tombstone refuses the stale save.  Pinned by
+=external-delete-refuses-an-open-stale-buffer= and
+=external-delete-refuses-before-fold=.
 
 ** H3 -- a daemon HERE cannot notify an Emacs THERE
 

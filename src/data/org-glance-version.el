@@ -195,5 +195,17 @@
                     (member (org-glance-version:id version) parents))
                   versions)))
 
+(cl-defun org-glance-version:snapshot-leaves (headline-dir headline)
+  "Return HEADLINE's current snapshot versions below HEADLINE-DIR."
+  (cl-remove-if-not
+   (lambda (version) (eq 'snapshot (org-glance-version:kind version)))
+   (org-glance-version:leaves (org-glance-version:read headline-dir headline))))
+
+(cl-defun org-glance-version:file-p (path)
+  "Return non-nil when PATH is an immutable version data or metadata file."
+  (string-match-p
+   "/versions/[^/]+/\\(?:data\\.org\\|meta\\.json\\)\\'"
+   (expand-file-name path)))
+
 (provide 'org-glance-version)
 ;;; org-glance-version.el ends here

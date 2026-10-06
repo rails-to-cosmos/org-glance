@@ -5,13 +5,22 @@ Notable user-facing changes.  Versions date-based
 
 * Unreleased
 
+* 1.53.0.0.20261006.0
+
 ** Added
 - The shared immutable headline-version contract: UUIDv7 snapshots, deterministic
   UUIDv5 migration roots, parent-derived leaves, SHA-256 verification, and tombstones.
-  Legacy =data.org= remains active until the coordinated Glance migration.
 - The offline migration primitive publishes and verifies an immutable root before
   removing legacy =data.org=.
 - Immutable migration metadata is byte-identical to Glance output.
+- =M-x org-glance-migrate-versions= migrates every legacy blob explicitly.
+
+** Changed
+- Graph writes, material saves, and deletes publish immutable child versions; concurrent
+  current leaves refuse mutation until the user resolves them.
+
+** Fixed
+- An open material buffer cannot resurrect a headline deleted by an external writer.
 
 * 1.52.0.0.20261005.0
 

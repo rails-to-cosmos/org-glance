@@ -6,7 +6,7 @@
 
 ;; Author: Dmitry Akatov <dmitry.akatov@protonmail.com>
 ;; Created: 29 September, 2018
-;; Version: 1.52.0.0.20261005.0
+;; Version: 1.53.0.0.20261006.0
 ;; Package-Requires: ((emacs "29.1") (org) (aes) (dash) (f) (s) (transient) (table-view "0"))
 ;; Keywords: org-mode, outlines, data, database, store, projections
 ;; Homepage: https://github.com/rails-to-cosmos/org-glance
@@ -299,6 +299,14 @@ Never migrate or prompt; `M-x org-glance-migrate' converts."
                      "Legacy .metadata.el detected; run `M-x org-glance-migrate' to convert it to the graph store."
                      :warning))
   nil)
+
+;;;###autoload
+(cl-defun org-glance-migrate-versions (&optional (directory org-glance-directory))
+  "Migrate DIRECTORY's legacy blobs to immutable roots."
+  (interactive)
+  (let ((count (org-glance-graph:migrate-versions (org-glance-graph directory))))
+    (message "org-glance: migrated %d legacy headline version(s)" count)
+    count))
 
 (defface org-glance-link-materialize-face
   '((((background dark)) (:inherit default :underline "MediumPurple3"))

@@ -584,8 +584,17 @@ Ids longer than two characters shard by their first two."
        (f-join data id)))))
 
 (cl-defun org-glance-graph:content-path (graph id)
-  "Return the path of ID's content blob in GRAPH's data store."
-  (f-join (org-glance-graph:headline-data-path graph id) "data.org"))
+  "Return ID's sole current snapshot path in GRAPH, or its legacy creation path.
+Signal a `user-error' when ID has concurrent leaves of either kind."
+  (let* ((dir (org-glance-graph:headline-data-path graph id))
+         (leaves (org-glance-version:leaves (org-glance-version:read dir id))))
+    (pcase leaves
+      ('() (f-join dir "data.org"))
+      (`(,version)
+       (if (eq 'snapshot (org-glance-version:kind version))
+           (f-join (org-glance-version:directory version) "data.org")
+         (f-join dir "data.org")))
+      (_ (user-error "Headline %s has %d current variants" id (length leaves))))))
 
 (cl-defun org-glance-graph:put-content (graph headline)
   "Persist HEADLINE's contents atomically under GRAPH's store, keyed by its id.
@@ -593,19 +602,35 @@ Return the file path, or nil if HEADLINE has no id."
   (cl-check-type graph org-glance-graph)
   (cl-check-type headline org-glance-headline)
   (when-let* ((id (org-glance-headline:id headline)))
-    (let ((dir (org-glance-graph:headline-data-path graph id))
-          (path (org-glance-graph:content-path graph id)))
+    (let* ((dir (org-glance-graph:headline-data-path graph id))
+           (versions (org-glance-version:read dir id)))
       (f-mkdir-full-path dir)
-      (org-glance--atomic-write path (org-glance-headline:contents headline))
-      path)))
+      (when (cl-find "legacy" versions :key #'org-glance-version:producer :test #'equal)
+        (org-glance-version:migrate-legacy dir id))
+      (let* ((leaves (org-glance-version:leaves
+                      (org-glance-version:read dir id)))
+             (_ (when (> (length leaves) 1)
+                  (user-error "Headline %s has %d current variants" id (length leaves))))
+             (parents (mapcar #'org-glance-version:id leaves))
+             (version (org-glance-version:write-snapshot
+                       dir id parents "org-glance"
+                       (org-glance-headline:contents headline))))
+        (f-join (org-glance-version:directory version) "data.org")))))
 
 (cl-defun org-glance-graph:get-content (graph id)
   "Return ID's stored contents in GRAPH, even if tombstoned, or nil if none."
   (cl-check-type graph org-glance-graph)
   (cl-check-type id string)
-  (let ((path (org-glance-graph:content-path graph id)))
-    (when (f-exists? path)
-      (f-read-text path 'utf-8))))
+  (let* ((dir (org-glance-graph:headline-data-path graph id))
+         (path (org-glance-graph:content-path graph id))
+         (fallback
+          (cl-find-if
+           #'f-file?
+           (mapcar (lambda (version)
+                     (f-join (org-glance-version:directory version) "data.org"))
+                   (reverse (org-glance-version:read dir id)))))
+         (held (if (f-file? path) path fallback)))
+    (when held (f-read-text held 'utf-8))))
 
 (cl-defun org-glance-graph:make-id (graph)
   (cl-check-type graph org-glance-graph)
@@ -614,6 +639,20 @@ Return the file path, or nil if HEADLINE has no id."
            for data-path = (org-glance-graph:headline-data-path graph id)
            unless (f-exists? data-path)
            return (prog1 id (f-mkdir-full-path data-path))))
+
+(cl-defun org-glance-graph:migrate-versions (graph)
+  "Migrate every legacy headline blob in GRAPH; return the migrated count."
+  (let ((data (org-glance-graph:data-path graph))
+        (count 0))
+    (dolist (path (directory-files-recursively data "data\\.org\\'"))
+      (unless (org-glance-version:file-p path)
+        (let* ((dir (f-parent path))
+               (parts (split-string (f-relative dir data) "/" t))
+               (id (apply #'concat parts)))
+          (when (and (memq (length parts) '(1 2))
+                     (org-glance-version:migrate-legacy dir id))
+            (cl-incf count)))))
+    count))
 
 (cl-defun org-glance-graph:add (graph &rest headlines)
   "Add HEADLINES, each a headline or pre-built metadata, to GRAPH; return GRAPH.
@@ -669,6 +708,16 @@ The guard `org-glance-graph:delete' shares with the fold (invariant 30)."
   (cl-check-type graph org-glance-graph)
   (cl-check-type id string)
   (when-let* ((spec (org-glance-graph--tombstone-spec graph id)))
+    (let* ((dir (org-glance-graph:headline-data-path graph id))
+           (versions (org-glance-version:read dir id)))
+      (when (cl-find "legacy" versions :key #'org-glance-version:producer :test #'equal)
+        (org-glance-version:migrate-legacy dir id))
+      (let ((leaves (org-glance-version:leaves
+                     (org-glance-version:read dir id))))
+        (when (> (length leaves) 1)
+          (user-error "Headline %s has %d current variants" id (length leaves)))
+        (org-glance-version:write-tombstone
+         dir id (mapcar #'org-glance-version:id leaves) "org-glance")))
     (org-glance-graph:insert graph (list spec))))
 
 (cl-defun org-glance-graph:headlines (graph)
