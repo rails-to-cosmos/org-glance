@@ -731,6 +731,7 @@ today, up from 50.
     every parent set.  Migration roots use deterministic UUIDv5 ids.  Pinned by the
     =org-glance-test:version-= cases.  Legacy =data.org= reads as an implicit root and
     remains the active writer until both programs switch in one coordinated migration.
+    Offline migration publishes and verifies the root before removing =data.org=.
 
 * Known hazards
 

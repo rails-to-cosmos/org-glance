@@ -80,13 +80,18 @@
   "Create one immutable KIND version, optionally holding CONTENTS."
   (let* ((id (org-glance-version--uuid-v7))
          (final (org-glance-version:path headline-dir id))
-         (parent (f-parent final))
          (created (format-time-string "%Y-%m-%dT%H:%M:%SZ" nil t))
          (version (make-org-glance-version
                    :schema 1 :headline headline :id id :kind kind
                    :parents (sort (copy-sequence parents) #'string<)
                    :content-sha256 (and contents (secure-hash 'sha256 contents))
                    :created created :producer producer :directory final)))
+    (org-glance-version--publish version contents)))
+
+(cl-defun org-glance-version--publish (version contents)
+  "Publish VERSION atomically, optionally storing CONTENTS."
+  (let* ((final (org-glance-version:directory version))
+         (parent (f-parent final)))
     (f-mkdir-full-path parent)
     (let ((temp (make-temp-file (f-join parent ".version-") t)))
       (unwind-protect
@@ -156,6 +161,31 @@
              :created "1970-01-01T00:00:00Z" :producer "legacy"
              :directory headline-dir))
         (error nil)))))
+
+(cl-defun org-glance-version:migrate-legacy (headline-dir headline)
+  "Publish HEADLINE's deterministic root, then remove legacy data.org."
+  (when-let* ((legacy (org-glance-version--legacy headline-dir headline))
+              (data (f-join headline-dir "data.org"))
+              (contents (f-read-text data 'utf-8))
+              (id (org-glance-version:id legacy))
+              (final (org-glance-version:path headline-dir id)))
+    (let ((version (make-org-glance-version
+                    :schema 1 :headline headline :id id :kind 'snapshot
+                    :parents nil
+                    :content-sha256 (org-glance-version:content-sha256 legacy)
+                    :created "1970-01-01T00:00:00Z" :producer "migration"
+                    :directory final)))
+      (if (f-directory? final)
+          (unless (cl-find-if
+                   (lambda (held)
+                     (and (equal final (org-glance-version:directory held))
+                          (equal (org-glance-version:content-sha256 held)
+                                 (org-glance-version:content-sha256 version))))
+                   (org-glance-version:read headline-dir headline))
+            (error "Invalid migration root already exists: %s" final))
+        (org-glance-version--publish version contents))
+      (delete-file data)
+      version)))
 
 (cl-defun org-glance-version:leaves (versions)
   "Return VERSIONS not named as another version's parent."

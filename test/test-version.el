@@ -83,4 +83,30 @@
                                (org-glance-version:leaves
                                 (org-glance-version:read dir "alpha")))))))))
 
+(ert-deftest org-glance-test:legacy-migration-publishes-before-removal ()
+  (with-temp-directory dir
+    (let* ((doc "* Alpha\n")
+           (data (f-join dir "data.org")))
+      (f-write-text doc 'utf-8 data)
+      (let ((migrated (org-glance-version:migrate-legacy dir "alpha")))
+        (should-not (f-exists? data))
+        (should (f-file? (f-join (org-glance-version:directory migrated) "data.org")))
+        (should (f-file? (f-join (org-glance-version:directory migrated) "meta.json")))
+        (let ((stored (car (org-glance-version:read dir "alpha"))))
+          (should (equal (org-glance-version:id migrated)
+                         (org-glance-version:id stored)))
+          (should (equal "migration" (org-glance-version:producer stored))))))))
+
+(ert-deftest org-glance-test:legacy-migration-resumes-a-published-root ()
+  (with-temp-directory dir
+    (let* ((doc "* Alpha\n")
+           (data (f-join dir "data.org")))
+      (f-write-text doc 'utf-8 data)
+      (let ((first (org-glance-version:migrate-legacy dir "alpha")))
+        (f-write-text doc 'utf-8 data)
+        (let ((resumed (org-glance-version:migrate-legacy dir "alpha")))
+          (should (equal (org-glance-version:directory first)
+                         (org-glance-version:directory resumed)))
+          (should-not (f-exists? data)))))))
+
 ;;; test-version.el ends here

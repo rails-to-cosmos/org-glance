@@ -9,6 +9,8 @@ Notable user-facing changes.  Versions date-based
 - The shared immutable headline-version contract: UUIDv7 snapshots, deterministic
   UUIDv5 migration roots, parent-derived leaves, SHA-256 verification, and tombstones.
   Legacy =data.org= remains active until the coordinated Glance migration.
+- The offline migration primitive publishes and verifies an immutable root before
+  removing legacy =data.org=.
 
 * 1.52.0.0.20261005.0
 

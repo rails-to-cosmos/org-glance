@@ -22,10 +22,15 @@ Legacy =data.org= now reads as a deterministic implicit snapshot root in the
 version contract.  A stored child that names that UUIDv5 root becomes the sole
 leaf while the compatibility file remains in place.
 
+The offline migration primitive publishes that root atomically, verifies and
+reuses an already-published root after interruption, and removes =data.org=
+only after publication.  No command invokes it before the coordinated writer
+cutover.
+
 * Remaining coordinated switch
 
-Migrate legacy blobs deterministically and update material saves so they create
-children instead of mutating a leaf.  Glance must
+Update material saves so they create children instead of mutating a leaf.
+Glance must
 switch its reader, writer, composite row identity, and variant UI in the same
 compatibility stage.  Until then =data.org= stays canonical, preserving current
 org-glance behavior and preventing a mixed-writer store.
