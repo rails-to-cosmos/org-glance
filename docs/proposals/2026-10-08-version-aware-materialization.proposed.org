@@ -1,0 +1,133 @@
+#+TITLE: Version-aware materialization and variant resolution
+#+DATE: 2026-10-08
+#+STATUS: proposed
+
+* Finding
+
+The reported =Messaging House= failure is client capability skew.  The live
+headline =84c23511-b2b6-42da-aba6-e9a73f045db4= contains seven immutable
+snapshots in one parent chain and has one current leaf,
+=01a11b15-7ba0-7b33-9630-193c40dc555b=.  Its history requires no merge.
+
+The running Emacs loads =org-glance-20261005.1247=.  That package predates
+=org-glance-version.el=, resolves the legacy =data.org= path, and reports:
+
+#+begin_example
+No stored content for id 84c23511-b2b6-42da-aba6-e9a73f045db4
+#+end_example
+
+The published 1.53 package and current source derive the sole current leaf and
+materialize its snapshot.  The leaf calculation and single-leaf content path
+are pinned in
+[[https://github.com/rails-to-cosmos/org-glance/blob/38ac98c894ac77aff814478187d879facc4fedb6/src/data/org-glance-version.el#L190-L202][org-glance-version.el:190]]
+and
+[[https://github.com/rails-to-cosmos/org-glance/blob/38ac98c894ac77aff814478187d879facc4fedb6/src/data/org-glance-graph.el#L586-L597][org-glance-graph.el:586]].
+
+Glance also derives one current row.  It emits =variantCount= only for several
+current leaves and renders that count beside the title.  See
+[[https://gitlab.com/rails-to-cosmos/glance/-/blob/b8a8cbfc66de434ddcdfc7c0adfe077d13749d18/src-query/Glance/Query.hs#L3121-3125][Query.hs:3121]]
+and
+[[https://gitlab.com/rails-to-cosmos/glance/-/blob/b8a8cbfc66de434ddcdfc7c0adfe077d13749d18/assets/table-view.js#L3360-3363][table-view.js:3360]].
+The absent badge is correct for this headline.
+
+* Terms
+
+- A *version* is any validated immutable snapshot or tombstone in a headline's
+  DAG.  Ancestor versions form history.
+- A *current variant* is a leaf version.  One leaf is the ordinary state.
+  Several leaves require resolution.
+- A *client capability mismatch* occurs when a reader predates the store schema
+  it encounters.  It is a deployment problem, independent of the leaf count.
+
+Messages, tests, and UI labels use these terms.  The phrase “multiple versions”
+never implies a conflict.
+
+* Immediate recovery
+
+Upgrade org-glance to 1.53 or newer and restart Emacs before changing the live
+store.  The upgraded reader materializes =Messaging House= from its sole leaf.
+No merge or store rewrite participates in recovery.
+
+Future storage cutovers publish the capable org-glance package first, verify
+the installed reader, and enable the Glance writer second.  The migration
+command names the minimum org-glance version in its confirmation and doctor
+output.  A missing legacy =data.org= remains a safe refusal for an old client;
+recreating that mutable compatibility file would permit an old writer to lose
+immutable history.
+
+* Org-glance behavior for actual variants
+
+Materialization branches on the derived leaf set:
+
+1. One snapshot leaf opens the editable material buffer attached to that exact
+   version.
+2. One tombstone leaf reports that the headline is deleted.
+3. Several leaves open a *headline variants table*.
+4. No valid leaf reports corrupt or incomplete version storage and points to
+   the doctor command.
+
+The completion candidate gains an =N variants= suffix only in case 3.  The main
+table gains a *Variants* column after Title; its cell is blank for zero or one
+leaf and shows the count for several leaves.  The count is derived from version
+metadata and never persisted in the headline WAL.  One graph-scoped version
+index supplies both surfaces and invalidates with the graph's store snapshot,
+so a table fill does not walk every version directory once per consumer.
+
+The headline variants table reuses =table-view=.  Rows represent current leaves
+and show Version, Producer, Created, Kind, State, Title, and Tags.  =RET= opens
+the selected snapshot read-only.  Tombstones have no preview.  A =Merge
+variants= producer row opens the headline merge table with =RET=; =m= keeps its
+ordinary table-view mark meaning.
+
+The headline merge table follows Glance's existing domain contract:
+
+- equal attributes carry forward without a choice;
+- every divergent scalar chooses one parent value;
+- tags choose one parent set or the normalized union;
+- body and children choose one complete parent document;
+- deletion races require an explicit keep-content or keep-deleted outcome;
+- finalization reparses the result and writes one child whose parents are the
+  complete captured leaf set;
+- finalization refuses when the current leaf set changed while the table was
+  open.
+
+The result is an ordinary org-glance version with merge provenance compatible
+with Glance.  Snapshot results append their parsed metadata to the WAL;
+tombstone results append the logical deletion.  The variants and merge tables
+then refresh to the single result leaf.
+
+* Scope
+
+This proposal adds native Emacs resolution for concurrent current leaves.  It
+does not add semantic text merging, automatic winner selection, version
+pruning, or a second version schema.  Glance keeps its current badge, headline
+variants table, and headline merge table.  =H= remains the history surface for
+all versions.
+
+* Oracles
+
+- The live =Messaging House= probe reads as seven versions, one leaf, and
+  materializes without a variants table; a matching seven-snapshot linear test
+  fixture pins the behavior.
+- A two-snapshot family shows =2 variants= in completion and the main table;
+  materialization opens the headline variants table.
+- =RET= on the =Merge variants= producer row opens headline merge; =m= still
+  marks an ordinary row.
+- Snapshot preview is read-only and never changes the selected parent.
+- A parent-complete merge produces one leaf in both org-glance and Glance.
+- A leaf arriving after the merge table opens causes a stale refusal and no
+  write.
+- Snapshot/tombstone resolution requires an explicit outcome.
+- A pre-version org-glance package reproduces the capability error without
+  changing any version directory.
+
+* Delivery
+
+1. Publish and install the existing 1.53 version-aware reader; verify
+   =Messaging House= materialization.
+2. Add the graph-scoped version index and variant counts to completion and the
+   main table.
+3. Add the headline variants table and read-only leaf preview.
+4. Add the attribute merge table, parent-complete writer, and interoperability
+   fixtures.
+5. Add the reader-version preflight to future migration and doctor workflows.

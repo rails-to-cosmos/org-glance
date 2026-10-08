@@ -8,7 +8,7 @@ Proposal files hold design detail; [[file:../org-glance.org][org-glance.org]] re
 When work lands, mark its item =DONE=, rename its proposal from =.proposed= to
 =.done=, update [[file:../CHANGELOG.org][CHANGELOG.org]], and record the verification in the proposal.
 
-Last reviewed: 2026-10-01.  Proposal inventory: 29 resolved, 16 proposed; the
+Last reviewed: 2026-10-08.  Proposal inventory: 30 resolved, 17 proposed; the
 composable-tag-template proposal has one shipped phase and two proposed phases.
 
 * DONE 0. Reconcile roadmap status
@@ -45,6 +45,15 @@ CLOSED: [2026-10-01]
 - [X] Replace the portable interop case with a local-index contract.
 
 [[file:proposals/2026-10-01-local-cache-retires-portable-projections.done.org][Proposal: local cache retires portable projections]]
+
+* TODO 0.8 Restore version-aware materialization, then resolve variants
+
+- [ ] Install the published version-aware reader and verify =Messaging House=.
+- [ ] Show a derived count only for several current leaves.
+- [ ] Open actual conflicts in a table-view headline variants table.
+- [ ] Write parent-complete resolutions compatible with Glance.
+
+[[file:proposals/2026-10-08-version-aware-materialization.proposed.org][Proposal: version-aware materialization and variant resolution]]
 
 * TODO 1. Consolidate the view and table architecture
 
