@@ -183,6 +183,9 @@ evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
     org-glance. Leaves derive from every identifiable node before payload integrity is
     checked. Writers publish immutable children; legacy `data.org` is an implicit root
     and migrates before its next write.
+40. Immutable history retains 10 generations by default. The tree-wide
+    =#+GLANCE_HEADLINE_HISTORY_DEPTH:= setting overrides it; zero is unlimited,
+    and retention never prunes a family with several structural leaves.
 
 ## Known hazards
 

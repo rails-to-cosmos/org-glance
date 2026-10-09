@@ -189,4 +189,48 @@
       (should-error (org-glance-graph:content-path graph "alpha")
                     :type 'user-error))))
 
+(ert-deftest org-glance-test:graph-retains-ten-version-generations-by-default ()
+  (org-glance-test:with-graph graph
+    (dotimes (n 12)
+      (org-glance-graph:add
+       graph (org-glance-test:headline "alpha" (format "* TODO Version %d" n))))
+    (let* ((dir (org-glance-graph:headline-data-path graph "alpha"))
+           (history (org-glance-version:history dir "alpha"))
+           (ids (mapcar #'org-glance-version:id history)))
+      (should (= 10 (length history)))
+      (should (= 1 (cl-loop for version in history
+                            sum (cl-count-if-not
+                                 (lambda (parent) (member parent ids))
+                                 (org-glance-version:parents version))))))))
+
+(ert-deftest org-glance-test:graph-reads-version-depth-from-system-config ()
+  (org-glance-test:with-graph graph
+    (let ((system (org-glance-graph:config-file graph "system.org")))
+      (f-mkdir-full-path (f-parent system))
+      (f-write-text "#+GLANCE_HEADLINE_HISTORY_DEPTH: 3\n" 'utf-8 system))
+    (dotimes (n 5)
+      (org-glance-graph:add
+       graph (org-glance-test:headline "alpha" (format "* TODO Version %d" n))))
+    (should (= 3 (length
+                  (org-glance-version:history
+                   (org-glance-graph:headline-data-path graph "alpha") "alpha"))))
+    (f-write-text "#+GLANCE_HEADLINE_HISTORY_DEPTH: 0\n" 'utf-8
+                  (org-glance-graph:config-file graph "system.org"))
+    (dotimes (n 3)
+      (org-glance-graph:add
+       graph (org-glance-test:headline "alpha" (format "* TODO Unlimited %d" n))))
+    (should (= 6 (length
+                  (org-glance-version:history
+                   (org-glance-graph:headline-data-path graph "alpha") "alpha"))))))
+
+(ert-deftest org-glance-test:version-retention-skips-conflicts ()
+  (with-temp-directory dir
+    (let* ((root (org-glance-version:write-snapshot
+                  dir "alpha" nil "org-glance" "root"))
+           (parent (list (org-glance-version:id root))))
+      (org-glance-version:write-snapshot dir "alpha" parent "glance" "left")
+      (org-glance-version:write-snapshot dir "alpha" parent "org-glance" "right")
+      (should-not (org-glance-version:prune dir "alpha" 1))
+      (should (= 3 (length (org-glance-version:history dir "alpha")))))))
+
 ;;; test-version.el ends here

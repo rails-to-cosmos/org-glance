@@ -109,6 +109,11 @@ Org link types org-glance registers; all follow with the ordinary =C-c C-o=.
   emit it from a tag's =#+TODO:= cycle (its config file) so org renders, faces
   and cycles those states natively; the table shows a coloured =#+TODO:= line of
   the graph's live states in its header (always visible).
+- =#+GLANCE_HEADLINE_HISTORY_DEPTH:= — the number of immutable generations
+  retained after a successful graph write.  It lives in =config/system.org=,
+  defaults to =10=, and =0= keeps unlimited history.  Retention leaves a
+  concurrent-leaf family unchanged and is read by
+  =org-glance-graph--headline-history-depth=.
 
 * Crypt blocks and materialization
 

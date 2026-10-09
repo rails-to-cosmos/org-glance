@@ -76,7 +76,8 @@
          (t nil)))
     (error nil)))
 
-(cl-defun org-glance-version--write (headline-dir headline parents producer kind contents)
+(cl-defun org-glance-version--write
+    (headline-dir headline parents producer kind contents depth)
   "Create one immutable KIND version, optionally holding CONTENTS."
   (let* ((id (org-glance-version--uuid-v7))
          (final (org-glance-version:path headline-dir id))
@@ -86,7 +87,8 @@
                    :parents (sort (copy-sequence parents) #'string<)
                    :content-sha256 (and contents (secure-hash 'sha256 contents))
                    :created created :producer producer :directory final :valid t)))
-    (org-glance-version--publish version contents)))
+    (prog1 (org-glance-version--publish version contents)
+      (org-glance-version:prune headline-dir headline depth))))
 
 (cl-defun org-glance-version--publish (version contents)
   "Publish VERSION atomically, optionally storing CONTENTS."
@@ -108,13 +110,16 @@
     version))
 
 (cl-defun org-glance-version:write-snapshot
-    (headline-dir headline parents producer contents)
+    (headline-dir headline parents producer contents &optional (depth 10))
   "Create a snapshot version below HEADLINE-DIR."
-  (org-glance-version--write headline-dir headline parents producer 'snapshot contents))
+  (org-glance-version--write
+   headline-dir headline parents producer 'snapshot contents depth))
 
-(cl-defun org-glance-version:write-tombstone (headline-dir headline parents producer)
+(cl-defun org-glance-version:write-tombstone
+    (headline-dir headline parents producer &optional (depth 10))
   "Create a tombstone version below HEADLINE-DIR."
-  (org-glance-version--write headline-dir headline parents producer 'tombstone nil))
+  (org-glance-version--write
+   headline-dir headline parents producer 'tombstone nil depth))
 
 (cl-defun org-glance-version:read (headline-dir headline)
   "Read HEADLINE's valid version metadata below HEADLINE-DIR."
@@ -205,6 +210,40 @@ Each returned node carries payload integrity in its `valid' slot."
   "Return HEADLINE's structural leaves, including damaged payloads."
   (org-glance-version:leaves
    (org-glance-version:history headline-dir headline)))
+
+(cl-defun org-glance-version:prune (headline-dir headline depth)
+  "Retain DEPTH generations of HEADLINE history and return removed ids.
+Zero keeps all history.  A family with several structural leaves is unchanged."
+  (when (> depth 0)
+    (let* ((history (org-glance-version:history headline-dir headline))
+           (leaves (org-glance-version:leaves history)))
+      (when (= 1 (length leaves))
+        (let ((by-id (make-hash-table :test #'equal))
+              (kept (make-hash-table :test #'equal))
+              (frontier (list (org-glance-version:id (car leaves))))
+              (remaining (1- depth))
+              removed)
+          (dolist (version history)
+            (puthash (org-glance-version:id version) version by-id))
+          (puthash (car frontier) t kept)
+          (while (and (> remaining 0) frontier)
+            (setq frontier
+                  (delete-dups
+                   (cl-loop for id in frontier
+                            for version = (gethash id by-id)
+                            when version
+                            append (cl-remove-if-not
+                                    (lambda (parent) (gethash parent by-id))
+                                    (org-glance-version:parents version)))))
+            (dolist (id frontier) (puthash id t kept))
+            (setq remaining (1- remaining)))
+          (dolist (version history (nreverse removed))
+            (let ((id (org-glance-version:id version)))
+              (when (and (not (gethash id kept))
+                         (equal (org-glance-version:directory version)
+                                (org-glance-version:path headline-dir id)))
+                (delete-directory (org-glance-version:directory version) t)
+                (push id removed)))))))))
 
 (cl-defun org-glance-version:snapshot-leaves (headline-dir headline)
   "Return HEADLINE's current snapshot versions below HEADLINE-DIR."

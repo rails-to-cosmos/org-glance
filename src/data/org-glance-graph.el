@@ -596,6 +596,27 @@ Signal a `user-error' when ID has concurrent leaves of either kind."
          (f-join dir "data.org")))
       (_ (user-error "Headline %s has %d current variants" id (length leaves))))))
 
+(defconst org-glance-graph--default-headline-history-depth 10)
+
+(cl-defun org-glance-graph--headline-history-depth (graph)
+  "Return GRAPH's configured immutable headline history depth."
+  (let ((path (org-glance-graph:config-file graph "system.org"))
+        (depth org-glance-graph--default-headline-history-depth)
+        (case-fold-search t))
+    (when (f-file? path)
+      (with-temp-buffer
+        (insert-file-contents path)
+        (goto-char (point-min))
+        (while (re-search-forward
+                "^#\\+GLANCE_HEADLINE_HISTORY_DEPTH:[ \t]*\\(.*\\)$"
+                nil t)
+          (let ((value (string-trim (match-string 1))))
+            (setq depth
+                  (if (string-match-p "\\`[0-9]+\\'" value)
+                      (string-to-number value)
+                    org-glance-graph--default-headline-history-depth))))))
+    depth))
+
 (cl-defun org-glance-graph:put-content (graph headline)
   "Persist HEADLINE's contents atomically under GRAPH's store, keyed by its id.
 Return the file path, or nil if HEADLINE has no id."
@@ -613,7 +634,8 @@ Return the file path, or nil if HEADLINE has no id."
              (parents (mapcar #'org-glance-version:id leaves))
              (version (org-glance-version:write-snapshot
                        dir id parents "org-glance"
-                       (org-glance-headline:contents headline))))
+                       (org-glance-headline:contents headline)
+                       (org-glance-graph--headline-history-depth graph))))
         (f-join (org-glance-version:directory version) "data.org")))))
 
 (cl-defun org-glance-graph:get-content (graph id)
@@ -715,7 +737,8 @@ The guard `org-glance-graph:delete' shares with the fold (invariant 30)."
         (when (> (length leaves) 1)
           (user-error "Headline %s has %d current variants" id (length leaves)))
         (org-glance-version:write-tombstone
-         dir id (mapcar #'org-glance-version:id leaves) "org-glance")))
+         dir id (mapcar #'org-glance-version:id leaves) "org-glance"
+         (org-glance-graph--headline-history-depth graph))))
     (org-glance-graph:insert graph (list spec))))
 
 (cl-defun org-glance-graph:headlines (graph)
