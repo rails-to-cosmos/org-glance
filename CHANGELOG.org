@@ -5,6 +5,14 @@ Notable user-facing changes.  Versions date-based
 
 * Unreleased
 
+** Added
+- =org-glance-version:history= exposes every identifiable version node with its
+  payload-integrity flag.
+
+** Fixed
+- Checksum-invalid leaves remain in version ancestry, so graph writes, deletes,
+  and material saves cannot promote an ancestor or miss a concurrent leaf.
+
 * 1.53.0.0.20261006.0
 
 ** Added

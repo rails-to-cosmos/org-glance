@@ -1,0 +1,37 @@
+#+TITLE: Immutable headline versions
+#+DATE: 2026-10-05
+#+STATUS: done
+
+* Contract
+
+Org-glance and Glance share schema-1 immutable version metadata under
+=data/HH/ID/versions/VERSION-ID/=. A snapshot carries =data.org= and
+=meta.json=; a tombstone carries metadata alone. Parent references over every
+identifiable node derive the structural leaf set. Payload integrity is a
+separate fact. UUIDv7 names ordinary versions; UUIDv5 over logical id and
+content digest names migration roots.
+
+* Implemented
+
+=org-glance-version.el= publishes complete version directories atomically,
+reads complete history, verifies payload integrity, and derives structural
+leaves. Graph writes, deletes, and material saves use those leaves and refuse a
+several-leaf family. Valid-only reads remain available for callers that need
+readable payloads. The implementation and focused regression tests are in
+[[https://github.com/rails-to-cosmos/org-glance/commit/a635398][a635398]]
+=src/data/org-glance-version.el:119= and =test/test-version.el:41=.
+
+Legacy =data.org= reads as a deterministic implicit snapshot root. Migration
+publishes that root atomically, verifies an interrupted publication, and removes
+the compatibility file after publication. Canonical compact JSON field order
+and a trailing newline match Glance byte for byte.
+
+The cross-repository interop suite covers concurrent leaves, merge resolution,
+checksum-invalid ancestry, and the sole-current invariant across org-glance,
+Glance HTTP History, and MCP.
+
+* Verification
+
+- =eask recompile=: 21 files, no compile failures.
+- =eask run command test=: 440 tests, 0 unexpected.
+- Glance =make interop=: 19 cases, including history-tree parity.

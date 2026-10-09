@@ -728,12 +728,16 @@ today, up from 50.
 39. *Immutable version metadata is shared with Glance.*  Schema 1 records a UUIDv7
     version id, logical headline id, =snapshot= or =tombstone= kind, sorted parent
     ids, optional SHA-256 content digest, UTC creation time, and producer.  Version
-    directories publish by sibling-directory rename; leaves are versions absent from
-    every parent set.  Compact JSON field order and the trailing newline are canonical
+    directories publish by sibling-directory rename; leaves are identifiable versions
+    absent from every parent set, including nodes whose payload fails integrity checks.
+    Compact JSON field order and the trailing newline are canonical
     across both producers.  Migration roots use deterministic UUIDv5 ids.  Pinned by the
     =org-glance-test:version-= cases.  Legacy =data.org= reads as an implicit root and
     migrates before its next write.  Material saves, graph writes, and deletes publish
-    immutable children; ambiguous current leaves refuse mutation.
+    immutable children; ambiguous current leaves refuse mutation. Enforced by
+    [[https://github.com/rails-to-cosmos/org-glance/commit/a635398][a635398]]
+    =src/data/org-glance-version.el:119= and pinned by
+    =test/test-version.el:41=.
 
 * Known hazards
 

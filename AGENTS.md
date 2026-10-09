@@ -180,8 +180,9 @@ evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
 39. Immutable headline-version metadata is schema 1: UUIDv7 id, logical headline
     id, kind, sorted parents, SHA-256 content digest, UTC creation time, and producer.
     Its compact JSON field order and trailing newline are canonical across Glance and
-    org-glance. Leaves derive from parent references. Writers publish immutable children;
-    legacy `data.org` is an implicit root and migrates before its next write.
+    org-glance. Leaves derive from every identifiable node before payload integrity is
+    checked. Writers publish immutable children; legacy `data.org` is an implicit root
+    and migrates before its next write.
 
 ## Known hazards
 
