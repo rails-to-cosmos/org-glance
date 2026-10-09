@@ -587,7 +587,7 @@ Ids longer than two characters shard by their first two."
   "Return ID's sole current snapshot path in GRAPH, or its legacy creation path.
 Signal a `user-error' when ID has concurrent leaves of either kind."
   (let* ((dir (org-glance-graph:headline-data-path graph id))
-         (leaves (org-glance-version:leaves (org-glance-version:read dir id))))
+         (leaves (org-glance-version:current dir id)))
     (pcase leaves
       ('() (f-join dir "data.org"))
       (`(,version)
@@ -607,8 +607,7 @@ Return the file path, or nil if HEADLINE has no id."
       (f-mkdir-full-path dir)
       (when (cl-find "legacy" versions :key #'org-glance-version:producer :test #'equal)
         (org-glance-version:migrate-legacy dir id))
-      (let* ((leaves (org-glance-version:leaves
-                      (org-glance-version:read dir id)))
+      (let* ((leaves (org-glance-version:current dir id))
              (_ (when (> (length leaves) 1)
                   (user-error "Headline %s has %d current variants" id (length leaves))))
              (parents (mapcar #'org-glance-version:id leaves))
@@ -628,7 +627,7 @@ Return the file path, or nil if HEADLINE has no id."
            #'f-file?
            (mapcar (lambda (version)
                      (f-join (org-glance-version:directory version) "data.org"))
-                   (reverse (org-glance-version:read dir id)))))
+                   (reverse (org-glance-version:history dir id)))))
          (held (if (f-file? path) path fallback)))
     (when held (f-read-text held 'utf-8))))
 
@@ -712,8 +711,7 @@ The guard `org-glance-graph:delete' shares with the fold (invariant 30)."
            (versions (org-glance-version:read dir id)))
       (when (cl-find "legacy" versions :key #'org-glance-version:producer :test #'equal)
         (org-glance-version:migrate-legacy dir id))
-      (let ((leaves (org-glance-version:leaves
-                     (org-glance-version:read dir id))))
+      (let ((leaves (org-glance-version:current dir id)))
         (when (> (length leaves) 1)
           (user-error "Headline %s has %d current variants" id (length leaves)))
         (org-glance-version:write-tombstone

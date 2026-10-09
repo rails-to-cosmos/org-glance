@@ -120,9 +120,8 @@ Plugins use it instead of the buffer-local internals."
                    org-glance-material--graph org-glance-material--id))
              (selected (f-filename (f-parent buffer-file-name)))
              (current (mapcar #'org-glance-version:id
-                              (org-glance-version:leaves
-                               (org-glance-version:read
-                                dir org-glance-material--id)))))
+                              (org-glance-version:current
+                               dir org-glance-material--id))))
         (unless (member selected current)
           (user-error "Headline %s changed to another current version"
                       org-glance-material--id))))

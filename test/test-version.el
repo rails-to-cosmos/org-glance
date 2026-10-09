@@ -44,7 +44,27 @@
                     dir "alpha" nil "org-glance" "original")))
       (f-write-text "changed" 'utf-8
                     (org-glance-version:data-file dir (org-glance-version:id version)))
-      (should-not (org-glance-version:read dir "alpha")))))
+      (should-not (org-glance-version:read dir "alpha"))
+      (let ((history (org-glance-version:history dir "alpha")))
+        (should (= 1 (length history)))
+        (should-not (org-glance-version:valid (car history)))
+        (should (equal (list (org-glance-version:id version))
+                       (mapcar #'org-glance-version:id
+                               (org-glance-version:current dir "alpha"))))))))
+
+(ert-deftest org-glance-test:damaged-child-does-not-promote-ancestor ()
+  (with-temp-directory dir
+    (let* ((root (org-glance-version:write-snapshot
+                  dir "alpha" nil "org-glance" "root"))
+           (child (org-glance-version:write-snapshot
+                   dir "alpha" (list (org-glance-version:id root))
+                   "glance" "child")))
+      (f-write-text "changed" 'utf-8
+                    (org-glance-version:data-file dir
+                                                  (org-glance-version:id child)))
+      (should (equal (list (org-glance-version:id child))
+                     (mapcar #'org-glance-version:id
+                             (org-glance-version:current dir "alpha")))))))
 
 (ert-deftest org-glance-test:legacy-version-id-is-deterministic-uuid-v5 ()
   (let ((id (org-glance-version:legacy-id "alpha" "digest-a")))
@@ -152,5 +172,21 @@
        (org-glance-graph:add graph (org-glance-test:headline "alpha" "* TODO Merge"))
        :type 'user-error)
       (should-error (org-glance-graph:delete graph "alpha") :type 'user-error))))
+
+(ert-deftest org-glance-test:graph-counts-damaged-structural-leaves ()
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "alpha" "* TODO Root"))
+    (let* ((dir (org-glance-graph:headline-data-path graph "alpha"))
+           (root (car (org-glance-version:current dir "alpha")))
+           (parent (list (org-glance-version:id root)))
+           (damaged (org-glance-version:write-snapshot
+                     dir "alpha" parent "glance" "* TODO Damaged\n")))
+      (org-glance-version:write-snapshot
+       dir "alpha" parent "org-glance" "* TODO Readable\n")
+      (f-write-text "* TODO Edited\n" 'utf-8
+                    (org-glance-version:data-file
+                     dir (org-glance-version:id damaged)))
+      (should-error (org-glance-graph:content-path graph "alpha")
+                    :type 'user-error))))
 
 ;;; test-version.el ends here

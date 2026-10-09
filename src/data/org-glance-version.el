@@ -9,7 +9,7 @@
 
 (cl-defstruct (org-glance-version (:predicate org-glance-version?)
                                   (:conc-name org-glance-version:))
-  schema headline id kind parents content-sha256 created producer directory)
+  schema headline id kind parents content-sha256 created producer directory valid)
 
 (cl-defun org-glance-version:path (headline-dir version-id)
   "Return VERSION-ID's immutable directory below HEADLINE-DIR."
@@ -85,7 +85,7 @@
                    :schema 1 :headline headline :id id :kind kind
                    :parents (sort (copy-sequence parents) #'string<)
                    :content-sha256 (and contents (secure-hash 'sha256 contents))
-                   :created created :producer producer :directory final)))
+                   :created created :producer producer :directory final :valid t)))
     (org-glance-version--publish version contents)))
 
 (cl-defun org-glance-version--publish (version contents)
@@ -118,6 +118,12 @@
 
 (cl-defun org-glance-version:read (headline-dir headline)
   "Read HEADLINE's valid version metadata below HEADLINE-DIR."
+  (cl-remove-if-not #'org-glance-version:valid
+                    (org-glance-version:history headline-dir headline)))
+
+(cl-defun org-glance-version:history (headline-dir headline)
+  "Read HEADLINE's identifiable version history below HEADLINE-DIR.
+Each returned node carries payload integrity in its `valid' slot."
   (let* ((root (f-join headline-dir "versions"))
          (stored
           (when (f-directory? root)
@@ -131,15 +137,15 @@
                            (error nil))
                when (and raw (= 1 (plist-get raw :version))
                          (equal headline (plist-get raw :headline))
-                         (equal (f-filename dir) (plist-get raw :id))
-                         (org-glance-version--valid-content-p dir raw))
+                         (equal (f-filename dir) (plist-get raw :id)))
                collect (make-org-glance-version
                         :schema 1 :headline headline :id (plist-get raw :id)
                         :kind (intern (plist-get raw :kind))
                         :parents (plist-get raw :parents)
                         :content-sha256 (plist-get raw :contentSha256)
                         :created (plist-get raw :created)
-                        :producer (plist-get raw :producer) :directory dir))))
+                        :producer (plist-get raw :producer) :directory dir
+                        :valid (org-glance-version--valid-content-p dir raw)))))
          (legacy (org-glance-version--legacy headline-dir headline)))
     (if (and legacy
              (not (cl-find (org-glance-version:id legacy) stored
@@ -159,7 +165,7 @@
              :id (org-glance-version:legacy-id headline digest)
              :kind 'snapshot :parents nil :content-sha256 digest
              :created "1970-01-01T00:00:00Z" :producer "legacy"
-             :directory headline-dir))
+             :directory headline-dir :valid t))
         (error nil)))))
 
 (cl-defun org-glance-version:migrate-legacy (headline-dir headline)
@@ -174,7 +180,7 @@
                     :parents nil
                     :content-sha256 (org-glance-version:content-sha256 legacy)
                     :created "1970-01-01T00:00:00Z" :producer "migration"
-                    :directory final)))
+                    :directory final :valid t)))
       (if (f-directory? final)
           (unless (cl-find-if
                    (lambda (held)
@@ -195,11 +201,16 @@
                     (member (org-glance-version:id version) parents))
                   versions)))
 
+(cl-defun org-glance-version:current (headline-dir headline)
+  "Return HEADLINE's structural leaves, including damaged payloads."
+  (org-glance-version:leaves
+   (org-glance-version:history headline-dir headline)))
+
 (cl-defun org-glance-version:snapshot-leaves (headline-dir headline)
   "Return HEADLINE's current snapshot versions below HEADLINE-DIR."
   (cl-remove-if-not
    (lambda (version) (eq 'snapshot (org-glance-version:kind version)))
-   (org-glance-version:leaves (org-glance-version:read headline-dir headline))))
+   (org-glance-version:current headline-dir headline)))
 
 (cl-defun org-glance-version:file-p (path)
   "Return non-nil when PATH is an immutable version data or metadata file."
