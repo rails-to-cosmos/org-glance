@@ -177,6 +177,62 @@
                      (org-glance-headline-metadata:title
                       (org-glance-graph:get-headline graph id)))))))
 
+(ert-deftest org-glance-test:family-inventory-retains-last-verified-projection ()
+  "A partial event delivery cannot replace the last verified projection."
+  (org-glance-test:with-graph graph
+    (let* ((id "family-partial")
+           (dir (org-glance-graph:headline-data-path graph id))
+           (created "2026-10-10T00:00:00Z"))
+      (org-glance-graph:add
+       graph (org-glance-test:headline id "* TODO Root"))
+      (let* ((root (car (org-glance-version:current dir id)))
+             (root-id (org-glance-version:id root))
+             (child "* DONE Child\n"))
+        (org-glance-test--write-family-event
+         dir "late-child"
+         (list :version 2 :event "snapshot-published" :headline id
+               :id "late-child" :parents ["missing-parent"]
+               :contentSha256 (secure-hash 'sha256 child)
+               :created created :producer "glance")
+         child)
+
+        (org-glance-cache:refresh graph)
+        (should (equal "Root"
+                       (org-glance-headline-metadata:title
+                        (org-glance-graph:live-meta graph id))))
+        (let ((db (sqlite-open (org-glance-cache:path graph))))
+          (unwind-protect
+              (progn
+                (should (equal '((0 1))
+                               (sqlite-select
+                                db
+                                "SELECT verified,reconciled_epoch IS NOT NULL FROM headline_family WHERE logical_id='family-partial'")))
+                (should (equal (list (list root-id))
+                               (sqlite-select
+                                db
+                                "SELECT event_id FROM headline_event WHERE logical_id='family-partial'"))))
+            (sqlite-close db)))
+
+        (let ((middle "* TODO Middle\n"))
+          (org-glance-test--write-family-event
+           dir "missing-parent"
+           (list :version 2 :event "snapshot-published" :headline id
+                 :id "missing-parent" :parents (vector root-id)
+                 :contentSha256 (secure-hash 'sha256 middle)
+                 :created created :producer "glance")
+           middle))
+        (org-glance-cache:refresh graph)
+        (should (equal "Child"
+                       (org-glance-headline-metadata:title
+                        (org-glance-graph:live-meta graph id))))
+        (let ((db (sqlite-open (org-glance-cache:path graph))))
+          (unwind-protect
+              (should (equal '((1 3))
+                             (sqlite-select
+                              db
+                              "SELECT verified,(SELECT count(*) FROM headline_event WHERE logical_id='family-partial') FROM headline_family WHERE logical_id='family-partial'")))
+            (sqlite-close db)))))))
+
 (ert-deftest org-glance-test:shared-cache-folds-schema-2-rejections ()
   "The shared family projection distinguishes structural and current Leaves."
   (org-glance-test:with-graph graph

@@ -201,6 +201,19 @@
           (org-glance-headline-metadata:deserialize (plist-put record :id id)))
       (error nil))))
 
+(cl-defun org-glance-cache--inventory-event-ids (dir)
+  "Return every event-directory name currently observable below DIR."
+  (let ((versions (f-join dir "versions")))
+    (when (file-directory-p versions)
+      (sort
+       (mapcar #'file-name-nondirectory
+               (cl-remove-if #'file-symlink-p (f-directories versions)))
+       #'string<))))
+
+(cl-defun org-glance-cache--inventory-proof (event-ids)
+  "Return a stable local inventory proof for EVENT-IDS."
+  (secure-hash 'sha256 (mapconcat #'identity event-ids "\n")))
+
 (cl-defun org-glance-cache--project-family (db graph id)
   "Replace logical family ID's folded cache projection in DB."
   (let* ((dir (org-glance-graph:headline-data-path graph id))
@@ -222,13 +235,41 @@
                                                (org-glance-version:id b)))))
          (envelopes (mapcar #'org-glance-cache--event-envelope ordered))
          (fingerprint (secure-hash 'sha256
-                                   (mapconcat #'identity envelopes ""))))
+                                   (mapconcat #'identity envelopes "")))
+         (inventory (org-glance-cache--inventory-event-ids dir))
+         (inventory-proof (org-glance-cache--inventory-proof inventory))
+         (admitted (mapcar #'org-glance-version:id history))
+         (previous (car (sqlite-select
+                         db
+                         "SELECT logical_id FROM headline_family WHERE logical_id=?"
+                         (vector id))))
+         (previous-events
+          (mapcar #'car
+                  (sqlite-select
+                   db
+                   "SELECT event_id FROM headline_event WHERE logical_id=?"
+                   (vector id))))
+         (verified (and (null (cl-set-exclusive-or inventory admitted
+                                                   :test #'equal))
+                        (null (cl-set-difference previous-events inventory
+                                                 :test #'equal)))))
+    (unless verified
+      (if previous
+          (sqlite-execute
+           db
+           "UPDATE headline_family SET reconciled_epoch=?,verified=0 WHERE logical_id=?"
+           (vector inventory-proof id))
+        (sqlite-execute
+         db
+         "INSERT INTO headline_family(logical_id,state,current_version_id,family_fingerprint,reconciled_epoch,verified) VALUES(?,?,?,?,?,0)"
+         (vector id "empty" nil fingerprint inventory-proof)))
+      (cl-return-from org-glance-cache--project-family nil))
     (sqlite-execute db "DELETE FROM headline_family WHERE logical_id=?" (vector id))
     (when history
       (sqlite-execute
        db
        "INSERT INTO headline_family(logical_id,state,current_version_id,family_fingerprint,reconciled_epoch,verified) VALUES(?,?,?,?,?,?)"
-       (vector id state current fingerprint nil 1))
+       (vector id state current fingerprint inventory-proof 1))
       (dolist (version history)
         (let* ((event (org-glance-version:id version))
                (version-kind (org-glance-version:kind version))
