@@ -257,14 +257,14 @@ No in-process invalidation fires; the store snapshot detects it (invariant 7)."
     (should (eq 'tombstone (org-glance-graph:get-headline graph "d1")))
     (should (= 0 (length (org-glance-graph:headlines graph))))))
 
-(ert-deftest org-glance-test:graph-cache-compaction-visibility ()
-  "A warmed cache sees compaction turn `get-headline' from `tombstone' to nil."
+(ert-deftest org-glance-test:graph-cache-compaction-preserves-family-tombstone ()
+  "WAL compaction cannot erase an immutable family Tombstone."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "k1" "* TODO A"))
     (org-glance-graph:delete graph "k1")
     (should (eq 'tombstone (org-glance-graph:get-headline graph "k1"))) ; warm: tombstone
     (org-glance-graph:compact graph)
-    (should (null (org-glance-graph:get-headline graph "k1")))))
+    (should (eq 'tombstone (org-glance-graph:get-headline graph "k1")))))
 
 (ert-deftest org-glance-test:graph-cache-insertion-order-after-update ()
   "First-sighting order survives a cache rebuild after an in-place update."
@@ -302,7 +302,7 @@ MANIFEST mtimes are pinned, so only [seg-01] -> [seg-02] differs."
       (set-file-times open pinned)
       (set-file-times manifest pinned)
       (should (= 2 (length (org-glance-graph:headlines reader))))
-      (should (null (org-glance-graph:get-headline reader "A"))))))
+      (should (eq 'tombstone (org-glance-graph:get-headline reader "A"))))))
 
 (ert-deftest org-glance-test:reindex-leaves-blobs-alone ()
   "Reindex appends metadata records only: blobs are read, never rewritten."

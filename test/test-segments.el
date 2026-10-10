@@ -150,7 +150,7 @@ Reads and order are unchanged, and the next insert continues cleanly."
         (should (= 1 (length records)))
         (should (string= "a" (plist-get (car records) :id)))
         (should (string= "DONE" (plist-get (car records) :state))))
-      (should (null (org-glance-graph:get-headline graph "b")))
+      (should (eq 'tombstone (org-glance-graph:get-headline graph "b")))
       (should-not (f-exists? (org-glance-graph:headline-data-path graph "b")))
       (should (s-contains? "alpha body v2" (org-glance-graph:get-content graph "a"))))))
 
@@ -199,14 +199,14 @@ The tombstone's only copy is in the open segment, which survives (invariant 2)."
       (org-glance-graph:add graph (org-glance-test:headline "x" "* TODO Doomed" "body"))  ; seals
       (org-glance-graph:add graph (org-glance-test:headline "y" "* Alive" "body")))       ; seals
     (org-glance-graph:delete graph "x")
-    (should (eq 'tombstone (org-glance-graph:get-headline graph "x")))
+      (should (eq 'tombstone (org-glance-graph:get-headline graph "x")))
     (org-glance-test:with-crash-at #'org-glance-graph--write-manifest
       (should-error (org-glance-graph:compact graph)))
     (let ((graph (org-glance-test:reopen graph)))
       (should (eq 'tombstone (org-glance-graph:get-headline graph "x")))
       (should (equal '("y") (org-glance-test:ids graph)))
       (org-glance-graph:compact graph)
-      (should (null (org-glance-graph:get-headline graph "x")))
+    (should (eq 'tombstone (org-glance-graph:get-headline graph "x")))
       (should-not (f-exists? (org-glance-graph:headline-data-path graph "x")))
       (should (org-glance-headline-metadata? (org-glance-graph:get-headline graph "y"))))))
 

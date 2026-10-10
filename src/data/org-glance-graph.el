@@ -701,10 +701,33 @@ Full headlines also persist their contents (invariant 5)."
 Return `tombstone' if ID was deleted, or nil if unknown (invariant 30)."
   (cl-check-type graph org-glance-graph)
   (cl-check-type id string)
-  (let ((record (gethash id (plist-get (org-glance-graph--ensure-cache graph) :by-id))))
-    (cond ((null record) nil)
-          ((plist-get record :tombstone) 'tombstone)
-          (t (org-glance-headline-metadata:deserialize record)))))
+  (let* ((record (gethash id (plist-get (org-glance-graph--ensure-cache graph)
+                                         :by-id)))
+         (authority (and (fboundp 'org-glance-cache:authority)
+                         (org-glance-cache:authority graph)))
+         (family (and authority
+                      (assoc id (plist-get authority :families))))
+         (projected (and family
+                         (cl-remove-if-not
+                          (lambda (meta)
+                            (equal id (org-glance-headline-metadata:id meta)))
+                          (plist-get authority :headlines)))))
+    (cond
+     ((and record (plist-get record :tombstone)
+           (not (member id (plist-get authority :revived))))
+      'tombstone)
+     (family
+        (cond
+         ((equal "deleted" (cadr family)) 'tombstone)
+         ((= 1 (length projected))
+          (org-glance-graph--prefer-family-metadata
+           (car projected)
+           (and record
+                (not (plist-get record :tombstone))
+                (org-glance-headline-metadata:deserialize record))))
+         (t nil)))
+     ((null record) nil)
+     (t (org-glance-headline-metadata:deserialize record)))))
 
 (cl-defun org-glance-graph:live-meta (graph id)
   "Return GRAPH's metadata for ID, or nil when unknown or tombstoned.
@@ -747,12 +770,49 @@ The guard `org-glance-graph:delete' shares with the fold (invariant 30)."
          (org-glance-graph--headline-history-depth graph))))
     (org-glance-graph:insert graph (list spec))))
 
+(cl-defun org-glance-graph--wal-headlines (graph)
+  "Return GRAPH's compatibility-WAL metadata projection."
+  (reverse (plist-get (org-glance-graph--ensure-cache graph) :live)))
+
+(cl-defun org-glance-graph--prefer-family-metadata (family wal)
+  "Choose FAMILY unless WAL is a compatible update of the same payload."
+  (if (and wal
+           (or (null (org-glance-headline-metadata:hash wal))
+               (equal (org-glance-headline-metadata:hash family)
+                      (org-glance-headline-metadata:hash wal))))
+      wal
+    family))
+
 (cl-defun org-glance-graph:headlines (graph)
   "Return all live headline metadata in GRAPH, latest record per id.
 Ordered by first insertion.  The list is fresh, so callers may sort it
 destructively; the read-only structs are shared with the cache."
   (cl-check-type graph org-glance-graph)
-  (reverse (plist-get (org-glance-graph--ensure-cache graph) :live)))
+  (let* ((wal (org-glance-graph--wal-headlines graph))
+         (authority (and (fboundp 'org-glance-cache:authority)
+                         (org-glance-cache:authority graph)))
+         (families (plist-get authority :families))
+         (projected (plist-get authority :headlines))
+         (wal-ids (mapcar #'org-glance-headline-metadata:id wal)))
+    (append
+     (delq nil
+           (mapcar
+            (lambda (meta)
+              (let* ((id (org-glance-headline-metadata:id meta))
+                     (state (cadr (assoc id families)))
+                     (family
+                      (cl-find id projected
+                               :key #'org-glance-headline-metadata:id
+                               :test #'equal)))
+                (cond
+                 ((equal state "deleted") nil)
+                 (family
+                  (org-glance-graph--prefer-family-metadata family meta))
+                 (t meta))))
+            wal))
+     (cl-remove-if
+      (lambda (meta) (member (org-glance-headline-metadata:id meta) wal-ids))
+      projected))))
 
 (cl-defun org-glance-graph--distinct (graph extract &optional ids)
   "Return the sorted distinct strings EXTRACT yields over GRAPH's live metadata.
@@ -1235,6 +1295,12 @@ then the file may rotate.  Return the number of entries refreshed."
          (entries (plist-get read :entries))
          (specs nil)
          (skipped 0))
+    (when (and entries (fboundp 'org-glance-cache:reconcile-families))
+      (org-glance-cache:reconcile-families
+       graph
+       (cl-loop for (id . kind) in entries
+                unless (eq kind 'tombstone)
+                collect id)))
     (pcase-dolist (`(,id . ,kind) entries)
       (let (spec reason)
         (if (eq kind 'tombstone)

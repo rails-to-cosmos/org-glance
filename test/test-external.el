@@ -399,14 +399,14 @@ over a blob that has gone."
     (should (eq 'tombstone (org-glance-graph:get-headline graph "id1")))))
 
 (ert-deftest org-glance-test:external-refresh-reads-the-last-sighting-either-way ()
-  "A delete then a write for one id folds as the WRITE: the last sighting wins."
+  "A legacy WRITE notification cannot resurrect an immutable Tombstone."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "id1" "* TODO foo"))
     (org-glance-test:edit-blob graph "id1" "* TODO foo" "* DONE foo")
     (org-glance-test:external-delete graph "id1")
     (org-glance-test:external-write graph "id1")
-    (should (= 1 (org-glance-graph:refresh-external graph)))
-    (should (string= "DONE" (org-glance-test:field graph "id1" state)))))
+    (should (= 0 (org-glance-graph:refresh-external graph)))
+    (should (eq 'tombstone (org-glance-graph:get-headline graph "id1")))))
 
 (ert-deftest org-glance-test:external-refresh-skips-a-delete-it-cannot-make ()
   "A delete of an unknown or tombstoned id spends its bytes and nothing else:

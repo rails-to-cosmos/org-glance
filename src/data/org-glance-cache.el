@@ -184,10 +184,28 @@
                      :producer (org-glance-version:producer version))))
     (concat (json-serialize (append identity shape tail)) "\n")))
 
+(cl-defun org-glance-cache--version-metadata (graph id dir version)
+  "Parse VERSION's available Snapshot bytes in DIR as family ID metadata."
+  (when (eq 'snapshot (org-glance-version:kind version))
+    (condition-case nil
+        (let* ((contents (f-read-text
+                          (org-glance-version:data-file
+                           dir (org-glance-version:id version))
+                          'utf-8))
+               (seed (org-glance-graph--reparse-blob
+                      graph (make-org-glance-headline-metadata :tags []) contents))
+               (basis (org-glance-headline:metadata* seed))
+               (metadata (org-glance-headline:metadata*
+                          (org-glance-graph--reparse-blob graph basis contents)))
+               (record (org-glance-headline-metadata:serialize metadata)))
+          (org-glance-headline-metadata:deserialize (plist-put record :id id)))
+      (error nil))))
+
 (cl-defun org-glance-cache--project-family (db graph id)
   "Replace logical family ID's folded cache projection in DB."
   (let* ((dir (org-glance-graph:headline-data-path graph id))
-         (history (org-glance-version:history dir id))
+         (history (and (file-directory-p (f-join dir "versions"))
+                       (org-glance-version:history dir id)))
          (candidates (org-glance-version:candidates history))
          (leaf-ids (mapcar #'org-glance-version:id candidates))
          (sole (and (= 1 (length candidates)) (car candidates)))
@@ -245,25 +263,28 @@
       (dolist (version candidates)
         (when (eq 'snapshot (org-glance-version:kind version))
           (let* ((event (org-glance-version:id version))
-                 (path (org-glance-version:data-file dir event))
-                 (record (car (sqlite-select
-                               db
-                               "SELECT org_headline.digest,org_headline.record FROM org_headline JOIN headline USING(id) WHERE headline.org_id=? AND org_headline.path=?"
-                               (vector id path))))
+                 (metadata (org-glance-cache--version-metadata
+                            graph id dir version))
                  (role (cond
                         ((not (org-glance-version:valid version)) "recovery")
                         ((> (length leaf-ids) 1) "conflict")
                         (t "current")))
-                 (digest (car record))
-                 (payload (or (cadr record) "{}")))
-            (sqlite-execute
-             db
-             "INSERT INTO headline_projection(logical_id,event_id,role,source_digest,parser_contract,record_payload) VALUES(?,?,?,?,?,?)"
-             (vector id event role digest "org-glance:1" payload))
-            (sqlite-execute
-             db
-             "INSERT INTO producer_projection(logical_id,event_id,producer,parser_contract,record_payload) VALUES(?,?,?,?,?)"
-             (vector id event "org-glance" "org-glance:1" payload))))))))
+                 (payload (and metadata
+                               (decode-coding-string
+                                (json-serialize
+                                 (org-glance-headline-metadata:serialize metadata))
+                                'utf-8 t))))
+            (when payload
+              (sqlite-execute
+               db
+               "INSERT INTO headline_projection(logical_id,event_id,role,source_digest,parser_contract,record_payload) VALUES(?,?,?,?,?,?)"
+               (vector id event role
+                       (org-glance-version:content-sha256 version)
+                       "org-glance:1" payload))
+              (sqlite-execute
+               db
+               "INSERT INTO producer_projection(logical_id,event_id,producer,parser_contract,record_payload) VALUES(?,?,?,?,?)"
+               (vector id event "org-glance" "org-glance:1" payload)))))))))
 
 (cl-defun org-glance-cache--delete (db graph id)
   "Delete ID's source projection from GRAPH's DB."
@@ -274,7 +295,7 @@
 (cl-defun org-glance-cache--headlines (graph)
   "Return GRAPH's live metadata without starting an external fold."
   (let ((org-glance-graph--folding-external t))
-    (org-glance-graph:headlines graph)))
+    (org-glance-graph--wal-headlines graph)))
 
 (cl-defun org-glance-cache--family-ids (graph)
   "Return every immutable family ID discovered below GRAPH's data root."
@@ -344,40 +365,92 @@
               (unless (member (car row) live)
                 (sqlite-execute db "DELETE FROM source WHERE path=?"
                                 (vector (cadr row))))))
-          (dolist (metadata headlines)
-            (org-glance-cache--project db graph metadata))
           (dolist (id families)
             (org-glance-cache--project-family db graph id))
+          (dolist (metadata headlines)
+            (let* ((id (org-glance-headline-metadata:id metadata))
+                   (state (caar (sqlite-select
+                                 db
+                                 "SELECT state FROM headline_family WHERE logical_id=?"
+                                 (vector id)))))
+              (when (or (null state) (member state '("live" "damaged")))
+                (org-glance-cache--project db graph metadata))))
           (dolist (metadata headlines)
             (org-glance-cache--project-edges db metadata))
           (sqlite-execute
            db
            "DELETE FROM source WHERE producer='org-glance' AND NOT EXISTS (SELECT 1 FROM headline WHERE headline.path=source.path)")))))))
 
-(cl-defun org-glance-cache:metadata (graph id)
-  "Return ID's valid org-glance projection from GRAPH's shared cache."
+(cl-defun org-glance-cache:reconcile-families (graph ids)
+  "Reconcile immutable family IDS into GRAPH's shared projection."
   (org-glance-cache--with-db
    graph
    (lambda (db)
-     (let* ((path (org-glance-graph:content-path graph id))
-            (digest (and (file-exists-p path)
-                         (org-glance-cache--file-digest path)))
-            (row (car (sqlite-select
+     (org-glance-cache--transaction
+      db
+      (lambda ()
+        (dolist (id (delete-dups (copy-sequence ids)))
+          (org-glance-cache--project-family db graph id)))))))
+
+(cl-defun org-glance-cache:metadata (graph id)
+  "Return ID's sole family-derived metadata from GRAPH's shared cache."
+  (org-glance-cache--with-db
+   graph
+   (lambda (db)
+     (let ((rows (sqlite-select
+                  db
+                  "SELECT record_payload FROM headline_projection WHERE logical_id=? AND role IN ('current','recovery') ORDER BY event_id"
+                  (vector id))))
+       (when (= 1 (length rows))
+         (ignore-errors
+           (org-glance-headline-metadata:deserialize
+            (json-parse-string (caar rows) :object-type 'plist))))))))
+
+(cl-defun org-glance-cache--revived-family-ids (db families)
+  "Return family IDs whose current event descends from a Tombstone in DB."
+  (cl-loop
+   for (logical-id state current) in families
+   when (and current (member state '("live" "damaged")))
+   for events = (sqlite-select
+                 db
+                 "SELECT event_id,kind,parents_json FROM headline_event WHERE logical_id=?"
+                 (vector logical-id))
+   when (cl-labels
+            ((tombstone-ancestor-p
+              (event-id seen)
+              (unless (member event-id seen)
+                (when-let* ((event (assoc event-id events)))
+                  (or (equal "tombstone-published" (cadr event))
+                      (cl-some
+                       (lambda (parent)
+                         (tombstone-ancestor-p parent (cons event-id seen)))
+                       (json-parse-string (nth 2 event) :array-type 'list)))))))
+          (tombstone-ancestor-p current nil))
+   collect logical-id))
+
+(cl-defun org-glance-cache:authority (graph)
+  "Return GRAPH's family-derived families and searchable projections."
+  (or
+   (org-glance-cache--with-db
+    graph
+    (lambda (db)
+      (let ((families (sqlite-select
                        db
-                       "SELECT org_headline.digest,content_hash,record FROM org_headline JOIN headline USING(id) WHERE headline.org_id=? AND org_headline.path=?"
-                       (vector id path))))
-            (payload (and row digest (equal (nth 0 row) digest) (nth 2 row)))
-            (record (and payload
-                         (ignore-errors
-                           (json-parse-string payload :object-type 'plist))))
-            (metadata (and record
-                           (org-glance-headline-metadata:deserialize record))))
-       (when (and metadata
-                  (equal id (org-glance-headline-metadata:id metadata))
-                  (or (null row)
-                      (equal (nth 1 row)
-                             (org-glance-headline-metadata:hash metadata))))
-         metadata)))))
+                       "SELECT logical_id,state,current_version_id FROM headline_family"))
+            (headlines
+             (delq nil
+                   (mapcar
+                    (lambda (row)
+                      (ignore-errors
+                        (org-glance-headline-metadata:deserialize
+                         (json-parse-string (car row) :object-type 'plist))))
+                    (sqlite-select
+                     db
+                     "SELECT record_payload FROM headline_projection WHERE role IN ('current','conflict','recovery','rejected') ORDER BY logical_id,event_id")))))
+        (list :families families
+              :revived (org-glance-cache--revived-family-ids db families)
+              :headlines headlines))))
+   (list :families nil :revived nil :headlines nil)))
 
 (add-hook 'org-glance-graph-after-append-functions
           #'org-glance-cache--after-append)

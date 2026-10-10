@@ -68,7 +68,9 @@
           (sqlite-execute
            db "UPDATE org_headline SET digest='stale' WHERE id=(SELECT id FROM headline WHERE org_id='a')")
         (sqlite-close db)))
-    (should-not (org-glance-cache:metadata graph "a"))
+    (should (equal "Alpha"
+                   (org-glance-headline-metadata:title
+                    (org-glance-cache:metadata graph "a"))))
     (let ((db (sqlite-open (org-glance-cache:path graph))))
       (unwind-protect
           (progn
@@ -78,7 +80,9 @@
             (sqlite-execute
              db "UPDATE org_headline SET content_hash='stale' WHERE id=(SELECT id FROM headline WHERE org_id='a')"))
         (sqlite-close db)))
-    (should-not (org-glance-cache:metadata graph "a"))))
+    (should (equal "Alpha"
+                   (org-glance-headline-metadata:title
+                    (org-glance-cache:metadata graph "a"))))))
 
 (ert-deftest org-glance-test:shared-cache-loss-rebuilds-without-touching-portable-files ()
   "A lost local cache rebuilds without writing or deleting portable files."
@@ -98,6 +102,80 @@
                       (org-glance-cache:metadata graph "a"))))
       (should (equal "legacy\n"
                      (f-read-text (f-join portable "legacy.jsonl") 'utf-8))))))
+
+(ert-deftest org-glance-test:family-inventory-is-search-authority-without-wal ()
+  "A complete immutable family is searchable without a metadata notification."
+  (org-glance-test:with-graph graph
+    (let* ((id "family-only")
+           (dir (org-glance-graph:headline-data-path graph id))
+           (contents (concat "* TODO Family authority :work:\n"
+                             ":PROPERTIES:\n"
+                             ":ORG_GLANCE_ID: " id "\n"
+                             ":END:\n")))
+      (org-glance-version:write-snapshot dir id nil "glance" contents 10)
+      (should-not (org-glance-graph:live-meta graph id))
+
+      (org-glance-cache:refresh graph)
+
+      (let ((metadata (org-glance-graph:live-meta graph id)))
+        (should (org-glance-headline-metadata? metadata))
+        (should (equal "Family authority"
+                       (org-glance-headline-metadata:title metadata))))
+      (should (equal (list id)
+                     (mapcar #'org-glance-headline-metadata:id
+                             (org-glance-graph:headlines graph))))
+      (let ((db (sqlite-open (org-glance-cache:path graph))))
+        (unwind-protect
+            (should-not
+             (equal '(("{}"))
+                    (sqlite-select
+                     db
+                     "SELECT record_payload FROM headline_projection WHERE logical_id='family-only'")))
+          (sqlite-close db))))))
+
+(ert-deftest org-glance-test:family-inventory-supersedes-stale-wal ()
+  "A newer immutable Snapshot is searchable before any legacy notification."
+  (org-glance-test:with-graph graph
+    (let* ((id "family-stale")
+           (dir (org-glance-graph:headline-data-path graph id)))
+      (org-glance-graph:add
+       graph (org-glance-test:headline id "* TODO Alpha"))
+      (let* ((parent (car (org-glance-version:current dir id)))
+             (contents (concat "* DONE Beta\n"
+                               ":PROPERTIES:\n"
+                               ":ORG_GLANCE_ID: " id "\n"
+                               ":END:\n")))
+        (org-glance-version:write-snapshot
+         dir id (list (org-glance-version:id parent)) "glance" contents 10))
+
+      (should (equal "Alpha"
+                     (org-glance-headline-metadata:title
+                      (car (org-glance-graph--wal-headlines graph)))))
+      (org-glance-cache:refresh graph)
+      (let ((metadata (org-glance-graph:live-meta graph id)))
+        (should (equal "Beta" (org-glance-headline-metadata:title metadata)))
+        (should (equal "DONE" (org-glance-headline-metadata:state metadata))))
+
+      (org-glance-graph:delete graph id)
+      (org-glance-cache:refresh graph)
+      (should (eq 'tombstone (org-glance-graph:get-headline graph id)))
+      (should-not (org-glance-graph:headlines graph))
+
+      (let* ((parent (car (org-glance-version:current dir id)))
+             (contents (concat "* TODO Gamma\n"
+                               ":PROPERTIES:\n"
+                               ":ORG_GLANCE_ID: " id "\n"
+                               ":END:\n")))
+        (org-glance-version:write-snapshot
+         dir id (list (org-glance-version:id parent)) "glance" contents 10))
+      (org-glance-cache:refresh graph)
+      (should (member id (plist-get (org-glance-cache:authority graph) :revived)))
+      (should (equal "Gamma"
+                     (org-glance-headline-metadata:title
+                      (org-glance-cache:metadata graph id))))
+      (should (equal "Gamma"
+                     (org-glance-headline-metadata:title
+                      (org-glance-graph:get-headline graph id)))))))
 
 (ert-deftest org-glance-test:shared-cache-folds-schema-2-rejections ()
   "The shared family projection distinguishes structural and current Leaves."
