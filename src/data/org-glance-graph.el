@@ -750,6 +750,13 @@ The guard `org-glance-graph:delete' shares with the fold (invariant 30)."
   (unless (memq (org-glance-graph:get-headline graph id) '(nil tombstone))
     (list :id id :tombstone t)))
 
+(cl-defun org-glance-graph--wal-tombstone-spec (graph id)
+  "Return a compatibility tombstone while WAL ID is still live."
+  (let ((record (gethash id (plist-get (org-glance-graph--ensure-cache graph)
+                                        :by-id))))
+    (when (and record (not (plist-get record :tombstone)))
+      (list :id id :tombstone t))))
+
 (cl-defun org-glance-graph:delete (graph id)
   "Append a tombstone for ID to GRAPH unless ID is absent or already deleted."
   (cl-check-type graph org-glance-graph)
@@ -1304,7 +1311,7 @@ then the file may rotate.  Return the number of entries refreshed."
     (pcase-dolist (`(,id . ,kind) entries)
       (let (spec reason)
         (if (eq kind 'tombstone)
-            (setq spec (org-glance-graph--tombstone-spec graph id)
+            (setq spec (org-glance-graph--wal-tombstone-spec graph id)
                   reason "unknown or deleted")
           ;; invariant 30; an unknown id parses first to pick its todo cycle.
           (if (eq (org-glance-graph:get-headline graph id) 'tombstone)
