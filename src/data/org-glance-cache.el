@@ -162,36 +162,47 @@
 
 (cl-defun org-glance-cache--event-envelope (version)
   "Return VERSION as a canonical shared schema-2 event envelope."
-  (concat
-   (json-serialize
-    (list :version 2
-          :event (if (eq 'snapshot (org-glance-version:kind version))
-                     "snapshot-published"
-                   "tombstone-published")
-          :headline (org-glance-version:headline version)
-          :id (org-glance-version:id version)
-          :parents (apply #'vector (org-glance-version:parents version))
-          :contentSha256 (org-glance-version:content-sha256 version)
-          :created (org-glance-version:created version)
-          :producer (org-glance-version:producer version)))
-   "\n"))
+  (let* ((kind (org-glance-version:kind version))
+         (event (pcase kind
+                  ('snapshot "snapshot-published")
+                  ('tombstone "tombstone-published")
+                  ('rejection "leaves-rejected")))
+         (identity (list :version 2 :event event
+                         :headline (org-glance-version:headline version)
+                         :id (org-glance-version:id version)))
+         (shape (if (eq kind 'rejection)
+                    (list :targets
+                          (apply #'vector (org-glance-version:targets version))
+                          :observedLeaves
+                          (apply #'vector
+                                 (org-glance-version:observed-leaves version)))
+                  (list :parents
+                        (apply #'vector (org-glance-version:parents version)))))
+         (tail (list :contentSha256
+                     (org-glance-version:content-sha256 version)
+                     :created (org-glance-version:created version)
+                     :producer (org-glance-version:producer version))))
+    (concat (json-serialize (append identity shape tail)) "\n")))
 
 (cl-defun org-glance-cache--project-family (db graph id)
   "Replace logical family ID's folded cache projection in DB."
   (let* ((dir (org-glance-graph:headline-data-path graph id))
          (history (org-glance-version:history dir id))
-         (leaves (org-glance-version:leaves history))
-         (leaf-ids (mapcar #'org-glance-version:id leaves))
-         (sole (and (= 1 (length leaves)) (car leaves)))
+         (candidates (org-glance-version:candidates history))
+         (leaf-ids (mapcar #'org-glance-version:id candidates))
+         (sole (and (= 1 (length candidates)) (car candidates)))
          (state (cond
                  ((null history) "empty")
-                 ((null leaves) "no-current")
-                 ((> (length leaves) 1) "conflict")
+                 ((null candidates) "no-current")
+                 ((> (length candidates) 1) "conflict")
                  ((eq 'tombstone (org-glance-version:kind sole)) "deleted")
                  ((org-glance-version:valid sole) "live")
                  (t "damaged")))
          (current (and sole (org-glance-version:id sole)))
-         (envelopes (mapcar #'org-glance-cache--event-envelope history))
+         (ordered (sort (copy-sequence history)
+                        (lambda (a b) (string< (org-glance-version:id a)
+                                               (org-glance-version:id b)))))
+         (envelopes (mapcar #'org-glance-cache--event-envelope ordered))
          (fingerprint (secure-hash 'sha256
                                    (mapconcat #'identity envelopes ""))))
     (sqlite-execute db "DELETE FROM headline_family WHERE logical_id=?" (vector id))
@@ -202,15 +213,23 @@
        (vector id state current fingerprint nil 1))
       (dolist (version history)
         (let* ((event (org-glance-version:id version))
-               (kind (if (eq 'snapshot (org-glance-version:kind version))
-                         "snapshot-published" "tombstone-published"))
+               (version-kind (org-glance-version:kind version))
+               (kind (pcase version-kind
+                       ('snapshot "snapshot-published")
+                       ('tombstone "tombstone-published")
+                       ('rejection "leaves-rejected")))
                (parents (json-serialize
                          (apply #'vector (org-glance-version:parents version))))
+               (targets (json-serialize
+                         (apply #'vector (org-glance-version:targets version))))
+               (observed (json-serialize
+                          (apply #'vector
+                                 (org-glance-version:observed-leaves version))))
                (envelope (org-glance-cache--event-envelope version)))
           (sqlite-execute
            db
            "INSERT INTO headline_event(logical_id,event_id,kind,parents_json,targets_json,observed_leaves_json,payload_digest,producer,created,envelope) VALUES(?,?,?,?,?,?,?,?,?,?)"
-           (vector id event kind parents "[]" "[]"
+           (vector id event kind parents targets observed
                    (org-glance-version:content-sha256 version)
                    (org-glance-version:producer version)
                    (org-glance-version:created version) envelope))
@@ -223,7 +242,7 @@
                      (and (org-glance-version:valid version)
                           (org-glance-version:content-sha256 version))
                      (if (org-glance-version:valid version) "available" "mismatch"))))))
-      (dolist (version leaves)
+      (dolist (version candidates)
         (when (eq 'snapshot (org-glance-version:kind version))
           (let* ((event (org-glance-version:id version))
                  (path (org-glance-version:data-file dir event))

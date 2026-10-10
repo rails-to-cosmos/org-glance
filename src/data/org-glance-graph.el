@@ -628,10 +628,13 @@ Return the file path, or nil if HEADLINE has no id."
       (f-mkdir-full-path dir)
       (when (cl-find "legacy" versions :key #'org-glance-version:producer :test #'equal)
         (org-glance-version:migrate-legacy dir id))
-      (let* ((leaves (org-glance-version:current dir id))
-             (_ (when (> (length leaves) 1)
-                  (user-error "Headline %s has %d current variants" id (length leaves))))
-             (parents (mapcar #'org-glance-version:id leaves))
+      (let* ((history (org-glance-version:history dir id))
+             (candidates (org-glance-version:candidates history))
+             (_ (when (> (length candidates) 1)
+                  (user-error "Headline %s has %d current variants"
+                              id (length candidates))))
+             (parents (mapcar #'org-glance-version:id
+                              (org-glance-version:leaves history)))
              (version (org-glance-version:write-snapshot
                        dir id parents "org-glance"
                        (org-glance-headline:contents headline)
@@ -733,11 +736,14 @@ The guard `org-glance-graph:delete' shares with the fold (invariant 30)."
            (versions (org-glance-version:read dir id)))
       (when (cl-find "legacy" versions :key #'org-glance-version:producer :test #'equal)
         (org-glance-version:migrate-legacy dir id))
-      (let ((leaves (org-glance-version:current dir id)))
-        (when (> (length leaves) 1)
-          (user-error "Headline %s has %d current variants" id (length leaves)))
+      (let* ((history (org-glance-version:history dir id))
+             (candidates (org-glance-version:candidates history)))
+        (when (> (length candidates) 1)
+          (user-error "Headline %s has %d current variants" id
+                      (length candidates)))
         (org-glance-version:write-tombstone
-         dir id (mapcar #'org-glance-version:id leaves) "org-glance"
+         dir id (mapcar #'org-glance-version:id
+                        (org-glance-version:leaves history)) "org-glance"
          (org-glance-graph--headline-history-depth graph))))
     (org-glance-graph:insert graph (list spec))))
 

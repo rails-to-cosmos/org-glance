@@ -9,7 +9,8 @@
 
 (cl-defstruct (org-glance-version (:predicate org-glance-version?)
                                   (:conc-name org-glance-version:))
-  schema headline id kind parents content-sha256 created producer directory valid)
+  schema headline id kind parents targets observed-leaves content-sha256
+  created producer directory valid)
 
 (cl-defun org-glance-version:path (headline-dir version-id)
   "Return VERSION-ID's immutable directory below HEADLINE-DIR."
@@ -62,18 +63,75 @@
         :created (org-glance-version:created version)
         :producer (org-glance-version:producer version)))
 
-(cl-defun org-glance-version--valid-content-p (dir raw)
-  "Return non-nil when DIR's content agrees with metadata RAW."
+(cl-defun org-glance-version--valid-content-p (version)
+  "Return non-nil when VERSION's payload agrees with its envelope."
   (condition-case nil
-      (let ((data (f-join dir "data.org"))
-            (kind (plist-get raw :kind))
-            (digest (plist-get raw :contentSha256)))
+      (let ((data (f-join (org-glance-version:directory version) "data.org"))
+            (kind (org-glance-version:kind version))
+            (digest (org-glance-version:content-sha256 version)))
         (cond
-         ((equal kind "tombstone") (and (null digest) (not (f-exists? data))))
-         ((equal kind "snapshot")
+         ((eq kind 'tombstone) (and (null digest) (not (f-exists? data))))
+         ((eq kind 'rejection) (and (null digest) (not (f-exists? data))))
+         ((eq kind 'snapshot)
           (and digest (f-file? data)
                (equal digest (secure-hash 'sha256 (f-read-text data 'utf-8)))))
          (t nil)))
+    (error nil)))
+
+(cl-defun org-glance-version--distinct-p (values)
+  (= (length values) (length (delete-dups (copy-sequence values)))))
+
+(cl-defun org-glance-version--strings-p (values)
+  (and (listp values) (cl-every #'stringp values)))
+
+(cl-defun org-glance-version--version-event-p (version)
+  (memq (org-glance-version:kind version) '(snapshot tombstone)))
+
+(cl-defun org-glance-version--candidate (dir headline raw)
+  "Decode structurally local RAW metadata at DIR for HEADLINE."
+  (condition-case nil
+      (let* ((schema (plist-get raw :version))
+             (id (plist-get raw :id))
+             (kind-name (if (= schema 1)
+                            (plist-get raw :kind)
+                          (plist-get raw :event)))
+             (kind (pcase kind-name
+                     ((or "snapshot" "snapshot-published") 'snapshot)
+                     ((or "tombstone" "tombstone-published") 'tombstone)
+                     ("leaves-rejected" 'rejection)))
+             (parents (if (eq kind 'rejection) nil (plist-get raw :parents)))
+             (targets (and (eq kind 'rejection) (plist-get raw :targets)))
+             (observed (and (eq kind 'rejection)
+                            (plist-get raw :observedLeaves)))
+             (digest (plist-get raw :contentSha256))
+             (version (make-org-glance-version
+                       :schema schema :headline headline :id id :kind kind
+                       :parents parents :targets targets :observed-leaves observed
+                       :content-sha256 digest :created (plist-get raw :created)
+                       :producer (plist-get raw :producer) :directory dir)))
+        (when (and (memq schema '(1 2)) kind (stringp id)
+                   (equal headline (plist-get raw :headline))
+                   (equal (f-filename dir) id)
+                   (stringp (org-glance-version:created version))
+                   (stringp (org-glance-version:producer version))
+                   (org-glance-version--strings-p parents)
+                   (org-glance-version--distinct-p parents)
+                   (not (member id parents))
+                   (pcase kind
+                     ('snapshot (stringp digest))
+                     ('tombstone (null digest))
+                     ('rejection
+                      (and (= schema 2) (null digest)
+                           (org-glance-version--strings-p targets)
+                           (org-glance-version--strings-p observed)
+                           (org-glance-version--distinct-p targets)
+                           (org-glance-version--distinct-p observed)
+                           (cl-every (lambda (target) (member target observed)) targets)
+                           (cl-some (lambda (leaf) (not (member leaf targets)))
+                                    observed)))))
+          (setf (org-glance-version:valid version)
+                (org-glance-version--valid-content-p version))
+          version))
     (error nil)))
 
 (cl-defun org-glance-version--write
@@ -122,14 +180,17 @@
 
 (cl-defun org-glance-version:read (headline-dir headline)
   "Read HEADLINE's valid version metadata below HEADLINE-DIR."
-  (cl-remove-if-not #'org-glance-version:valid
-                    (org-glance-version:history headline-dir headline)))
+  (cl-remove-if-not
+   (lambda (version)
+     (and (org-glance-version--version-event-p version)
+          (org-glance-version:valid version)))
+   (org-glance-version:history headline-dir headline)))
 
 (cl-defun org-glance-version:history (headline-dir headline)
   "Read HEADLINE's identifiable version history below HEADLINE-DIR.
 Each returned node carries payload integrity in its `valid' slot."
   (let* ((root (f-join headline-dir "versions"))
-         (stored
+         (candidates
           (when (f-directory? root)
             (cl-loop for dir in (sort (f-directories root) #'string<)
                for meta = (f-join dir "meta.json")
@@ -139,18 +200,40 @@ Each returned node carries payload integrity in its `valid' slot."
                                                 :object-type 'plist :array-type 'list
                                                 :null-object nil :false-object nil)
                            (error nil))
-               when (and raw (= 1 (plist-get raw :version))
-                         (equal headline (plist-get raw :headline))
-                         (equal (f-filename dir) (plist-get raw :id)))
-               collect (make-org-glance-version
-                        :schema 1 :headline headline :id (plist-get raw :id)
-                        :kind (intern (plist-get raw :kind))
-                        :parents (plist-get raw :parents)
-                        :content-sha256 (plist-get raw :contentSha256)
-                        :created (plist-get raw :created)
-                        :producer (plist-get raw :producer) :directory dir
-                        :valid (org-glance-version--valid-content-p dir raw)))))
+               for candidate = (and raw
+                                    (org-glance-version--candidate dir headline raw))
+               when candidate collect candidate)))
+         (versions (cl-remove-if-not #'org-glance-version--version-event-p
+                                     candidates))
+         (known (mapcar #'org-glance-version:id versions))
+         (changed t)
+         stored
          (legacy (org-glance-version--legacy headline-dir headline)))
+    (while changed
+      (let ((closed
+             (cl-remove-if
+              (lambda (version)
+                (and (= 2 (org-glance-version:schema version))
+                     (cl-some (lambda (parent) (not (member parent known)))
+                              (org-glance-version:parents version))))
+              versions)))
+        (setq changed (/= (length closed) (length versions))
+              versions closed
+              known (mapcar #'org-glance-version:id versions))))
+    (setq stored
+          (cl-remove-if
+           (lambda (event)
+             (and (eq 'rejection (org-glance-version:kind event))
+                  (cl-some (lambda (ref) (not (member ref known)))
+                           (append (org-glance-version:targets event)
+                                   (org-glance-version:observed-leaves event)))))
+           candidates))
+    (setq stored
+          (cl-remove-if
+           (lambda (event)
+             (and (org-glance-version--version-event-p event)
+                  (not (member (org-glance-version:id event) known))))
+           stored))
     (if (and legacy
              (not (cl-find (org-glance-version:id legacy) stored
                            :key #'org-glance-version:id :test #'equal)))
@@ -199,16 +282,27 @@ Each returned node carries payload integrity in its `valid' slot."
 
 (cl-defun org-glance-version:leaves (versions)
   "Return VERSIONS not named as another version's parent."
-  (let ((parents (cl-loop for version in versions
+  (let* ((versions (cl-remove-if-not #'org-glance-version--version-event-p
+                                     versions))
+         (parents (cl-loop for version in versions
                           append (org-glance-version:parents version))))
     (cl-remove-if (lambda (version)
                     (member (org-glance-version:id version) parents))
                   versions)))
 
 (cl-defun org-glance-version:current (headline-dir headline)
-  "Return HEADLINE's structural leaves, including damaged payloads."
-  (org-glance-version:leaves
+  "Return HEADLINE's unrejected structural leaves, including damaged payloads."
+  (org-glance-version:candidates
    (org-glance-version:history headline-dir headline)))
+
+(cl-defun org-glance-version:candidates (history)
+  "Return HISTORY's structural Leaves after admitted rejections."
+  (let ((rejected (cl-loop for event in history
+                           when (eq 'rejection (org-glance-version:kind event))
+                           append (org-glance-version:targets event))))
+    (cl-remove-if (lambda (version)
+                    (member (org-glance-version:id version) rejected))
+                  (org-glance-version:leaves history))))
 
 (cl-defun org-glance-version:prune (headline-dir headline depth)
   "Retain DEPTH generations of HEADLINE history and return removed ids.

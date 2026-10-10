@@ -99,6 +99,47 @@
       (should (equal "legacy\n"
                      (f-read-text (f-join portable "legacy.jsonl") 'utf-8))))))
 
+(ert-deftest org-glance-test:shared-cache-folds-schema-2-rejections ()
+  "The shared family projection distinguishes structural and current Leaves."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "a" "* Root"))
+    (let* ((dir (org-glance-graph:headline-data-path graph "a"))
+           (root (car (org-glance-version:current dir "a")))
+           (root-id (org-glance-version:id root))
+           (created "2026-10-10T00:00:00Z"))
+      (dolist (branch '(("left" "* Left\n") ("right" "* Right\n")))
+        (let ((id (car branch)) (contents (cadr branch)))
+          (org-glance-test--write-family-event
+           dir id
+           (list :version 2 :event "snapshot-published" :headline "a"
+                 :id id :parents (vector root-id)
+                 :contentSha256 (secure-hash 'sha256 contents)
+                 :created created :producer "glance")
+           contents)))
+      (org-glance-test--write-family-event
+       dir "reject-left"
+       (list :version 2 :event "leaves-rejected" :headline "a"
+             :id "reject-left" :targets ["left"]
+             :observedLeaves ["left" "right"] :contentSha256 nil
+             :created created :producer "glance"))
+      (org-glance-cache:refresh graph)
+      (let ((db (sqlite-open (org-glance-cache:path graph))))
+        (unwind-protect
+            (progn
+              (should (equal '(("live" "right"))
+                             (sqlite-select
+                              db
+                              "SELECT state,current_version_id FROM headline_family WHERE logical_id='a'")))
+              (should (equal '(("leaves-rejected" "[\"left\"]" "[\"left\",\"right\"]"))
+                             (sqlite-select
+                              db
+                              "SELECT kind,targets_json,observed_leaves_json FROM headline_event WHERE event_id='reject-left'")))
+              (should (equal '(("right" "current"))
+                             (sqlite-select
+                              db
+                              "SELECT event_id,role FROM headline_projection WHERE logical_id='a'"))))
+          (sqlite-close db))))))
+
 (ert-deftest org-glance-test:shared-cache-follows-delete ()
   "Deleting a graph headline removes its shared source and incoming edges."
   (org-glance-test:with-graph graph

@@ -3,6 +3,14 @@
 (require 'test-helpers)
 (require 'org-glance-version)
 
+(cl-defun org-glance-test--write-family-event (dir id fields &optional contents)
+  (let ((target (org-glance-version:path dir id)))
+    (f-mkdir-full-path target)
+    (when contents
+      (f-write-text contents 'utf-8 (f-join target "data.org")))
+    (f-write-text (concat (json-serialize fields) "\n") 'utf-8
+                  (f-join target "meta.json"))))
+
 (ert-deftest org-glance-test:version-snapshot-roundtrip ()
   (with-temp-directory dir
     (let* ((doc "* TODO Alpha\n")
@@ -37,6 +45,80 @@
       (should (equal 'tombstone (org-glance-version:kind gone)))
       (should-not (f-exists? (org-glance-version:data-file
                               dir (org-glance-version:id gone)))))))
+
+(ert-deftest org-glance-test:schema-2-rejection-retains-history-and-selects-a-candidate ()
+  (with-temp-directory dir
+    (let* ((root (org-glance-version:write-snapshot
+                  dir "alpha" nil "org-glance" "root"))
+           (root-id (org-glance-version:id root))
+           (created "2026-10-10T00:00:00Z")
+           (left "left")
+           (right "right")
+           (reject "reject-left"))
+      (dolist (branch `((,left "left payload") (,right "right payload")))
+        (let ((id (car branch)) (contents (cadr branch)))
+          (org-glance-test--write-family-event
+           dir id
+           (list :version 2 :event "snapshot-published" :headline "alpha"
+                 :id id :parents (vector root-id)
+                 :contentSha256 (secure-hash 'sha256 contents)
+                 :created created :producer "glance")
+           contents)))
+      (org-glance-test--write-family-event
+       dir reject
+       (list :version 2 :event "leaves-rejected" :headline "alpha"
+             :id reject :targets (vector left)
+             :observedLeaves (vector left right) :contentSha256 nil
+             :created created :producer "glance"))
+      (let ((history (org-glance-version:history dir "alpha")))
+        (should (= 4 (length history)))
+        (should (equal '("left" "right")
+                       (sort (mapcar #'org-glance-version:id
+                                     (org-glance-version:leaves history))
+                             #'string<)))
+        (should (equal (list right)
+                       (mapcar #'org-glance-version:id
+                               (org-glance-version:current dir "alpha"))))))))
+
+(ert-deftest org-glance-test:write-after-rejection-closes-the-structural-frontier ()
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "alpha" "* Root"))
+    (let* ((dir (org-glance-graph:headline-data-path graph "alpha"))
+           (root-id (org-glance-version:id
+                     (car (org-glance-version:current dir "alpha"))))
+           (created "2026-10-10T00:00:00Z"))
+      (dolist (branch '(("left" "* Left\n") ("right" "* Right\n")))
+        (let ((id (car branch)) (contents (cadr branch)))
+          (org-glance-test--write-family-event
+           dir id
+           (list :version 2 :event "snapshot-published" :headline "alpha"
+                 :id id :parents (vector root-id)
+                 :contentSha256 (secure-hash 'sha256 contents)
+                 :created created :producer "glance")
+           contents)))
+      (org-glance-test--write-family-event
+       dir "reject-left"
+       (list :version 2 :event "leaves-rejected" :headline "alpha"
+             :id "reject-left" :targets ["left"]
+             :observedLeaves ["left" "right"] :contentSha256 nil
+             :created created :producer "glance"))
+      (org-glance-graph:add graph
+        (org-glance-test:headline "alpha" "* Edited after rejection"))
+      (let* ((history (org-glance-version:history dir "alpha"))
+             (written (cl-find-if
+                       (lambda (version)
+                         (and (equal "org-glance"
+                                     (org-glance-version:producer version))
+                              (not (equal root-id
+                                          (org-glance-version:id version)))))
+                       history)))
+        (should (equal '("left" "right")
+                       (sort (copy-sequence
+                              (org-glance-version:parents written))
+                             #'string<)))
+        (should (equal (list (org-glance-version:id written))
+                       (mapcar #'org-glance-version:id
+                               (org-glance-version:leaves history))))))))
 
 (ert-deftest org-glance-test:version-rejects-content-digest-mismatch ()
   (with-temp-directory dir
