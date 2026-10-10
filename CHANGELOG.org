@@ -18,6 +18,8 @@ Notable user-facing changes.  Versions date-based
   and material saves cannot promote an ancestor or miss a concurrent leaf.
 - Missing, checksum-mismatched, and unparseable Snapshot payloads retain one
   searchable logical recovery row with their precise payload state.
+- Shared cache schema 4 stores metadata-only recovery projections with no
+  backing Snapshot event ID.
 
 * 1.53.0.0.20261006.0
 

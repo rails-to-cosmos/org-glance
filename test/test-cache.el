@@ -13,7 +13,7 @@
     (let ((db (sqlite-open (org-glance-cache:path graph))))
       (unwind-protect
           (progn
-            (should (equal '((3)) (sqlite-select db "PRAGMA user_version")))
+            (should (equal '((4)) (sqlite-select db "PRAGMA user_version")))
             (should
              (equal
               '(("headline_event") ("headline_family")
@@ -22,6 +22,17 @@
               (sqlite-select
                db
                "SELECT name FROM sqlite_master WHERE (type='table' AND name LIKE 'headline_%') OR name='producer_projection' ORDER BY name")))
+            (should
+             (equal '(("headline_projection" 0) ("producer_projection" 0))
+                    (sqlite-select
+                     db
+                     "SELECT 'headline_projection',\"notnull\" FROM pragma_table_info('headline_projection') WHERE name='event_id' UNION ALL SELECT 'producer_projection',\"notnull\" FROM pragma_table_info('producer_projection') WHERE name='event_id'")))
+            (should
+             (equal '(("headline_projection_metadata")
+                      ("producer_projection_metadata"))
+                    (sqlite-select
+                     db
+                     "SELECT name FROM sqlite_master WHERE type='index' AND name IN ('headline_projection_metadata','producer_projection_metadata') ORDER BY name")))
             (should (equal '(("glance_payload"))
                            (sqlite-select
                             db
@@ -179,12 +190,12 @@
                            (sqlite-select
                             db
                             "SELECT logical_id,payload_state FROM headline_payload_observation ORDER BY logical_id")))
-            (should (equal '(("family-mismatch" "recovery")
-                             ("family-missing" "recovery")
-                             ("family-unparseable" "recovery"))
+            (should (equal '(("family-mismatch" 0 "recovery")
+                             ("family-missing" 1 "recovery")
+                             ("family-unparseable" 1 "recovery"))
                            (sqlite-select
                             db
-                            "SELECT logical_id,role FROM headline_projection ORDER BY logical_id"))))
+                            "SELECT logical_id,event_id IS NULL,role FROM headline_projection ORDER BY logical_id"))))
         (sqlite-close db)))))
 
 (ert-deftest org-glance-test:family-inventory-supersedes-stale-wal ()
