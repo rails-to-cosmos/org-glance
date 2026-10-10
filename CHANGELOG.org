@@ -4,9 +4,10 @@ Notable user-facing changes.  Versions date-based
 =MAJOR.MINOR.PATCH.BUILD.YYYYMMDD.REV=.  Detail: [[file:docs/proposals/][docs/proposals/]].
 
 * Unreleased
+
 ** Changed
-- Immutable headline history retains ten generations by default;
-  =#+GLANCE_HEADLINE_HISTORY_DEPTH:= configures the depth and =0= keeps all history.
+
+- Immutable headline writes retain every version event; history depth is a projection setting.
 
 ** Added
 - =org-glance-version:history= exposes every identifiable version node with its

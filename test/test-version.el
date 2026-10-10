@@ -189,7 +189,7 @@
       (should-error (org-glance-graph:content-path graph "alpha")
                     :type 'user-error))))
 
-(ert-deftest org-glance-test:graph-retains-ten-version-generations-by-default ()
+(ert-deftest org-glance-test:graph-appends-version-generations-by-default ()
   (org-glance-test:with-graph graph
     (dotimes (n 12)
       (org-glance-graph:add
@@ -197,8 +197,8 @@
     (let* ((dir (org-glance-graph:headline-data-path graph "alpha"))
            (history (org-glance-version:history dir "alpha"))
            (ids (mapcar #'org-glance-version:id history)))
-      (should (= 10 (length history)))
-      (should (= 1 (cl-loop for version in history
+      (should (= 12 (length history)))
+      (should (= 0 (cl-loop for version in history
                             sum (cl-count-if-not
                                  (lambda (parent) (member parent ids))
                                  (org-glance-version:parents version))))))))
@@ -211,7 +211,7 @@
     (dotimes (n 5)
       (org-glance-graph:add
        graph (org-glance-test:headline "alpha" (format "* TODO Version %d" n))))
-    (should (= 3 (length
+    (should (= 5 (length
                   (org-glance-version:history
                    (org-glance-graph:headline-data-path graph "alpha") "alpha"))))
     (f-write-text "#+GLANCE_HEADLINE_HISTORY_DEPTH: 0\n" 'utf-8
@@ -219,7 +219,7 @@
     (dotimes (n 3)
       (org-glance-graph:add
        graph (org-glance-test:headline "alpha" (format "* TODO Unlimited %d" n))))
-    (should (= 6 (length
+    (should (= 8 (length
                   (org-glance-version:history
                    (org-glance-graph:headline-data-path graph "alpha") "alpha"))))))
 

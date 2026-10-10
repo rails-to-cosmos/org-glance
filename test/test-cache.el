@@ -13,11 +13,40 @@
     (let ((db (sqlite-open (org-glance-cache:path graph))))
       (unwind-protect
           (progn
-            (should (equal '((2)) (sqlite-select db "PRAGMA user_version")))
+            (should (equal '((3)) (sqlite-select db "PRAGMA user_version")))
+            (should
+             (equal
+              '(("headline_event") ("headline_family")
+                ("headline_payload_observation") ("headline_projection")
+                ("producer_projection"))
+              (sqlite-select
+               db
+               "SELECT name FROM sqlite_master WHERE (type='table' AND name LIKE 'headline_%') OR name='producer_projection' ORDER BY name")))
             (should (equal '(("glance_payload"))
                            (sqlite-select
                             db
                             "SELECT name FROM sqlite_master WHERE type='table' AND name='glance_payload'")))
+            (should
+             (equal '(("a" "live") ("b" "live"))
+                    (sqlite-select
+                     db
+                     "SELECT logical_id,state FROM headline_family ORDER BY logical_id")))
+            (should (equal '((2))
+                           (sqlite-select db "SELECT count(*) FROM headline_event")))
+            (pcase-let* ((`((,envelope ,fingerprint))
+                          (sqlite-select
+                           db
+                           "SELECT headline_event.envelope,headline_family.family_fingerprint FROM headline_event JOIN headline_family USING(logical_id) WHERE logical_id='a'"))
+                         (event (json-parse-string envelope :object-type 'plist)))
+              (should (= 2 (plist-get event :version)))
+              (should (equal "snapshot-published" (plist-get event :event)))
+              (should-not (plist-member event :kind))
+              (should (equal fingerprint (secure-hash 'sha256 envelope))))
+            (should
+             (equal '(("a" "current") ("b" "current"))
+                    (sqlite-select
+                     db
+                     "SELECT logical_id,role FROM headline_projection ORDER BY logical_id")))
             (pcase-let ((`((,digest ,content-hash ,producer))
                          (sqlite-select
                           db
@@ -99,7 +128,20 @@
     (org-glance-test:reopen graph)
     (let ((db (sqlite-open (org-glance-cache:path graph))))
       (unwind-protect
-          (should-not (sqlite-select db "SELECT id FROM headline"))
+          (progn
+            (should-not (sqlite-select db "SELECT id FROM headline"))
+            (should (equal '(("deleted"))
+                           (sqlite-select
+                            db
+                            "SELECT state FROM headline_family WHERE logical_id='a'")))
+            (should (equal '((2))
+                           (sqlite-select
+                            db
+                            "SELECT count(*) FROM headline_event WHERE logical_id='a'")))
+            (should-not
+             (sqlite-select
+              db
+              "SELECT event_id FROM headline_projection WHERE logical_id='a'")))
         (sqlite-close db)))))
 
 (provide 'test-cache)

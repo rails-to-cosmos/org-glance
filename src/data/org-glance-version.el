@@ -77,7 +77,7 @@
     (error nil)))
 
 (cl-defun org-glance-version--write
-    (headline-dir headline parents producer kind contents depth)
+    (headline-dir headline parents producer kind contents _depth)
   "Create one immutable KIND version, optionally holding CONTENTS."
   (let* ((id (org-glance-version--uuid-v7))
          (final (org-glance-version:path headline-dir id))
@@ -87,8 +87,7 @@
                    :parents (sort (copy-sequence parents) #'string<)
                    :content-sha256 (and contents (secure-hash 'sha256 contents))
                    :created created :producer producer :directory final :valid t)))
-    (prog1 (org-glance-version--publish version contents)
-      (org-glance-version:prune headline-dir headline depth))))
+    (org-glance-version--publish version contents)))
 
 (cl-defun org-glance-version--publish (version contents)
   "Publish VERSION atomically, optionally storing CONTENTS."

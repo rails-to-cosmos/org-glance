@@ -10,8 +10,9 @@
 
 (require 'org-glance-graph)
 (require 'org-glance-headline)
+(require 'org-glance-version)
 
-(defconst org-glance-cache:version 2
+(defconst org-glance-cache:version 3
   "Shared Glance cache schema version.")
 
 (defconst org-glance-cache--schema
@@ -21,7 +22,12 @@
     "CREATE INDEX IF NOT EXISTS headline_path ON headline(path)"
     "CREATE TABLE IF NOT EXISTS org_headline (id TEXT PRIMARY KEY REFERENCES headline(id) ON DELETE CASCADE, path TEXT NOT NULL, digest TEXT NOT NULL, content_hash TEXT NOT NULL, record TEXT NOT NULL, producer TEXT NOT NULL)"
     "CREATE TABLE IF NOT EXISTS edge (src TEXT NOT NULL REFERENCES headline(id) ON DELETE CASCADE, dst TEXT NOT NULL REFERENCES headline(id) ON DELETE CASCADE, kind TEXT, via TEXT NOT NULL, PRIMARY KEY(src, dst, kind, via))"
-    "CREATE INDEX IF NOT EXISTS edge_dst ON edge(dst)")
+    "CREATE INDEX IF NOT EXISTS edge_dst ON edge(dst)"
+    "CREATE TABLE IF NOT EXISTS headline_family (logical_id TEXT PRIMARY KEY, state TEXT NOT NULL, current_version_id TEXT, family_fingerprint TEXT NOT NULL, reconciled_epoch TEXT, verified INTEGER NOT NULL)"
+    "CREATE TABLE IF NOT EXISTS headline_event (logical_id TEXT NOT NULL REFERENCES headline_family(logical_id) ON DELETE CASCADE, event_id TEXT NOT NULL, kind TEXT NOT NULL, parents_json TEXT NOT NULL, targets_json TEXT NOT NULL, observed_leaves_json TEXT NOT NULL, payload_digest TEXT, producer TEXT NOT NULL, created TEXT NOT NULL, envelope TEXT NOT NULL, PRIMARY KEY(logical_id,event_id))"
+    "CREATE TABLE IF NOT EXISTS headline_payload_observation (logical_id TEXT NOT NULL, event_id TEXT NOT NULL, path TEXT NOT NULL, observed_digest TEXT, payload_state TEXT NOT NULL, PRIMARY KEY(logical_id,event_id), FOREIGN KEY(logical_id,event_id) REFERENCES headline_event(logical_id,event_id) ON DELETE CASCADE)"
+    "CREATE TABLE IF NOT EXISTS headline_projection (logical_id TEXT NOT NULL REFERENCES headline_family(logical_id) ON DELETE CASCADE, event_id TEXT NOT NULL, role TEXT NOT NULL, source_digest TEXT, parser_contract TEXT NOT NULL, record_payload TEXT, PRIMARY KEY(logical_id,event_id))"
+    "CREATE TABLE IF NOT EXISTS producer_projection (logical_id TEXT NOT NULL REFERENCES headline_family(logical_id) ON DELETE CASCADE, event_id TEXT NOT NULL, producer TEXT NOT NULL, parser_contract TEXT NOT NULL, record_payload TEXT NOT NULL, PRIMARY KEY(logical_id,event_id,producer))")
   "DDL shared with `Glance.Cache'.")
 
 (cl-defun org-glance-cache:path (graph)
@@ -43,7 +49,7 @@
     (when reset?
       (dolist (table (sqlite-select
                       db
-                      "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY CASE name WHEN 'edge' THEN 0 WHEN 'org_headline' THEN 1 WHEN 'headline' THEN 2 WHEN 'source' THEN 3 ELSE 4 END"))
+                      "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY CASE name WHEN 'producer_projection' THEN 0 WHEN 'headline_projection' THEN 1 WHEN 'headline_payload_observation' THEN 2 WHEN 'headline_event' THEN 3 WHEN 'headline_family' THEN 4 WHEN 'edge' THEN 5 WHEN 'org_headline' THEN 6 WHEN 'glance_payload' THEN 7 WHEN 'headline' THEN 8 WHEN 'source' THEN 9 ELSE 10 END"))
         (sqlite-execute db
                         (format "DROP TABLE IF EXISTS \"%s\""
                                 (replace-regexp-in-string "\"" "\"\"" (car table))))))
@@ -154,6 +160,92 @@
          db "INSERT OR REPLACE INTO edge(src,dst,kind,via) VALUES(?,?,?,?)"
          (vector src dst (cdr edge) "row"))))))
 
+(cl-defun org-glance-cache--event-envelope (version)
+  "Return VERSION as a canonical shared schema-2 event envelope."
+  (concat
+   (json-serialize
+    (list :version 2
+          :event (if (eq 'snapshot (org-glance-version:kind version))
+                     "snapshot-published"
+                   "tombstone-published")
+          :headline (org-glance-version:headline version)
+          :id (org-glance-version:id version)
+          :parents (apply #'vector (org-glance-version:parents version))
+          :contentSha256 (org-glance-version:content-sha256 version)
+          :created (org-glance-version:created version)
+          :producer (org-glance-version:producer version)))
+   "\n"))
+
+(cl-defun org-glance-cache--project-family (db graph id)
+  "Replace logical family ID's folded cache projection in DB."
+  (let* ((dir (org-glance-graph:headline-data-path graph id))
+         (history (org-glance-version:history dir id))
+         (leaves (org-glance-version:leaves history))
+         (leaf-ids (mapcar #'org-glance-version:id leaves))
+         (sole (and (= 1 (length leaves)) (car leaves)))
+         (state (cond
+                 ((null history) "empty")
+                 ((null leaves) "no-current")
+                 ((> (length leaves) 1) "conflict")
+                 ((eq 'tombstone (org-glance-version:kind sole)) "deleted")
+                 ((org-glance-version:valid sole) "live")
+                 (t "damaged")))
+         (current (and sole (org-glance-version:id sole)))
+         (envelopes (mapcar #'org-glance-cache--event-envelope history))
+         (fingerprint (secure-hash 'sha256
+                                   (mapconcat #'identity envelopes ""))))
+    (sqlite-execute db "DELETE FROM headline_family WHERE logical_id=?" (vector id))
+    (when history
+      (sqlite-execute
+       db
+       "INSERT INTO headline_family(logical_id,state,current_version_id,family_fingerprint,reconciled_epoch,verified) VALUES(?,?,?,?,?,?)"
+       (vector id state current fingerprint nil 1))
+      (dolist (version history)
+        (let* ((event (org-glance-version:id version))
+               (kind (if (eq 'snapshot (org-glance-version:kind version))
+                         "snapshot-published" "tombstone-published"))
+               (parents (json-serialize
+                         (apply #'vector (org-glance-version:parents version))))
+               (envelope (org-glance-cache--event-envelope version)))
+          (sqlite-execute
+           db
+           "INSERT INTO headline_event(logical_id,event_id,kind,parents_json,targets_json,observed_leaves_json,payload_digest,producer,created,envelope) VALUES(?,?,?,?,?,?,?,?,?,?)"
+           (vector id event kind parents "[]" "[]"
+                   (org-glance-version:content-sha256 version)
+                   (org-glance-version:producer version)
+                   (org-glance-version:created version) envelope))
+          (when (eq 'snapshot (org-glance-version:kind version))
+            (sqlite-execute
+             db
+             "INSERT INTO headline_payload_observation(logical_id,event_id,path,observed_digest,payload_state) VALUES(?,?,?,?,?)"
+             (vector id event
+                     (org-glance-version:data-file dir event)
+                     (and (org-glance-version:valid version)
+                          (org-glance-version:content-sha256 version))
+                     (if (org-glance-version:valid version) "available" "mismatch"))))))
+      (dolist (version leaves)
+        (when (eq 'snapshot (org-glance-version:kind version))
+          (let* ((event (org-glance-version:id version))
+                 (path (org-glance-version:data-file dir event))
+                 (record (car (sqlite-select
+                               db
+                               "SELECT org_headline.digest,org_headline.record FROM org_headline JOIN headline USING(id) WHERE headline.org_id=? AND org_headline.path=?"
+                               (vector id path))))
+                 (role (cond
+                        ((not (org-glance-version:valid version)) "recovery")
+                        ((> (length leaf-ids) 1) "conflict")
+                        (t "current")))
+                 (digest (car record))
+                 (payload (or (cadr record) "{}")))
+            (sqlite-execute
+             db
+             "INSERT INTO headline_projection(logical_id,event_id,role,source_digest,parser_contract,record_payload) VALUES(?,?,?,?,?,?)"
+             (vector id event role digest "org-glance:1" payload))
+            (sqlite-execute
+             db
+             "INSERT INTO producer_projection(logical_id,event_id,producer,parser_contract,record_payload) VALUES(?,?,?,?,?)"
+             (vector id event "org-glance" "org-glance:1" payload))))))))
+
 (cl-defun org-glance-cache--delete (db graph id)
   "Delete ID's source projection from GRAPH's DB."
   (ignore graph)
@@ -164,6 +256,22 @@
   "Return GRAPH's live metadata without starting an external fold."
   (let ((org-glance-graph--folding-external t))
     (org-glance-graph:headlines graph)))
+
+(cl-defun org-glance-cache--family-ids (graph)
+  "Return every immutable family ID discovered below GRAPH's data root."
+  (let ((data (org-glance-graph:data-path graph)))
+    (cl-labels
+        ((walk
+          (dir)
+          (cl-loop
+           for path in (directory-files dir t directory-files-no-dot-files-regexp)
+           when (and (file-directory-p path) (not (file-symlink-p path)))
+           if (file-directory-p (f-join path "versions"))
+           collect (mapconcat #'identity
+                              (split-string (file-relative-name path data) "/" t)
+                              "")
+           else append (walk path))))
+      (if (file-directory-p data) (sort (delete-dups (walk data)) #'string<) nil))))
 
 (cl-defun org-glance-cache--after-append (graph specs)
   "Apply GRAPH's appended SPECS to the shared cache."
@@ -190,6 +298,8 @@
                                       :key #'org-glance-headline-metadata:id
                                       :test #'equal)))
                   (org-glance-cache--project db graph metadata)))))
+          (dolist (id (delete-dups touched))
+            (org-glance-cache--project-family db graph id))
           (dolist (metadata headlines)
             (when (or (member (org-glance-headline-metadata:id metadata)
                               touched)
@@ -200,7 +310,10 @@
 
 (cl-defun org-glance-cache:refresh (graph)
   "Reconcile GRAPH's live headlines into the shared cache."
-  (let ((headlines (org-glance-cache--headlines graph)))
+  (let* ((headlines (org-glance-cache--headlines graph))
+         (families (delete-dups
+                    (append (mapcar #'org-glance-headline-metadata:id headlines)
+                            (org-glance-cache--family-ids graph)))))
     (org-glance-cache--with-db
      graph
      (lambda (db)
@@ -214,6 +327,8 @@
                                 (vector (cadr row))))))
           (dolist (metadata headlines)
             (org-glance-cache--project db graph metadata))
+          (dolist (id families)
+            (org-glance-cache--project-family db graph id))
           (dolist (metadata headlines)
             (org-glance-cache--project-edges db metadata))
           (sqlite-execute
