@@ -133,6 +133,60 @@
                      "SELECT record_payload FROM headline_projection WHERE logical_id='family-only'")))
           (sqlite-close db))))))
 
+(ert-deftest org-glance-test:family-damage-keeps-precise-logical-recovery-rows ()
+  "Damaged Snapshot payloads remain searchable with precise recovery state."
+  (org-glance-test:with-graph graph
+    (dolist (case '(("family-mismatch" . "mismatch")
+                    ("family-missing" . "missing")
+                    ("family-unparseable" . "unparseable")))
+      (let* ((id (car case))
+             (wanted (cdr case))
+             (dir (org-glance-graph:headline-data-path graph id))
+             (version (org-glance-version:write-snapshot
+                       dir id nil "glance"
+                       (concat "* Recovery source\n:PROPERTIES:\n"
+                               ":ORG_GLANCE_ID: " id "\n:END:\n") 10))
+             (path (org-glance-version:data-file
+                    dir (org-glance-version:id version))))
+        (cond
+         ((equal wanted "missing") (delete-file path))
+         ((equal wanted "mismatch")
+          (write-region
+           (concat "* Changed recovery source\n:PROPERTIES:\n"
+                   ":ORG_GLANCE_ID: " id "\n:END:\n")
+           nil path nil 'silent))
+         (t
+          (let ((coding-system-for-write 'no-conversion))
+            (write-region (unibyte-string #xff #xfe) nil path nil 'silent))))))
+
+    (org-glance-cache:refresh graph)
+
+    (dolist (case '(("family-mismatch" . "mismatch")
+                    ("family-missing" . "missing")
+                    ("family-unparseable" . "unparseable")))
+      (let* ((id (car case))
+             (wanted (cdr case))
+             (metadata (org-glance-graph:live-meta graph id)))
+        (should (org-glance-headline-metadata? metadata))
+        (should (equal wanted
+                       (org-glance-headline-metadata:recovery metadata)))))
+    (let ((db (sqlite-open (org-glance-cache:path graph))))
+      (unwind-protect
+          (progn
+            (should (equal '(("family-mismatch" "mismatch")
+                             ("family-missing" "missing")
+                             ("family-unparseable" "unparseable"))
+                           (sqlite-select
+                            db
+                            "SELECT logical_id,payload_state FROM headline_payload_observation ORDER BY logical_id")))
+            (should (equal '(("family-mismatch" "recovery")
+                             ("family-missing" "recovery")
+                             ("family-unparseable" "recovery"))
+                           (sqlite-select
+                            db
+                            "SELECT logical_id,role FROM headline_projection ORDER BY logical_id"))))
+        (sqlite-close db)))))
+
 (ert-deftest org-glance-test:family-inventory-supersedes-stale-wal ()
   "A newer immutable Snapshot is searchable before any legacy notification."
   (org-glance-test:with-graph graph

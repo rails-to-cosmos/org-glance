@@ -201,6 +201,17 @@
           (org-glance-headline-metadata:deserialize (plist-put record :id id)))
       (error nil))))
 
+(cl-defun org-glance-cache--payload-observation (graph id dir version)
+  "Return VERSION's payload state in GRAPH and any parsed metadata."
+  (let ((path (org-glance-version:data-file dir (org-glance-version:id version))))
+    (if (not (file-exists-p path))
+        (cons "missing" nil)
+      (let ((metadata (org-glance-cache--version-metadata graph id dir version)))
+        (cond
+         ((not metadata) (cons "unparseable" nil))
+         ((org-glance-version:valid version) (cons "available" metadata))
+         (t (cons "mismatch" metadata)))))))
+
 (cl-defun org-glance-cache--inventory-event-ids (dir)
   "Return every event-directory name currently observable below DIR."
   (let ((versions (f-join dir "versions")))
@@ -252,7 +263,8 @@
          (verified (and (null (cl-set-exclusive-or inventory admitted
                                                    :test #'equal))
                         (null (cl-set-difference previous-events inventory
-                                                 :test #'equal)))))
+                                                 :test #'equal))))
+         (projected nil))
     (unless verified
       (if previous
           (sqlite-execute
@@ -293,19 +305,30 @@
                    (org-glance-version:producer version)
                    (org-glance-version:created version) envelope))
           (when (eq 'snapshot (org-glance-version:kind version))
-            (sqlite-execute
-             db
-             "INSERT INTO headline_payload_observation(logical_id,event_id,path,observed_digest,payload_state) VALUES(?,?,?,?,?)"
-             (vector id event
-                     (org-glance-version:data-file dir event)
-                     (and (org-glance-version:valid version)
-                          (org-glance-version:content-sha256 version))
-                     (if (org-glance-version:valid version) "available" "mismatch"))))))
+            (let ((observation
+                   (org-glance-cache--payload-observation graph id dir version)))
+              (sqlite-execute
+               db
+               "INSERT INTO headline_payload_observation(logical_id,event_id,path,observed_digest,payload_state) VALUES(?,?,?,?,?)"
+               (vector id event
+                       (org-glance-version:data-file dir event)
+                       (and (equal "available" (car observation))
+                            (org-glance-version:content-sha256 version))
+                       (car observation)))))))
       (dolist (version candidates)
         (when (eq 'snapshot (org-glance-version:kind version))
           (let* ((event (org-glance-version:id version))
-                 (metadata (org-glance-cache--version-metadata
-                            graph id dir version))
+                 (observation
+                  (org-glance-cache--payload-observation graph id dir version))
+                 (metadata
+                  (and (cdr observation)
+                       (if (equal "available" (car observation))
+                           (cdr observation)
+                         (org-glance-headline-metadata:deserialize
+                          (plist-put
+                           (org-glance-headline-metadata:serialize
+                            (cdr observation))
+                           :recovery (car observation))))))
                  (role (cond
                         ((not (org-glance-version:valid version)) "recovery")
                         ((> (length leaf-ids) 1) "conflict")
@@ -316,6 +339,7 @@
                                  (org-glance-headline-metadata:serialize metadata))
                                 'utf-8 t))))
             (when payload
+              (setq projected t)
               (sqlite-execute
                db
                "INSERT INTO headline_projection(logical_id,event_id,role,source_digest,parser_contract,record_payload) VALUES(?,?,?,?,?,?)"
@@ -325,7 +349,28 @@
               (sqlite-execute
                db
                "INSERT INTO producer_projection(logical_id,event_id,producer,parser_contract,record_payload) VALUES(?,?,?,?,?)"
-               (vector id event "org-glance" "org-glance:1" payload)))))))))
+               (vector id event "org-glance" "org-glance:1" payload))))))
+      (unless (or projected (member state '("deleted" "empty")))
+        (let* ((observation (and sole
+                                 (eq 'snapshot (org-glance-version:kind sole))
+                                 (org-glance-cache--payload-observation
+                                  graph id dir sole)))
+               (damage (or (car-safe observation) "unavailable"))
+               (metadata (make-org-glance-headline-metadata
+                          :id id :title (format "%s — %s recovery" id damage)
+                          :tags [] :recovery damage))
+               (payload (decode-coding-string
+                         (json-serialize
+                          (org-glance-headline-metadata:serialize metadata))
+                         'utf-8 t)))
+          (sqlite-execute
+           db
+           "INSERT INTO headline_projection(logical_id,event_id,role,source_digest,parser_contract,record_payload) VALUES(?,?,?,?,?,?)"
+           (vector id id "recovery" nil "org-glance:1" payload))
+          (sqlite-execute
+           db
+           "INSERT INTO producer_projection(logical_id,event_id,producer,parser_contract,record_payload) VALUES(?,?,?,?,?)"
+           (vector id id "org-glance" "org-glance:1" payload)))))))
 
 (cl-defun org-glance-cache--delete (db graph id)
   "Delete ID's source projection from GRAPH's DB."

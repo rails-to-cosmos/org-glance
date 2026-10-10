@@ -53,7 +53,8 @@ A very large value disables it; then use \\[org-glance-graph-compact]."
   (links nil :read-only t :type list)
   (archived? nil :read-only t :type boolean)
   (commented? nil :read-only t :type boolean)
-  (range nil :read-only t :type list))
+  (range nil :read-only t :type list)
+  (recovery nil :read-only t :type string))
 
 (defconst org-glance-headline-metadata:fields
   ;; SLOT          JSON-KEY      FROM-HEADLINE                                                ENCODE       DECODE
@@ -72,7 +73,8 @@ A very large value disables it; then use \\[org-glance-graph-compact]."
     (links         :links        :links                                                    strings-vector strings-list)
     (archived?     :archived     ,#'org-glance-headline:archived?                          nil          bool)
     (commented?    :commented    ,#'org-glance-headline:commented?                         nil          bool)
-    (range         :range        :range                                                    strings-vector strings-list))
+    (range         :range        :range                                                    strings-vector strings-list)
+    (recovery      :recovery     ,(lambda (_headline) nil)                                 nil          nil))
   "Single source of truth for the metadata projection's shape (invariant 4).
 Drives `org-glance-headline:metadata', `serialize' and `deserialize'; a new
 field is one row here plus one struct slot, checked at load.  FROM-HEADLINE is

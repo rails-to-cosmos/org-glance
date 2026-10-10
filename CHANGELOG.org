@@ -16,6 +16,8 @@ Notable user-facing changes.  Versions date-based
 ** Fixed
 - Checksum-invalid leaves remain in version ancestry, so graph writes, deletes,
   and material saves cannot promote an ancestor or miss a concurrent leaf.
+- Missing, checksum-mismatched, and unparseable Snapshot payloads retain one
+  searchable logical recovery row with their precise payload state.
 
 * 1.53.0.0.20261006.0
 
