@@ -5,9 +5,13 @@ Notable user-facing changes.  Versions date-based
 
 * Unreleased
 
+* 1.55.0.0.20261010.0
+
 ** Changed
 
 - Immutable headline writes retain every version event; history depth is a projection setting.
+- Material relation LOGBOOK entries capitalize typed kinds and show the current
+  source snapshot's creation timestamp.
 
 ** Added
 - =org-glance-version:history= exposes every identifiable version node with its

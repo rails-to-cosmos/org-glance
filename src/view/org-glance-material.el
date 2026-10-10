@@ -494,37 +494,63 @@ Fixed for the buffer's life; an option change applies to later buffers.")
   'org-glance-derived-relation
   "Text property marking live relation lines in a material buffer.")
 
-(cl-defun org-glance-material--relation-line (graph id kind direction)
-  "Return one derived logbook line for ID and KIND in DIRECTION in GRAPH."
+(cl-defun org-glance-material--relation-stamp (graph id)
+  "Return ID's current source snapshot time as an Org timestamp, or nil."
+  (ignore-errors
+    (let* ((dir (org-glance-graph:headline-data-path graph id))
+           (versions (org-glance-version:current dir id)))
+      (when-let* (((= 1 (length versions)))
+                  (version (car versions))
+                  ((eq 'snapshot (org-glance-version:kind version)))
+                  ((not (member (org-glance-version:producer version)
+                                '("legacy" "migration"))))
+                  (created (org-glance-version:created version)))
+        (format-time-string "[%Y-%m-%d %a %H:%M]"
+                            (date-to-time created))))))
+
+(cl-defun org-glance-material--relation-line
+    (graph id &key kind direction stamp)
+  "Return one derived logbook line for ID in DIRECTION in GRAPH.
+KIND supplies its relation label and STAMP names the source snapshot time."
   (let ((label (if kind
-                   (org-glance--kind-pretty kind)
+                   (s-capitalize (org-glance--kind-pretty kind))
                  (if (eq direction 'out) "Refers to" "Referred by"))))
     (concat "- " label " "
             (org-link-make-string
              (org-glance--edge->link-path id (and (eq direction 'out) kind))
              (org-glance-graph:title-or-id graph id))
+            (and stamp (concat " at " stamp))
             "\n")))
 
 (cl-defun org-glance-material--relation-lines (graph id)
   "Return current outgoing and incoming relation log lines for ID in GRAPH."
-  (let ((meta (org-glance-graph:live-meta graph id)))
+  (let* ((meta (org-glance-graph:live-meta graph id))
+         (outgoing (and meta (org-glance-headline-metadata:relations meta)))
+         (out-stamp (and outgoing
+                         (org-glance-material--relation-stamp graph id))))
     (concat
      (apply #'concat
-            (cl-loop for (target . kind) in (and meta
-                                                  (org-glance-headline-metadata:relations meta))
+            (cl-loop for (target . kind) in outgoing
                      unless (equal target id)
                      collect (org-glance-material--relation-line
-                              graph target kind 'out)))
+                              graph target :kind kind :direction 'out
+                              :stamp out-stamp)))
      (apply #'concat
             (cl-loop for source in (org-glance-graph:headlines graph)
                      for source-id = (org-glance-headline-metadata:id source)
                      unless (equal source-id id)
                      append
-                     (cl-loop for (target . kind) in
-                              (org-glance-headline-metadata:relations source)
-                              when (equal target id)
-                              collect (org-glance-material--relation-line
-                                       graph source-id kind 'in)))))))
+                     (let ((matches
+                            (cl-remove-if-not
+                             (lambda (edge) (equal (car edge) id))
+                             (org-glance-headline-metadata:relations source))))
+                       (when matches
+                         (let ((stamp (org-glance-material--relation-stamp
+                                       graph source-id)))
+                           (cl-loop for (_target . kind) in matches
+                                    collect (org-glance-material--relation-line
+                                             graph source-id :kind kind
+                                             :direction 'in :stamp stamp))))))))))
 
 (cl-defun org-glance-material--remove-derived-relations ()
   "Remove every live relation region from the current material buffer."

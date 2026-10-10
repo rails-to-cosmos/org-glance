@@ -58,10 +58,11 @@ compaction, reindex backfill all apply unchanged.
 
 Material buffers derive current outgoing and incoming relation entries in the
 root headline's =LOGBOOK= on open, revert and save.  Plain links use =Refers to=
-and =Referred by=; typed links use =<type> <reference>=.  The projection is
-read-only and removed before every write, leaving the blob as the sole canonical
-edge source.  Incoming entries carry a plain =glance:= link so parsing the
-projection cannot reverse the source edge.
+and =Referred by=; typed links capitalize =<type>=.  Each entry carries the
+current source snapshot's creation timestamp, except synthetic legacy roots.
+The projection is read-only and removed before every write, leaving the blob as
+the sole canonical edge source.  Incoming entries carry a plain =glance:= link
+so parsing the projection cannot reverse the source edge.
 
 ** =@= in the material buffer
 

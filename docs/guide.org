@@ -127,10 +127,11 @@ In a materialized buffer:
 | =C-c @= | table of everything this headline relates to   |
 
 The =LOGBOOK= also shows live relation entries.  Plain links use =Refers to=
-and =Referred by=; typed links use =<type> <reference>=, such as =blocked by
-[[glance:abc][Other headline]]=.  These entries refresh from the graph on open,
-revert and save.  They are a material-buffer projection and stay out of the
-stored headline.
+and =Referred by=; typed links capitalize the kind, such as =Blocked by
+[[glance:abc][Other headline]] at [2026-01-01 Thu 12:00]=.  The timestamp is
+the current source snapshot's creation time.  These entries refresh from the
+graph on open, revert and save.  They are a material-buffer projection and stay
+out of the stored headline.
 
 A relation table lists both directions in one view — the headlines this one refers to AND the ones referring to it — and its =Relation= column names each row's direction and kind (=> roasted by=, =<=).  =@= on a row in the table or the overview opens the same view for that headline.
 

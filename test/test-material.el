@@ -148,6 +148,10 @@ a save persists to the graph and survives re-materializing."
     (org-glance-test:with-material (buffer graph "b")
       (should (s-contains?
                ":LOGBOOK:\n- Referred by [[glance:a][Alpha]]\n:END:"
+               (replace-regexp-in-string
+                " at \\[[^]]+\\]" "" (buffer-string))))
+      (should (string-match-p
+               "- Referred by \\[\\[glance:a\\]\\[Alpha\\]\\] at \\[[-0-9]+ [[:alpha:]]+ [0-9:]+\\]"
                (buffer-string)))
       (should-not (buffer-modified-p)))
     (org-glance-test:with-material (buffer graph "a")
@@ -155,15 +159,30 @@ a save persists to the graph and survives re-materializing."
         (should (s-contains? "- Kept" shown))
         (should (s-contains? "- Refers to [[glance:b][Bee]]" shown))
         (should (s-contains?
-                 "- blocked by [[glance:c?kind=blocked-by][Cee]]" shown))
+                 "- Blocked by [[glance:c?kind=blocked-by][Cee]]" shown))
         (should (s-contains? "- Referred by [[glance:d][Delta]]" shown))
-        (should (s-contains? "- reviewed by [[glance:e][Echo]]" shown))
+        (should (s-contains? "- Reviewed by [[glance:e][Echo]]" shown))
+        (should (string-match-p
+                 "\\] at \\[[-0-9]+ [[:alpha:]]+ [0-9:]+\\]" shown))
         (should-not (buffer-modified-p)))
       (goto-char (point-min))
       (search-forward ":END:\n")
       (search-forward "[[glance:b][Bee]]")
       (replace-match "[[glance:d][Delta]]" t t)
-      (org-glance-test:save)
+      (let ((original (symbol-function 'format-time-string))
+            (created "2030-01-02T03:04:00Z"))
+        (cl-letf (((symbol-function 'format-time-string)
+                   (lambda (format &optional time zone)
+                     (if (equal format "%Y-%m-%dT%H:%M:%SZ")
+                         created
+                       (funcall original format time zone)))))
+          (org-glance-test:save))
+        (should
+         (s-contains?
+          (concat "- Refers to [[glance:d][Delta]] at "
+                  (funcall original "[%Y-%m-%d %a %H:%M]"
+                           (date-to-time created)))
+          (buffer-string))))
       (should-not (s-contains? "- Refers to [[glance:b][Bee]]" (buffer-string)))
       (should (s-contains? "- Refers to [[glance:d][Delta]]" (buffer-string)))
       (should-not (buffer-modified-p)))
@@ -172,8 +191,8 @@ a save persists to the graph and survives re-materializing."
       (should (s-contains? "[[glance:d][Delta]]" blob))
       (should-not (s-contains? "Refers to" blob))
       (should-not (s-contains? "Referred by" blob))
-      (should-not (s-contains? "- blocked by" blob))
-      (should-not (s-contains? "- reviewed by" blob)))))
+      (should-not (s-contains? "- Blocked by" blob))
+      (should-not (s-contains? "- Reviewed by" blob)))))
 
 (ert-deftest org-glance-test:material-open-missing ()
   "Materializing an unknown id errors."

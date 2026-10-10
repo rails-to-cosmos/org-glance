@@ -176,7 +176,8 @@ evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
     `org-glance.el`.
 38. Material relation logbook entries derive live on open, revert and save; the
     before-save hook removes them, preserving authored blob content alone. Plain
-    edges use `Refers to` / `Referred by`; typed edges use `<type> <reference>`.
+    edges use `Refers to` / `Referred by`; typed edges capitalize `<type>`; each
+    entry carries its current source snapshot creation time, except legacy roots.
 39. Immutable headline-version metadata is schema 1: UUIDv7 id, logical headline
     id, kind, sorted parents, SHA-256 content digest, UTC creation time, and producer.
     Its compact JSON field order and trailing newline are canonical across Glance and

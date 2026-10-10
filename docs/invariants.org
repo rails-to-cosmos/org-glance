@@ -721,8 +721,9 @@ today, up from 50.
     derives outgoing and incoming entries from graph metadata on open, revert and
     save.  The before-save hook removes every projected byte; source blobs retain
     authored logbook content alone.  Plain edges render as =Refers to= /
-    =Referred by= and typed edges as =<type> <reference>=.  Incoming links omit
-    the kind query so scanning the projection cannot create a reversed edge.
+    =Referred by= and typed edges capitalize =<type>=.  Entries carry the current
+    source snapshot's creation timestamp; synthetic legacy roots carry none.
+    Incoming links omit the kind query so scanning cannot create a reversed edge.
     Pinned by =material-relations-actualize-in-logbook=.
 
 39. *Immutable version metadata is shared with Glance.*  Schema 1 records a UUIDv7
