@@ -5,6 +5,13 @@ Notable user-facing changes.  Versions date-based
 
 * Unreleased
 
+** Changed
+
+- Running graphs reconcile immutable family inventories on reads and once per
+  second, independent of =EXTERNAL.jsonl= hints.
+- A successful mutation now includes its family-projection commit; failures
+  reach the caller while the immutable event remains retryable.
+
 * 1.55.0.0.20261010.0
 
 ** Changed

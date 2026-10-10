@@ -480,6 +480,53 @@
         (dolist (id (delete-dups (copy-sequence ids)))
           (org-glance-cache--project-family db graph id)))))))
 
+(cl-defun org-glance-cache:reconcile-inventory (graph)
+  "Reconcile immutable families whose inventory checkpoint changed in GRAPH.
+Return the number of families folded."
+  (let ((current (org-glance-cache--family-ids graph)))
+    (org-glance-cache--with-db
+     graph
+     (lambda (db)
+       (let* ((held (sqlite-select
+                     db
+                     "SELECT logical_id,reconciled_epoch,verified FROM headline_family"))
+              (ids (sort (delete-dups
+                          (append current (mapcar #'car held))) #'string<))
+              (changed
+               (cl-remove-if-not
+                (lambda (id)
+                  (let* ((row (assoc id held))
+                         (proof (org-glance-cache--inventory-proof
+                                 (org-glance-cache--inventory-event-ids
+                                  (org-glance-graph:headline-data-path graph id)))))
+                    (or (null row) (/= 1 (or (nth 2 row) 0))
+                        (not (equal proof (nth 1 row))))))
+                ids)))
+         (org-glance-cache--transaction
+          db
+          (lambda ()
+            (dolist (id changed)
+              (org-glance-cache--project-family db graph id))))
+         (length changed))))))
+
+(defvar org-glance-cache--inventory-timer nil
+  "Timer that reconciles immutable inventories for open graphs.")
+
+(cl-defun org-glance-cache--inventory-tick ()
+  "Reconcile immutable inventories for every open graph."
+  (maphash
+   (lambda (_directory graph)
+     (condition-case err
+         (org-glance-cache:reconcile-inventory graph)
+       (error (message "org-glance: inventory reconciliation skipped: %S" err))))
+   org-glance-graph:list))
+
+(cl-defun org-glance-cache--start-inventory-timer (_graph)
+  "Start the session-wide immutable-family inventory timer."
+  (unless (timerp org-glance-cache--inventory-timer)
+    (setq org-glance-cache--inventory-timer
+          (run-with-timer 1 1 #'org-glance-cache--inventory-tick))))
+
 (cl-defun org-glance-cache:metadata (graph id)
   "Return ID's sole family-derived metadata from GRAPH's shared cache."
   (org-glance-cache--with-db
@@ -540,9 +587,11 @@
               :headlines headlines))))
    (list :families nil :revived nil :headlines nil)))
 
-(add-hook 'org-glance-graph-after-append-functions
+(add-hook 'org-glance-graph-after-family-append-functions
           #'org-glance-cache--after-append)
 (add-hook 'org-glance-graph-after-open-functions #'org-glance-cache:refresh)
+(add-hook 'org-glance-graph-after-open-functions
+          #'org-glance-cache--start-inventory-timer)
 
 (provide 'org-glance-cache)
 ;;; org-glance-cache.el ends here

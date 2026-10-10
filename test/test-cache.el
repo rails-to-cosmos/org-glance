@@ -124,10 +124,6 @@
                              ":ORG_GLANCE_ID: " id "\n"
                              ":END:\n")))
       (org-glance-version:write-snapshot dir id nil "glance" contents 10)
-      (should-not (org-glance-graph:live-meta graph id))
-
-      (org-glance-cache:refresh graph)
-
       (let ((metadata (org-glance-graph:live-meta graph id)))
         (should (org-glance-headline-metadata? metadata))
         (should (equal "Family authority"
@@ -358,7 +354,7 @@
   "Opening a graph reconciles a tombstone missed after its WAL append."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "a" "* Alpha"))
-    (let ((org-glance-graph-after-append-functions nil))
+    (let ((org-glance-graph-after-family-append-functions nil))
       (org-glance-graph:delete graph "a"))
     (let ((db (sqlite-open (org-glance-cache:path graph))))
       (unwind-protect
@@ -383,6 +379,37 @@
               db
               "SELECT event_id FROM headline_projection WHERE logical_id='a'")))
         (sqlite-close db)))))
+
+(ert-deftest org-glance-test:shared-cache-inventory-finds-a-relay-free-snapshot ()
+  "A live inventory fold discovers an immutable Snapshot without a relay line."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "a" "* TODO Before"))
+    (let* ((dir (org-glance-graph:headline-data-path graph "a"))
+           (leaf (car (org-glance-version:candidates
+                       (org-glance-version:history dir "a"))))
+           (content (replace-regexp-in-string
+                     "TODO Before" "DONE After"
+                     (org-glance-graph:get-content graph "a") t t)))
+      (org-glance-version:write-snapshot
+       dir "a" (list (org-glance-version:id leaf)) "glance" content)
+      (should (equal "Before"
+                     (org-glance-headline-metadata:title
+                      (org-glance-cache:metadata graph "a"))))
+      (should (= 1 (org-glance-cache:reconcile-inventory graph)))
+      (let ((metadata (org-glance-cache:metadata graph "a")))
+        (should (equal "After" (org-glance-headline-metadata:title metadata)))
+        (should (equal "DONE" (org-glance-headline-metadata:state metadata)))))))
+
+(ert-deftest org-glance-test:shared-cache-commit-failure-reaches-the-writer ()
+  "A durable event remains retryable when its required projection commit fails."
+  (org-glance-test:with-graph graph
+    (cl-letf (((symbol-function 'org-glance-cache--after-append)
+               (lambda (&rest _) (error "projection failed"))))
+      (should-error
+       (org-glance-graph:add graph (org-glance-test:headline "a" "* TODO Alpha"))
+       :type 'error))
+    (should (= 1 (length (org-glance-version:history
+                          (org-glance-graph:headline-data-path graph "a") "a"))))))
 
 (provide 'test-cache)
 ;;; test-cache.el ends here

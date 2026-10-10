@@ -740,6 +740,18 @@ today, up from 50.
     =src/data/org-glance-version.el:119= and pinned by
     =test/test-version.el:41=.
 
+40. *Immutable history is append-only.*  Physical events remain retained while
+    the configured history depth limits the visible ancestry projection.
+
+41. *Immutable family inventory is live search authority.*  Read-path polling
+    and a one-second session timer compare event-directory proofs with the
+    shared SQLite checkpoint and fold changed or unverified families. Relay
+    records accelerate compatibility ingestion but do not gate discovery. A
+    local mutation runs the family cache hook outside error demotion; failure
+    reaches the caller after the immutable event remains available for retry.
+    Pinned by =shared-cache-inventory-finds-a-relay-free-snapshot= and
+    =shared-cache-commit-failure-reaches-the-writer=.
+
 * Known hazards
 
 Costs the code ships WITH, deliberately.  Each was reproduced with a probe and each

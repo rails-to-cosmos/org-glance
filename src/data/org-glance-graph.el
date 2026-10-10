@@ -474,6 +474,11 @@ pre-append state.  Errors are demoted (invariant 9).")
   "Abnormal hook run with GRAPH and SPECS after SPECS reach the WAL.
 Side indexes update here when they need the graph's new read-cache state.")
 
+(defvar org-glance-graph-after-family-append-functions nil
+  "Abnormal hook required to commit GRAPH's family projection after SPECS.
+Errors reach the writer after the immutable event and WAL record remain
+durable for retry.  Auxiliary indexes use the error-demoted after-append hook.")
+
 (cl-defun org-glance-graph--append (graph specs)
   "Append SPECS to GRAPH's open segment, then maybe seal and compact.
 SPECS are metadata structs or bare plists; each gets a fresh monotonic `seq'."
@@ -493,6 +498,8 @@ SPECS are metadata structs or bare plists; each gets a fresh monotonic `seq'."
     (org-glance-graph--maybe-seal graph)
     (org-glance-graph--maybe-compact graph)
     (org-glance-graph--patch-cache graph written)
+    (run-hook-with-args
+     'org-glance-graph-after-family-append-functions graph specs)
     (with-demoted-errors "org-glance: after-append hook: %S"
       (run-hook-with-args 'org-glance-graph-after-append-functions graph specs))))
 
@@ -1270,11 +1277,10 @@ One check per graph per interval, whatever the read volume; 0 checks each read."
 Bound by `org-glance-graph:refresh-external' itself.")
 
 (cl-defun org-glance-graph--fold-external-maybe (graph)
-  "Fold GRAPH's pending external writes, at most once per poll interval.
+  "Reconcile GRAPH's external relay and immutable inventory when due.
 Every read calls this (`--ensure-cache'); the interval is
-`org-glance-graph-external-poll-seconds'.  A failed fold is messaged and leaves
-the cursor: `condition-case', never `with-demoted-errors', which lets errors
-through under `debug-on-error' (invariant 33)."
+`org-glance-graph-external-poll-seconds'.  Failures are messaged and retried on
+a later read."
   (unless org-glance-graph--folding-external
     (let ((now (float-time)))
       (when (>= (- now (org-glance-graph:-external-checked graph))
@@ -1285,7 +1291,12 @@ through under `debug-on-error' (invariant 33)."
           (when (org-glance-graph--external-pending-p graph survey)
             (condition-case err
                 (org-glance-graph:refresh-external graph survey)
-              (error (message "org-glance: refresh-external skipped: %S" err)))))))))
+              (error (message "org-glance: refresh-external skipped: %S" err)))))
+        (when (fboundp 'org-glance-cache:reconcile-inventory)
+          (condition-case err
+              (org-glance-cache:reconcile-inventory graph)
+            (error (message "org-glance: inventory reconciliation skipped: %S"
+                            err))))))))
 
 (cl-defun org-glance-graph:refresh-external (&optional (graph (org-glance-ensure-init))
                                                        survey)

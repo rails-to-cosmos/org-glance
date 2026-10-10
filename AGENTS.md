@@ -66,9 +66,10 @@ evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
    and repairs the retired broad rule while preserving unrelated lines. The gitignore
    also covers Glance's local `COMPLETIONS.jsonl`; tracked paths still require a one-time
    untrack because git applies no ignore rule to them.
-9. Side-index hooks, view refresh, occurrence snapshots and the plugin loader are
-   error-demoted — they may never break a save, an open, a display or init;
-   `org-glance-plugin-enable` is the deliberate loud counterpart.
+9. Auxiliary side-index hooks, view refresh, occurrence snapshots and the plugin
+   loader are error-demoted. The family-projection commit is part of mutation
+   success and reaches the caller after leaving its immutable event retryable;
+   `org-glance-plugin-enable` is the other deliberate loud counterpart.
 10. View coherence is flag-stale + pull-refresh; when freshness is in doubt, rebuild.
 11. Never clobber unsaved user edits: `user-error` or skip, never overwrite.
     `material:delete` names unsaved edits in its consent prompt and tombstones BEFORE
@@ -187,6 +188,9 @@ evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
 40. Immutable history is append-only. The tree-wide
     =#+GLANCE_HEADLINE_HISTORY_DEPTH:= setting limits the projected ancestry;
     zero exposes the complete event family.
+41. Immutable family directories are search authority. Reads and the session
+    timer compare event-name inventories with SQLite checkpoints; relay lines
+    are wake-up hints. A writer commits its family projection before success.
 
 ## Known hazards
 

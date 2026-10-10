@@ -175,11 +175,11 @@ tracks nothing, so the patterns are the whole answer; a tracked path says nil."
      (s-replace from to (f-read-text path 'utf-8)))))
 
 (ert-deftest org-glance-test:external-refresh-folds-the-edit-in ()
-  "A blob edited outside Emacs reaches the WAL through `refresh-external'."
+  "An immutable external edit is visible before its relay reaches the WAL."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "id1" "* TODO foo"))
     (org-glance-test:edit-blob graph "id1" "* TODO foo" "* DONE foo")
-    (should (string= "TODO" (org-glance-test:field graph "id1" state)))
+    (should (string= "DONE" (org-glance-test:field graph "id1" state)))
     (org-glance-test:external-write graph "id1")
     (should (= 1 (org-glance-graph:refresh-external graph)))
     (should (string= "DONE" (org-glance-test:field graph "id1" state)))))
@@ -332,8 +332,7 @@ edit invalidates a rendered overview the way a WAL append does."
         (should (= 1 calls))))))
 
 (ert-deftest org-glance-test:external-read-fold-survives-a-failure ()
-  "A fold that signals never breaks the read, even under `debug-on-error': the
-read serves the WAL and the line stays pending, its cursor unmoved."
+  "A failed relay fold leaves its cursor while inventory serves the event."
   (let ((org-glance-graph-external-poll-seconds 0)
         (debug-on-error t))
     (org-glance-test:with-graph graph
@@ -342,7 +341,7 @@ read serves the WAL and the line stays pending, its cursor unmoved."
       (org-glance-test:external-write graph "id1")
       (cl-letf (((symbol-function 'org-glance-graph--read-external)
                  (lambda (&rest _) (error "boom"))))
-        (should (string= "TODO" (org-glance-test:field graph "id1" state))))
+        (should (string= "DONE" (org-glance-test:field graph "id1" state))))
       (should (string-match-p "id1" (org-glance-test:external-pending graph)))
       (should (string= "DONE" (org-glance-test:field graph "id1" state))))))
 
@@ -1052,7 +1051,7 @@ alone into `meta/' is the repair, and the next fold takes it whole."
         (org-glance-test:edit-blob graph "id1" "* TODO foo" "* DONE foo")
         (should (string= "" (org-glance-test:external-pending graph)))
         (should (= 0 (org-glance-graph:refresh-external graph)))
-        (should (string= "TODO" (org-glance-test:field graph "id1" state)))
+        (should (string= "DONE" (org-glance-test:field graph "id1" state)))
         (rename-file moved gen1)
         (should (member gen1 (org-glance-graph--external-sources graph)))
         (should (string-match-p "id1" (org-glance-test:external-pending graph)))
