@@ -7,6 +7,9 @@ Notable user-facing changes.  Versions date-based
 
 ** Changed
 
+- Snapshot and Tombstone writes now publish canonical schema-2 family events;
+  schema-1 stores remain readable and migrate their implicit root before the
+  first schema-2 child.
 - Running graphs reconcile immutable family inventories on reads and once per
   second, independent of =EXTERNAL.jsonl= hints.
 - A successful mutation now includes its family-projection commit; failures

@@ -54,14 +54,25 @@
 
 (cl-defun org-glance-version--plist (version)
   "Return VERSION's portable metadata plist."
-  (list :version (org-glance-version:schema version)
-        :headline (org-glance-version:headline version)
-        :id (org-glance-version:id version)
-        :kind (symbol-name (org-glance-version:kind version))
-        :parents (apply #'vector (org-glance-version:parents version))
-        :contentSha256 (org-glance-version:content-sha256 version)
-        :created (org-glance-version:created version)
-        :producer (org-glance-version:producer version)))
+  (if (= 2 (org-glance-version:schema version))
+      (list :version 2
+            :event (pcase (org-glance-version:kind version)
+                     ('snapshot "snapshot-published")
+                     ('tombstone "tombstone-published"))
+            :headline (org-glance-version:headline version)
+            :id (org-glance-version:id version)
+            :parents (apply #'vector (org-glance-version:parents version))
+            :contentSha256 (org-glance-version:content-sha256 version)
+            :created (org-glance-version:created version)
+            :producer (org-glance-version:producer version))
+    (list :version 1
+          :headline (org-glance-version:headline version)
+          :id (org-glance-version:id version)
+          :kind (symbol-name (org-glance-version:kind version))
+          :parents (apply #'vector (org-glance-version:parents version))
+          :contentSha256 (org-glance-version:content-sha256 version)
+          :created (org-glance-version:created version)
+          :producer (org-glance-version:producer version))))
 
 (cl-defun org-glance-version--valid-content-p (version)
   "Return non-nil when VERSION's payload agrees with its envelope."
@@ -141,7 +152,7 @@
          (final (org-glance-version:path headline-dir id))
          (created (format-time-string "%Y-%m-%dT%H:%M:%SZ" nil t))
          (version (make-org-glance-version
-                   :schema 1 :headline headline :id id :kind kind
+                   :schema 2 :headline headline :id id :kind kind
                    :parents (sort (copy-sequence parents) #'string<)
                    :content-sha256 (and contents (secure-hash 'sha256 contents))
                    :created created :producer producer :directory final :valid t)))

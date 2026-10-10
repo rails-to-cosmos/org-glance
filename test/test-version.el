@@ -17,6 +17,13 @@
            (version (org-glance-version:write-snapshot dir "alpha" nil "org-glance" doc))
            (read (car (org-glance-version:read dir "alpha"))))
       (should (equal 'snapshot (org-glance-version:kind read)))
+      (should (= 2 (org-glance-version:schema version)))
+      (let ((raw (json-parse-string
+                  (f-read-text (f-join (org-glance-version:directory version)
+                                       "meta.json") 'utf-8)
+                  :object-type 'plist)))
+        (should (equal "snapshot-published" (plist-get raw :event)))
+        (should-not (plist-member raw :kind)))
       (should (equal (secure-hash 'sha256 doc)
                      (org-glance-version:content-sha256 read)))
       (should (equal ?7 (aref (org-glance-version:id read) 14)))
@@ -43,6 +50,14 @@
            (gone (org-glance-version:write-tombstone
                   dir "alpha" (list (org-glance-version:id root)) "org-glance")))
       (should (equal 'tombstone (org-glance-version:kind gone)))
+      (should (= 2 (org-glance-version:schema gone)))
+      (let ((raw (json-parse-string
+                  (f-read-text (f-join (org-glance-version:directory gone)
+                                       "meta.json") 'utf-8)
+                  :object-type 'plist)))
+        (should (equal "tombstone-published" (plist-get raw :event)))
+        (should-not (plist-member raw :kind))
+        (should-not (plist-get raw :contentSha256)))
       (should-not (f-exists? (org-glance-version:data-file
                               dir (org-glance-version:id gone)))))))
 
@@ -177,8 +192,10 @@
            (root-id (org-glance-version:legacy-id
                      "alpha" (secure-hash 'sha256 doc))))
       (f-write-text doc 'utf-8 data)
-      (let ((child (org-glance-version:write-snapshot
-                    dir "alpha" (list root-id) "org-glance" "* Revised\n")))
+      (let* ((root (org-glance-version:migrate-legacy dir "alpha"))
+             (child (org-glance-version:write-snapshot
+                     dir "alpha" (list root-id) "org-glance" "* Revised\n")))
+        (should (equal root-id (org-glance-version:id root)))
         (should (= 2 (length (org-glance-version:read dir "alpha"))))
         (should (equal (list (org-glance-version:id child))
                        (mapcar #'org-glance-version:id

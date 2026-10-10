@@ -726,8 +726,9 @@ today, up from 50.
     Incoming links omit the kind query so scanning cannot create a reversed edge.
     Pinned by =material-relations-actualize-in-logbook=.
 
-39. *Immutable version metadata is shared with Glance.*  Schema 1 records a UUIDv7
-    version id, logical headline id, =snapshot= or =tombstone= kind, sorted parent
+39. *Immutable version metadata is shared with Glance.*  New writes use schema 2
+    with explicit =Snapshot= or =Tombstone= events. Schema 1 remains readable and
+    records a UUIDv7 version id, logical headline id, =snapshot= or =tombstone= kind, sorted parent
     ids, optional SHA-256 content digest, UTC creation time, and producer.  Version
     directories publish by sibling-directory rename; leaves are identifiable versions
     absent from every parent set, including nodes whose payload fails integrity checks.
