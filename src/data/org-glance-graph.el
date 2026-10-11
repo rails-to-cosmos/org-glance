@@ -479,6 +479,13 @@ Side indexes update here when they need the graph's new read-cache state.")
 Errors reach the writer after the immutable event and WAL record remain
 durable for retry.  Auxiliary indexes use the error-demoted after-append hook.")
 
+(defvar org-glance-graph--publication-hook nil
+  "Function called after local projection commit and before live publication.")
+
+(cl-defun org-glance-graph--publication-point (phase)
+  (when org-glance-graph--publication-hook
+    (funcall org-glance-graph--publication-hook phase)))
+
 (cl-defun org-glance-graph--append (graph specs)
   "Append SPECS to GRAPH's open segment, then maybe seal and compact.
 SPECS are metadata structs or bare plists; each gets a fresh monotonic `seq'."
@@ -500,6 +507,8 @@ SPECS are metadata structs or bare plists; each gets a fresh monotonic `seq'."
     (org-glance-graph--patch-cache graph written)
     (run-hook-with-args
      'org-glance-graph-after-family-append-functions graph specs)
+    (org-glance-graph--publication-point 'after-sqlite-commit)
+    (org-glance-graph--publication-point 'before-live-frame-publication)
     (with-demoted-errors "org-glance: after-append hook: %S"
       (run-hook-with-args 'org-glance-graph-after-append-functions graph specs))))
 

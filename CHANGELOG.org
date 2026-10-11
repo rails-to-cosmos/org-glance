@@ -5,8 +5,14 @@ Notable user-facing changes.  Versions date-based
 
 * Unreleased
 
+* 1.55.0.0.20261011.0
+
 ** Changed
 
+- Snapshot and Tombstone publication exposes the same crash boundaries as
+  Glance. Both =.version-*= and =*.tmp= private staging directories stay outside
+  either producer's inventory proof, and the required SQLite family projection
+  commits before live hooks.
 - Snapshot and Tombstone writes now publish canonical schema-2 family events;
   schema-1 stores remain readable and migrate their implicit root before the
   first schema-2 child.

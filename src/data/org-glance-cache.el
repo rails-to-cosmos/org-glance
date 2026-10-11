@@ -220,7 +220,13 @@
     (when (file-directory-p versions)
       (sort
        (mapcar #'file-name-nondirectory
-               (cl-remove-if #'file-symlink-p (f-directories versions)))
+               (cl-remove-if
+                (lambda (path)
+                  (let ((name (file-name-nondirectory path)))
+                    (or (file-symlink-p path)
+                        (string-prefix-p ".version-" name)
+                        (string-suffix-p ".tmp" name))))
+                (f-directories versions)))
        #'string<))))
 
 (cl-defun org-glance-cache--inventory-proof (event-ids)

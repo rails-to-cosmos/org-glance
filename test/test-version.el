@@ -61,6 +61,27 @@
       (should-not (f-exists? (org-glance-version:data-file
                               dir (org-glance-version:id gone)))))))
 
+(ert-deftest org-glance-test:restart-admits-event-exactly-after-rename ()
+  (with-temp-directory root
+    (dolist (kind '(snapshot tombstone))
+      (dolist (phase '(before-temp-write after-payload-write
+                       after-envelope-write after-final-rename))
+        (let* ((dir (f-join root (symbol-name kind) (symbol-name phase)))
+               (org-glance-version--publication-hook
+                (lambda (observed)
+                  (when (eq observed phase)
+                    (error "simulated crash at %s" phase)))))
+          (should-error
+           (pcase kind
+             ('snapshot
+              (org-glance-version:write-snapshot
+               dir "alpha" nil "org-glance" "* Alpha\n"))
+             ('tombstone
+              (org-glance-version:write-tombstone
+               dir "alpha" nil "org-glance"))))
+          (should (= (if (eq phase 'after-final-rename) 1 0)
+                     (length (org-glance-version:history dir "alpha")))))))))
+
 (ert-deftest org-glance-test:schema-2-rejection-retains-history-and-selects-a-candidate ()
   (with-temp-directory dir
     (let* ((root (org-glance-version:write-snapshot

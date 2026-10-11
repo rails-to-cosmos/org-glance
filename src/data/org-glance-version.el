@@ -158,6 +158,13 @@
                    :created created :producer producer :directory final :valid t)))
     (org-glance-version--publish version contents)))
 
+(defvar org-glance-version--publication-hook nil
+  "Function called with each immutable event publication phase.")
+
+(cl-defun org-glance-version--publication-point (phase)
+  (when org-glance-version--publication-hook
+    (funcall org-glance-version--publication-hook phase)))
+
 (cl-defun org-glance-version--publish (version contents)
   "Publish VERSION atomically, optionally storing CONTENTS."
   (let* ((final (org-glance-version:directory version))
@@ -166,13 +173,17 @@
     (let ((temp (make-temp-file (f-join parent ".version-") t)))
       (unwind-protect
           (progn
+            (org-glance-version--publication-point 'before-temp-write)
             (when contents
               (let ((coding-system-for-write 'utf-8-unix))
                 (write-region contents nil (f-join temp "data.org") nil 'silent)))
+            (org-glance-version--publication-point 'after-payload-write)
             (let ((coding-system-for-write 'utf-8-unix))
               (write-region (concat (json-serialize (org-glance-version--plist version)) "\n")
                             nil (f-join temp "meta.json") nil 'silent))
+            (org-glance-version--publication-point 'after-envelope-write)
             (rename-file temp final)
+            (org-glance-version--publication-point 'after-final-rename)
             (setq temp nil))
         (when (and temp (f-exists? temp)) (delete-directory temp t))))
     version))

@@ -380,6 +380,61 @@
               "SELECT event_id FROM headline_projection WHERE logical_id='a'")))
         (sqlite-close db)))))
 
+(ert-deftest org-glance-test:restart-closes-cache-to-live-publication-boundary ()
+  (dolist (kind '(snapshot tombstone))
+    (dolist (phase '(after-sqlite-commit before-live-frame-publication))
+      (with-temp-directory dir
+        (let* ((graph (org-glance-graph dir))
+               (frames 0))
+          (org-glance-graph:add graph
+            (org-glance-test:headline "a" "* Root"))
+          (let ((org-glance-graph--publication-hook
+                 (lambda (observed)
+                   (when (eq observed phase)
+                     (let ((db (sqlite-open (org-glance-cache:path graph))))
+                       (unwind-protect
+                           (should (= 2 (caar (sqlite-select db
+                             "SELECT count(*) FROM headline_event WHERE logical_id='a'"))))
+                         (sqlite-close db)))
+                     (error "simulated crash at %s" phase))))
+                (org-glance-graph-after-append-functions
+                 (list (lambda (&rest _) (cl-incf frames)))))
+            (should-error
+             (pcase kind
+               ('snapshot
+                (org-glance-graph:add graph
+                  (org-glance-test:headline "a" "* Child")))
+               ('tombstone (org-glance-graph:delete graph "a")))))
+          (should (= 0 frames))
+          (let* ((cold (org-glance-test:reopen graph))
+                 (history (org-glance-version:history
+                           (org-glance-graph:headline-data-path cold "a") "a")))
+            (should (= 2 (length history)))
+            (pcase kind
+              ('snapshot
+               (should (equal "Child"
+                              (org-glance-headline-metadata:title
+                               (org-glance-graph:get-headline cold "a")))))
+              ('tombstone
+               (should (eq 'tombstone
+                           (org-glance-graph:get-headline cold "a")))))))))))
+
+(ert-deftest org-glance-test:publication-staging-is-outside-family-inventory ()
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "staging" "* Root"))
+    (let* ((dir (org-glance-graph:headline-data-path graph "staging"))
+           (staging (f-join dir "versions" ".version-abandoned")))
+      (make-directory staging)
+      (write-region "* Partial\n" nil (f-join staging "data.org") nil 'silent)
+      (make-directory (f-join dir "versions" "foreign-staging.tmp"))
+      (should (= 0 (org-glance-cache:reconcile-inventory graph)))
+      (let ((db (sqlite-open (org-glance-cache:path graph))))
+        (unwind-protect
+            (should (equal '((1))
+                           (sqlite-select db
+                            "SELECT verified FROM headline_family WHERE logical_id='staging'")))
+          (sqlite-close db))))))
+
 (ert-deftest org-glance-test:shared-cache-inventory-finds-a-relay-free-snapshot ()
   "A live inventory fold discovers an immutable Snapshot without a relay line."
   (org-glance-test:with-graph graph
