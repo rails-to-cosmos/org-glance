@@ -435,6 +435,67 @@
                             "SELECT verified FROM headline_family WHERE logical_id='staging'")))
           (sqlite-close db))))))
 
+(ert-deftest org-glance-test:family-projection-observes-filesystem-once ()
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "observed" "* Observed"))
+    (let* ((dir (org-glance-graph:headline-data-path graph "observed"))
+           (versions (f-join dir "versions"))
+           (directory-censuses 0)
+           (payload-observations 0)
+           (original-directories (symbol-function 'f-directories))
+           (original-payload
+            (symbol-function 'org-glance-cache--payload-observation))
+           (leaf (car (org-glance-version:candidates
+                       (org-glance-version:history dir "observed"))))
+           (payload (org-glance-version:data-file
+                     dir (org-glance-version:id leaf)))
+           (db (sqlite-open (org-glance-cache:path graph))))
+      (unwind-protect
+          (progn
+            (sqlite-execute db "PRAGMA foreign_keys=ON")
+            (cl-letf (((symbol-function 'f-directories)
+                     (lambda (path &rest args)
+                       (when (equal path versions)
+                         (cl-incf directory-censuses))
+                       (apply original-directories path args)))
+                    ((symbol-function 'org-glance-cache--payload-observation)
+                     (lambda (&rest args)
+                       (cl-incf payload-observations)
+                       (apply original-payload args))))
+              (org-glance-cache--project-family db graph "observed")
+              (should (= 1 directory-censuses))
+              (should (= 1 payload-observations))
+              (setq directory-censuses 0
+                    payload-observations 0)
+              (delete-file payload)
+              (org-glance-cache--project-family db graph "observed")
+              (should (= 1 directory-censuses))
+              (should (= 1 payload-observations))))
+        (sqlite-close db)))))
+
+(ert-deftest org-glance-test:empty-family-projection-censuses-once ()
+  (org-glance-test:with-graph graph
+    (let* ((dir (org-glance-graph:headline-data-path graph "empty"))
+           (versions (f-join dir "versions"))
+           (directory-censuses 0)
+           (original-directories (symbol-function 'f-directories))
+           (db (sqlite-open (org-glance-cache:path graph))))
+      (make-directory versions t)
+      (unwind-protect
+          (progn
+            (sqlite-execute db "PRAGMA foreign_keys=ON")
+            (cl-letf (((symbol-function 'f-directories)
+                       (lambda (path &rest args)
+                         (when (equal path versions)
+                           (cl-incf directory-censuses))
+                         (apply original-directories path args))))
+              (org-glance-cache--project-family db graph "empty")
+              (should (= 1 directory-censuses))
+              (setq directory-censuses 0)
+              (org-glance-cache--project-family db graph "empty" nil)
+              (should (= 0 directory-censuses))))
+        (sqlite-close db)))))
+
 (ert-deftest org-glance-test:shared-cache-inventory-finds-a-relay-free-snapshot ()
   "A live inventory fold discovers an immutable Snapshot without a relay line."
   (org-glance-test:with-graph graph

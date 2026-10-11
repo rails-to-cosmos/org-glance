@@ -211,10 +211,19 @@
 (cl-defun org-glance-version:history (headline-dir headline)
   "Read HEADLINE's identifiable version history below HEADLINE-DIR.
 Each returned node carries payload integrity in its `valid' slot."
+  (let ((root (f-join headline-dir "versions")))
+    (org-glance-version:history-from-directories
+     headline-dir headline
+     (and (f-directory? root) (f-directories root)))))
+
+(cl-defun org-glance-version:history-from-directories
+    (headline-dir headline directories)
+  "Read HEADLINE history from already observed DIRECTORIES below HEADLINE-DIR.
+DIRECTORIES may be empty."
   (let* ((root (f-join headline-dir "versions"))
          (candidates
           (when (f-directory? root)
-            (cl-loop for dir in (sort (f-directories root) #'string<)
+            (cl-loop for dir in (sort directories #'string<)
                for meta = (f-join dir "meta.json")
                when (f-exists? meta)
                for raw = (condition-case nil

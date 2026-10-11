@@ -5,6 +5,13 @@ Notable user-facing changes.  Versions date-based
 
 * Unreleased
 
+* 1.55.0.0.20261011.1
+
+** Changed
+
+- Shared-cache family projection performs one event-directory census and one
+  payload observation per Snapshot, including damaged and empty families.
+
 * 1.55.0.0.20261011.0
 
 ** Changed

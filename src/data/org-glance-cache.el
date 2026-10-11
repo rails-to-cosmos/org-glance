@@ -12,6 +12,9 @@
 (require 'org-glance-headline)
 (require 'org-glance-version)
 
+(declare-function org-glance-version:history-from-directories
+                  "org-glance-version" (headline-dir headline directories))
+
 (defconst org-glance-cache:version 4
   "Shared Glance cache schema version.")
 
@@ -233,11 +236,19 @@
   "Return a stable local inventory proof for EVENT-IDS."
   (secure-hash 'sha256 (mapconcat #'identity event-ids "\n")))
 
-(cl-defun org-glance-cache--project-family (db graph id)
+(cl-defun org-glance-cache--project-family
+    (db graph id &optional (inventory nil inventory-supplied-p))
   "Replace logical family ID's folded cache projection in DB."
   (let* ((dir (org-glance-graph:headline-data-path graph id))
+         (inventory (if inventory-supplied-p
+                        inventory
+                      (org-glance-cache--inventory-event-ids dir)))
          (history (and (file-directory-p (f-join dir "versions"))
-                       (org-glance-version:history dir id)))
+                       (org-glance-version:history-from-directories
+                        dir id
+                        (mapcar (lambda (event)
+                                  (f-join dir "versions" event))
+                                inventory))))
          (candidates (org-glance-version:candidates history))
          (leaf-ids (mapcar #'org-glance-version:id candidates))
          (sole (and (= 1 (length candidates)) (car candidates)))
@@ -255,9 +266,9 @@
          (envelopes (mapcar #'org-glance-cache--event-envelope ordered))
          (fingerprint (secure-hash 'sha256
                                    (mapconcat #'identity envelopes "")))
-         (inventory (org-glance-cache--inventory-event-ids dir))
          (inventory-proof (org-glance-cache--inventory-proof inventory))
          (admitted (mapcar #'org-glance-version:id history))
+         (payload-observations (make-hash-table :test #'equal))
          (previous (car (sqlite-select
                          db
                          "SELECT logical_id FROM headline_family WHERE logical_id=?"
@@ -315,6 +326,8 @@
           (when (eq 'snapshot (org-glance-version:kind version))
             (let ((observation
                    (org-glance-cache--payload-observation graph id dir version)))
+              (when (member event leaf-ids)
+                (puthash event observation payload-observations))
               (sqlite-execute
                db
                "INSERT INTO headline_payload_observation(logical_id,event_id,path,observed_digest,payload_state) VALUES(?,?,?,?,?)"
@@ -326,8 +339,7 @@
       (dolist (version candidates)
         (when (eq 'snapshot (org-glance-version:kind version))
           (let* ((event (org-glance-version:id version))
-                 (observation
-                  (org-glance-cache--payload-observation graph id dir version))
+                 (observation (gethash event payload-observations))
                  (metadata
                   (and (cdr observation)
                        (if (equal "available" (car observation))
@@ -361,8 +373,8 @@
       (unless (or projected (member state '("deleted" "empty")))
         (let* ((observation (and sole
                                  (eq 'snapshot (org-glance-version:kind sole))
-                                 (org-glance-cache--payload-observation
-                                  graph id dir sole)))
+                                 (gethash (org-glance-version:id sole)
+                                          payload-observations)))
                (damage (or (car-safe observation) "unavailable"))
                (metadata (make-org-glance-headline-metadata
                           :id id :title (format "%s — %s recovery" id damage)
@@ -498,21 +510,27 @@ Return the number of families folded."
                      "SELECT logical_id,reconciled_epoch,verified FROM headline_family"))
               (ids (sort (delete-dups
                           (append current (mapcar #'car held))) #'string<))
+              (observed
+               (mapcar
+                (lambda (id)
+                  (cons id (org-glance-cache--inventory-event-ids
+                            (org-glance-graph:headline-data-path graph id))))
+                ids))
               (changed
                (cl-remove-if-not
-                (lambda (id)
-                  (let* ((row (assoc id held))
-                         (proof (org-glance-cache--inventory-proof
-                                 (org-glance-cache--inventory-event-ids
-                                  (org-glance-graph:headline-data-path graph id)))))
+                (lambda (family)
+                  (let* ((id (car family))
+                         (row (assoc id held))
+                         (proof (org-glance-cache--inventory-proof (cdr family))))
                     (or (null row) (/= 1 (or (nth 2 row) 0))
                         (not (equal proof (nth 1 row))))))
-                ids)))
+                observed)))
          (org-glance-cache--transaction
           db
           (lambda ()
-            (dolist (id changed)
-              (org-glance-cache--project-family db graph id))))
+            (dolist (family changed)
+              (org-glance-cache--project-family
+               db graph (car family) (cdr family)))))
          (length changed))))))
 
 (defvar org-glance-cache--inventory-timer nil
