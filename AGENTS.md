@@ -166,8 +166,8 @@ evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
     is git-ignored — what crosses machines is the WAL record the fold produces, at the
     cost of hazard H3. Refusals, ordering rules, the retirement contract and the
     evidence: [[file:docs/invariants.org][docs/invariants.org]].
-35. `cache/glance.sqlite3` schema version 2 is the local multi-writer
-    projection. `headline.digest` and `org_headline.digest` are raw file
+35. `cache/glance.sqlite3` is the local multi-writer projection.
+    `headline.digest` and `org_headline.digest` are raw file
     SHA-256 values; `org_headline.content_hash` is org-glance's normalized
     content SHA-1. SQLite serializes its writers. The graph WAL remains the
     compatibility reader until the coordinated stage-5 cutover.
@@ -179,8 +179,8 @@ evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
     before-save hook removes them, preserving authored blob content alone. Plain
     edges use `Refers to` / `Referred by`; typed edges capitalize `<type>`; each
     entry carries its current source snapshot creation time, except legacy roots.
-39. Immutable headline-version metadata is schema 1: UUIDv7 id, logical headline
-    id, kind, sorted parents, SHA-256 content digest, UTC creation time, and producer.
+39. Immutable headline-version metadata carries a UUIDv7 id, logical headline id,
+    kind, sorted parents, SHA-256 content digest, UTC creation time, and producer.
     Its compact JSON field order and trailing newline are canonical across Glance and
     org-glance. Leaves derive from every identifiable node before payload integrity is
     checked. Writers publish immutable children; legacy `data.org` is an implicit root
