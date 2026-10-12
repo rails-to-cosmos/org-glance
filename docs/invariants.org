@@ -824,8 +824,13 @@ today, up from 50.
     =cache-refresh-async-uses-an-isolated-emacs-process=,
     =cache-refresh-batch-does-not-queue-another-worker=,
     =cache-refresh-process-commits-across-the-process-boundary=,
+    =cache-worker-finds-a-package-upgraded-in-place=,
+    =table-visit-builds-its-palette-from-cache-rows=,
+    =table-property-column-uses-the-row-cache-only=,
     =inventory-tick-skips-a-proven-current-store= and
     =explicit-refresh-detects-after-nonblocking-read=.
+    Enforced by
+    [[https://github.com/rails-to-cosmos/org-glance/commit/eff816c][eff816c]].
 
 43. *Checkpoint source paths come from one verified production inventory.*
     =org-glance-cache:checkpoint-source-paths= accepts a current inventory proof

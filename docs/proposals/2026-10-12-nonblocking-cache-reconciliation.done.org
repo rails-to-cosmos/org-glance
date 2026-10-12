@@ -38,6 +38,11 @@ operations.
 - =cache-refresh-batch-does-not-queue-another-worker= prevents recursive workers.
 - =cache-refresh-process-commits-across-the-process-boundary= verifies the real
   worker's committed projection.
+- =cache-worker-finds-a-package-upgraded-in-place= keeps a live session able to
+  launch a worker after its loaded package directory is replaced.
+- =table-visit-builds-its-palette-from-cache-rows= and
+  =table-property-column-uses-the-row-cache-only= keep a warm tagged Table on
+  its committed Row and property projections.
 - =startup-refresh-leaves-first-read-due= proves startup cannot hide a Git
   update behind the steady-state throttle.
 - =inventory-tick-skips-a-proven-current-store= proves the timer does not repeat
@@ -50,7 +55,7 @@ operations.
 
 - =eask recompile=
 - focused cache/process/material-read regression sets
-- =make test= (499 tests)
+- =make test= (502 tests)
 
 On the real 7,099-directory =~/sync/views= store, a forced-stale synchronous
 startup exceeded the 120-second measurement cap. The asynchronous caller path
@@ -58,4 +63,9 @@ returned in 437 ms. At 1,000 families, the isolated worker launched in 1.5 ms
 p50 and completed in 3.48 s p50 while foreground committed-projection probes
 remained below 83 ms p50. The census remains optimization work; it cannot
 occupy the interactive Emacs thread.
+
+The 448-Row =alberblanc= Table with its saved property column rendered in
+0.367 seconds after [[https://github.com/rails-to-cosmos/org-glance/commit/eff816c][eff816c]], down from a run exceeding 30 seconds. The action
+benchmark also measures the full Table entrypoint and rejects any census,
+History read, reconciliation request, or cache transaction.
 

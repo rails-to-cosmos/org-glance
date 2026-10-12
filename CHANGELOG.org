@@ -5,6 +5,20 @@ Notable user-facing changes.  Versions date-based
 
 * Unreleased
 
+* 1.55.0.0.20261012.16
+
+** Changed
+
+- A tagged Table builds its Rows and state palette from one committed-cache
+  query. Hash-current property cells read the property sidecar directly.
+- A reconciliation worker survives an in-place package upgrade by selecting
+  the newest installed org-glance package directory.
+
+** Fixed
+
+- A failed reconciliation process names its retained diagnostic buffer instead
+  of reporting only exit code 255.
+
 * 1.55.0.0.20261012.15
 
 ** Changed

@@ -117,6 +117,14 @@ SQLite; at 2,000 Rows its p50 fell from 201.2 ms to 9.5 ms. The action benchmark
 asserts zero reconciliation requests, full censuses, cache maintenance
 transactions, and History reads for every transient read entrypoint.
 
+The full tagged Table entrypoint now includes saved property columns in that
+contract. Its state palette and hash-current property cells reuse the selected
+committed Rows and property sidecar. On the 448-Row =alberblanc= view, isolated
+rendering fell from more than 30 seconds to 0.367 seconds. A live Emacs whose
+loaded package directory was replaced also discovers the newest installed
+package for its worker, and an exit-255 failure names the retained process
+buffer. org-glance 1.55.0.0.20261012.16 carries the fix.
+
 ** TODO Publish full recovery as a separate committed generation
 The isolated process still refreshes the existing SQLite projection in phases.
 Build complete recovery state separately, validate it, then atomically publish
