@@ -6,6 +6,7 @@
 ;;; Code:
 
 (require 'cl-lib)
+(require 'json)
 (require 'sqlite)
 
 (require 'org-glance-graph)
@@ -15,7 +16,7 @@
 (declare-function org-glance-version:history-from-directories
                   "org-glance-version" (headline-dir headline directories))
 
-(defconst org-glance-cache:version 4
+(defconst org-glance-cache:version 5
   "Shared Glance cache schema version.")
 
 (defconst org-glance-cache--schema
@@ -32,7 +33,8 @@
     "CREATE TABLE IF NOT EXISTS headline_projection (logical_id TEXT NOT NULL REFERENCES headline_family(logical_id) ON DELETE CASCADE, event_id TEXT, role TEXT NOT NULL, source_digest TEXT, parser_contract TEXT NOT NULL, record_payload TEXT, PRIMARY KEY(logical_id,event_id))"
     "CREATE UNIQUE INDEX IF NOT EXISTS headline_projection_metadata ON headline_projection(logical_id) WHERE event_id IS NULL"
     "CREATE TABLE IF NOT EXISTS producer_projection (logical_id TEXT NOT NULL REFERENCES headline_family(logical_id) ON DELETE CASCADE, event_id TEXT, producer TEXT NOT NULL, parser_contract TEXT NOT NULL, record_payload TEXT NOT NULL, PRIMARY KEY(logical_id,event_id,producer))"
-    "CREATE UNIQUE INDEX IF NOT EXISTS producer_projection_metadata ON producer_projection(logical_id,producer) WHERE event_id IS NULL")
+    "CREATE UNIQUE INDEX IF NOT EXISTS producer_projection_metadata ON producer_projection(logical_id,producer) WHERE event_id IS NULL"
+    "CREATE TABLE IF NOT EXISTS inventory_directory (path TEXT PRIMARY KEY, stamp TEXT NOT NULL)")
   "DDL shared with `Glance.Cache'.")
 
 (cl-defun org-glance-cache:path (graph)
@@ -458,20 +460,50 @@
 
 (cl-defun org-glance-cache--inventory-proof-current-p (graph)
   "Return non-nil when GRAPH's last directory-entry proof remains current."
-  (when-let* ((proof (gethash graph org-glance-cache--inventory-directory-proofs)))
+  (when-let* ((proof
+               (or (gethash graph org-glance-cache--inventory-directory-proofs)
+                   (let ((loaded (org-glance-cache--load-inventory-proof graph)))
+                     (when loaded
+                       (puthash graph loaded
+                                org-glance-cache--inventory-directory-proofs)
+                       loaded)))))
     (cl-every (lambda (entry)
                 (equal (cdr entry)
                        (org-glance-cache--directory-stamp (car entry))))
               proof)))
+
+(cl-defun org-glance-cache--load-inventory-proof (graph)
+  "Return GRAPH's persisted directory-entry proof."
+  (org-glance-cache--with-db
+   graph
+   (lambda (db)
+     (mapcar
+      (lambda (row)
+        (cons (car row) (json-parse-string (cadr row) :array-type 'list)))
+      (sqlite-select db "SELECT path,stamp FROM inventory_directory")))))
+
+(cl-defun org-glance-cache--persist-inventory-proof (graph proof)
+  "Replace GRAPH's persisted directory-entry PROOF."
+  (org-glance-cache--with-db
+   graph
+   (lambda (db)
+     (org-glance-cache--transaction
+      db
+      (lambda ()
+        (sqlite-execute db "DELETE FROM inventory_directory")
+        (dolist (entry proof)
+          (sqlite-execute
+           db "INSERT INTO inventory_directory(path,stamp) VALUES(?,?)"
+           (vector (car entry) (json-serialize (vconcat (cdr entry)))))))))))
 
 (cl-defun org-glance-cache--record-complete-inventory (graph thunk)
   "Call THUNK and retain GRAPH's stable directory-entry proof on success."
   (let ((org-glance-cache--collect-inventory-proof t)
         (org-glance-cache--observed-inventory-directories nil))
     (prog1 (funcall thunk)
-      (puthash graph
-               (delete-dups org-glance-cache--observed-inventory-directories)
-               org-glance-cache--inventory-directory-proofs))))
+      (let ((proof (delete-dups org-glance-cache--observed-inventory-directories)))
+        (puthash graph proof org-glance-cache--inventory-directory-proofs)
+        (org-glance-cache--persist-inventory-proof graph proof)))))
 
 (cl-defun org-glance-cache--inventory-current-p (held family)
   "Return non-nil when HELD proves observed FAMILY is already projected."
@@ -518,9 +550,10 @@
 
 (cl-defun org-glance-cache:refresh (graph)
   "Reconcile GRAPH's live headlines into the shared cache."
-  (org-glance-cache--record-complete-inventory
-   graph
-   (lambda ()
+  (unless (org-glance-cache--inventory-proof-current-p graph)
+    (org-glance-cache--record-complete-inventory
+     graph
+     (lambda ()
      (let* ((headlines (org-glance-cache--headlines graph))
             (families (delete-dups
                        (append (mapcar #'org-glance-headline-metadata:id headlines)
@@ -561,7 +594,7 @@
             (org-glance-cache--project-edges db metadata))
           (sqlite-execute
            db
-           "DELETE FROM source WHERE producer='org-glance' AND NOT EXISTS (SELECT 1 FROM headline WHERE headline.path=source.path)"))))))))))
+           "DELETE FROM source WHERE producer='org-glance' AND NOT EXISTS (SELECT 1 FROM headline WHERE headline.path=source.path)")))))))))))
 
 (cl-defun org-glance-cache:reconcile-families (graph ids)
   "Reconcile immutable family IDS into GRAPH's shared projection."

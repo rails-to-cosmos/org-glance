@@ -13,7 +13,7 @@
     (let ((db (sqlite-open (org-glance-cache:path graph))))
       (unwind-protect
           (progn
-            (should (equal '((4)) (sqlite-select db "PRAGMA user_version")))
+          (should (equal '((5)) (sqlite-select db "PRAGMA user_version")))
             (should
              (equal
               '(("headline_event") ("headline_family")
@@ -541,6 +541,30 @@
            "* After\n"))
         (org-glance-cache:refresh graph)
         (should (= 1 projects))))))
+
+(ert-deftest org-glance-test:warm-restart-loads-the-persisted-directory-proof ()
+  "A new graph validates warm inventory without enumerating event directories."
+  (with-temp-directory dir
+    (let ((graph (org-glance-graph dir)))
+      (org-glance-graph:add graph (org-glance-test:headline "observed" "* Observed"))
+      (org-glance-cache:refresh graph)
+      (remhash (org-glance-graph:directory graph) org-glance-graph:list))
+    (let ((censuses 0)
+          (original (symbol-function 'org-glance-cache--inventory-event-ids)))
+      (cl-letf (((symbol-function 'org-glance-cache--inventory-event-ids)
+                 (lambda (&rest args)
+                   (cl-incf censuses)
+                   (apply original args))))
+        (let ((graph (org-glance-graph dir)))
+          (should (= 0 censuses))
+          (let* ((family (org-glance-graph:headline-data-path graph "observed"))
+                 (leaf (car (org-glance-version:current family "observed"))))
+            (org-glance-version:write-snapshot
+             family "observed" (list (org-glance-version:id leaf)) "peer"
+             "* Changed\n"))
+          (remhash (org-glance-graph:directory graph) org-glance-graph:list))
+        (org-glance-graph dir)
+        (should (> censuses 0))))))
 
 (ert-deftest org-glance-test:shared-cache-inventory-finds-a-relay-free-snapshot ()
   "A live inventory fold discovers an immutable Snapshot without a relay line."

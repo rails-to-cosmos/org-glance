@@ -5,6 +5,13 @@ Notable user-facing changes.  Versions date-based
 
 * Unreleased
 
+* 1.55.0.0.20261012.2
+
+** Changed
+
+- Unchanged warm startup validates a persisted directory proof without
+  enumerating immutable event directories.
+
 * 1.55.0.0.20261012.1
 
 ** Changed
