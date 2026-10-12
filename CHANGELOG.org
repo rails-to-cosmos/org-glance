@@ -5,6 +5,12 @@ Notable user-facing changes.  Versions date-based
 
 * Unreleased
 
+* 1.55.0.0.20261012.9
+
+** Changed
+
+- Material relation direction has focused regression coverage for body links.
+
 * 1.55.0.0.20261012.8
 
 ** Changed

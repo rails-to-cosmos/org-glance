@@ -194,6 +194,19 @@ a save persists to the graph and survives re-materializing."
       (should-not (s-contains? "- Blocked by" blob))
       (should-not (s-contains? "- Reviewed by" blob)))))
 
+(ert-deftest org-glance-test:material-relation-direction-follows-body-link ()
+  "Show the body-link owner as referring and its target as referred to."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-test:headline "a" "* A" "[[glance:b][B]]")
+      (org-glance-test:headline "b" "* B"))
+    (org-glance-test:with-material (_buffer graph "a")
+      (should (s-contains? "- Refers to [[glance:b][B]]" (buffer-string)))
+      (should-not (s-contains? "- Referred by [[glance:b][B]]" (buffer-string))))
+    (org-glance-test:with-material (_buffer graph "b")
+      (should (s-contains? "- Referred by [[glance:a][A]]" (buffer-string)))
+      (should-not (s-contains? "- Refers to [[glance:a][A]]" (buffer-string))))))
+
 (ert-deftest org-glance-test:material-open-missing ()
   "Materializing an unknown id errors."
   (org-glance-test:with-graph graph
