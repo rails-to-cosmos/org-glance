@@ -175,10 +175,11 @@ tracks nothing, so the patterns are the whole answer; a tracked path says nil."
      (s-replace from to (f-read-text path 'utf-8)))))
 
 (ert-deftest org-glance-test:external-refresh-folds-the-edit-in ()
-  "An immutable external edit is visible before its relay reaches the WAL."
+  "An immutable external edit is visible after inventory reconciliation."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "id1" "* TODO foo"))
     (org-glance-test:edit-blob graph "id1" "* TODO foo" "* DONE foo")
+    (org-glance-cache:reconcile-inventory graph)
     (should (string= "DONE" (org-glance-test:field graph "id1" state)))
     (org-glance-test:external-write graph "id1")
     (should (= 1 (org-glance-graph:refresh-external graph)))
@@ -1051,6 +1052,7 @@ alone into `meta/' is the repair, and the next fold takes it whole."
         (org-glance-test:edit-blob graph "id1" "* TODO foo" "* DONE foo")
         (should (string= "" (org-glance-test:external-pending graph)))
         (should (= 0 (org-glance-graph:refresh-external graph)))
+        (org-glance-cache:reconcile-inventory graph)
         (should (string= "DONE" (org-glance-test:field graph "id1" state)))
         (rename-file moved gen1)
         (should (member gen1 (org-glance-graph--external-sources graph)))

@@ -8,7 +8,7 @@ Proposal files hold design detail; [[file:../org-glance.org][org-glance.org]] re
 When work lands, mark its item =DONE=, rename its proposal from =.proposed= to
 =.done=, update [[file:../CHANGELOG.org][CHANGELOG.org]], and record the verification in the proposal.
 
-Last reviewed: 2026-10-08.  Proposal inventory: 30 resolved, 17 proposed; the
+Last reviewed: 2026-10-12.  Proposal inventory: 31 resolved, 17 proposed; the
 composable-tag-template proposal has one shipped phase and two proposed phases.
 
 * DONE 0. Reconcile roadmap status
@@ -45,6 +45,16 @@ CLOSED: [2026-10-01]
 - [X] Replace the portable interop case with a local-index contract.
 
 [[file:proposals/2026-10-01-local-cache-retires-portable-projections.done.org][Proposal: local cache retires portable projections]]
+
+* DONE 0.75 Restore interactive startup
+CLOSED: [2026-10-12]
+
+- [X] Return from graph open before immutable-family reconciliation.
+- [X] Serve the last verified SQLite/WAL projection while reconciliation runs.
+- [X] Limit each graph to one background worker and one request per minute.
+- [X] Keep relay-backed external publication immediately visible.
+
+[[file:proposals/2026-10-12-nonblocking-cache-reconciliation.done.org][Proposal: nonblocking cache reconciliation]]
 
 * TODO 0.8 Restore version-aware materialization, then resolve variants
 

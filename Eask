@@ -1,4 +1,4 @@
-(package "org-glance" "1.55.0.0.20261012.9" "Org-mode projections")
+(package "org-glance" "1.55.0.0.20261012.10" "Org-mode projections")
 
 (website-url "https://github.com/rails-to-cosmos/org-glance")
 (keywords "org-mode" "outlines" "data" "database" "store" "projections")

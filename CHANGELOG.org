@@ -5,6 +5,15 @@ Notable user-facing changes.  Versions date-based
 
 * Unreleased
 
+* 1.55.0.0.20261012.10
+
+** Changed
+
+- Startup, passive reads, and the inventory timer reconcile the immutable
+  family cache on one throttled worker per graph.  Emacs can display the last
+  verified projection immediately while a stale or missing proof rebuilds.
+  Relay-backed external writes retain synchronous publication visibility.
+
 * 1.55.0.0.20261012.9
 
 ** Changed

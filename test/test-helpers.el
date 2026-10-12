@@ -3,6 +3,8 @@
 (require 's)
 (require 'org-glance)
 
+(setq org-glance-cache--refresh-synchronously t)
+
 (cl-defmacro with-temp-directory (dir &rest body)
   "Bind symbol DIR to a fresh temporary directory, run BODY, then delete it."
   (declare (indent 1))

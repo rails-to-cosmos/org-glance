@@ -27,6 +27,14 @@ entry point; each non-trivial optimization has its own proposal, linked below.
 | *E* | removed 8 redundant ~(org-glance--org-mode)~ re-inits inside ~with-contents~ bodies | halves the fixed mode-init cost per parse |
 | *D* | metadata build: 4 thunk reparses → one ~--content-facts~ pass | *3.9×* on the content-facts portion; byte-identical (5-shape test) |
 
+* 2026-10-12 startup result
+
+The immutable-family census now runs on one throttled worker per graph.  On the
+real 7,099-directory =~/sync/views= store, a forced-stale synchronous startup
+exceeded 120 seconds; the nonblocking caller path returned in 437 ms.  The
+remaining census cost is tracked as background throughput work.  See
+[[file:2026-10-12-nonblocking-cache-reconciliation.done.org][nonblocking cache reconciliation]].
+
 All four are org-glance-only, covered by the ERT suite (327 tests) + benchmarks (=eask bench= / =make bench=, [[file:2026-07-09-dev-tooling-benchmarks-linters.done.org][dev tooling]]).
 
 * Proposed (non-trivial, not yet done)

@@ -1322,14 +1322,19 @@ a later read."
                 org-glance-graph-external-poll-seconds)
         ;; stamped BEFORE the fold: the reads it makes must not re-check either
         (setf (org-glance-graph:-external-checked graph) now)
-        (let ((survey (org-glance-graph--external-survey graph)))
-          (when (org-glance-graph--external-pending-p graph survey)
+        (let* ((survey (org-glance-graph--external-survey graph))
+               (pending (org-glance-graph--external-pending-p graph survey)))
+          (when pending
             (condition-case err
                 (org-glance-graph:refresh-external graph survey)
-              (error (message "org-glance: refresh-external skipped: %S" err)))))
-        (when (fboundp 'org-glance-cache:reconcile-inventory-maybe)
+              (error (message "org-glance: refresh-external skipped: %S" err))))
           (condition-case err
-              (org-glance-cache:reconcile-inventory-maybe graph)
+              (cond
+               ((and pending
+                     (fboundp 'org-glance-cache:reconcile-inventory-maybe))
+                (org-glance-cache:reconcile-inventory-maybe graph))
+               ((fboundp 'org-glance-cache:refresh-async)
+                (org-glance-cache:refresh-async graph)))
             (error (message "org-glance: inventory reconciliation skipped: %S"
                             err))))))))
 

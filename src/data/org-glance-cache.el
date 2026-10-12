@@ -788,12 +788,64 @@ Return the number of families folded."
 (defvar org-glance-cache--inventory-timer nil
   "Timer that reconciles immutable inventories for open graphs.")
 
+(defvar org-glance-cache--refresh-threads
+  (make-hash-table :test #'eq :weakness 'key)
+  "Active cache-refresh thread for each live graph.")
+
+(defvar org-glance-cache--refresh-requested-at
+  (make-hash-table :test #'eq :weakness 'key)
+  "Time of the latest queued cache refresh for each live graph.")
+
+(defcustom org-glance-cache-refresh-interval 60
+  "Minimum seconds between automatic cache refresh jobs for one graph."
+  :type 'number
+  :group 'org-glance)
+
+(defvar org-glance-cache--refresh-synchronously nil
+  "Non-nil makes graph-open refresh deterministic for the test harness.")
+
+(cl-defun org-glance-cache:refresh-async (graph)
+  "Queue GRAPH's cache reconciliation off the caller thread when due."
+  (let ((active (gethash graph org-glance-cache--refresh-threads))
+        (now (float-time)))
+    (unless (or (eq active 'starting)
+                (and (threadp active) (thread-live-p active))
+                (< (- now (gethash graph org-glance-cache--refresh-requested-at
+                                   most-negative-fixnum))
+                   org-glance-cache-refresh-interval))
+      (puthash graph now org-glance-cache--refresh-requested-at)
+      (puthash graph 'starting org-glance-cache--refresh-threads)
+      (condition-case err
+          (let ((thread
+                 (make-thread
+                  (lambda ()
+                    (unwind-protect
+                        (condition-case refresh-error
+                            (org-glance-cache:refresh graph)
+                          (error
+                           (message "org-glance: cache refresh skipped: %S"
+                                    refresh-error)))
+                      (remhash graph org-glance-cache--refresh-threads)))
+                  "org-glance-cache-refresh")))
+            (when (eq 'starting
+                      (gethash graph org-glance-cache--refresh-threads))
+              (puthash graph thread org-glance-cache--refresh-threads)))
+        (error
+         (remhash graph org-glance-cache--refresh-threads)
+         (message "org-glance: cache refresh could not start: %S" err))))))
+
+(cl-defun org-glance-cache--refresh-on-open (graph)
+  "Refresh GRAPH according to the current startup execution policy."
+  (if org-glance-cache--refresh-synchronously
+      (org-glance-cache:refresh graph)
+    (org-glance-cache:refresh-async graph)))
+
 (cl-defun org-glance-cache--inventory-tick ()
   "Reconcile immutable inventories for every open graph."
   (maphash
    (lambda (_directory graph)
      (condition-case err
-         (org-glance-cache:reconcile-inventory graph)
+         (org-glance-cache:refresh-async graph)
        (error (message "org-glance: inventory reconciliation skipped: %S" err))))
    org-glance-graph:list))
 
@@ -801,7 +853,8 @@ Return the number of families folded."
   "Start the session-wide immutable-family inventory timer."
   (unless (timerp org-glance-cache--inventory-timer)
     (setq org-glance-cache--inventory-timer
-          (run-with-timer 1 1 #'org-glance-cache--inventory-tick))))
+          (run-with-timer 1 org-glance-cache-refresh-interval
+                          #'org-glance-cache--inventory-tick))))
 
 (cl-defun org-glance-cache:metadata (graph id)
   "Return ID's sole family-derived metadata from GRAPH's shared cache."
@@ -849,7 +902,7 @@ Return the number of families folded."
 
 (add-hook 'org-glance-graph-after-family-append-functions
           #'org-glance-cache--after-append)
-(add-hook 'org-glance-graph-after-open-functions #'org-glance-cache:refresh)
+(add-hook 'org-glance-graph-after-open-functions #'org-glance-cache--refresh-on-open)
 (add-hook 'org-glance-graph-after-open-functions
           #'org-glance-cache--start-inventory-timer)
 

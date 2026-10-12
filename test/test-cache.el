@@ -124,6 +124,7 @@
                              ":ORG_GLANCE_ID: " id "\n"
                              ":END:\n")))
       (org-glance-version:write-snapshot dir id nil "glance" contents 10)
+      (org-glance-cache:reconcile-inventory graph)
       (let ((metadata (org-glance-graph:live-meta graph id)))
         (should (org-glance-headline-metadata? metadata))
         (should (equal "Family authority"
@@ -622,8 +623,8 @@
               (should (= 0 directory-censuses))))
         (sqlite-close db)))))
 
-(ert-deftest org-glance-test:startup-refresh-proves-the-first-read-current ()
-  "A startup proof skips one unchanged census and detects a new event."
+(ert-deftest org-glance-test:explicit-refresh-detects-after-nonblocking-read ()
+  "A read stays nonblocking; an explicit refresh detects a new event."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "observed" "* Observed"))
     (let ((censuses 0)
@@ -646,6 +647,8 @@
              "* Changed\n"))
           (setf (org-glance-graph:-external-checked graph) 0)
           (org-glance-graph:headlines graph)
+          (should (= startup-censuses censuses))
+          (org-glance-cache:refresh graph)
           (should (> censuses startup-censuses)))))))
 
 (ert-deftest org-glance-test:warm-refresh-projects-only-changed-families ()
@@ -691,6 +694,73 @@
           (remhash (org-glance-graph:directory graph) org-glance-graph:list))
         (org-glance-graph dir)
         (should (> censuses 0))))))
+
+(ert-deftest org-glance-test:inventory-tick-skips-a-proven-current-store ()
+  "The session timer does not census a store whose warm proof is current."
+  (let ((org-glance-graph:list (make-hash-table :test #'equal)))
+    (org-glance-test:with-graph graph
+      (org-glance-graph:add graph
+        (org-glance-test:headline "observed" "* Observed"))
+      (org-glance-cache:refresh graph)
+      (let ((censuses 0)
+            (original
+             (symbol-function 'org-glance-cache--inventory-event-ids)))
+        (cl-letf (((symbol-function 'org-glance-cache--inventory-event-ids)
+                   (lambda (&rest args)
+                     (cl-incf censuses)
+                     (apply original args))))
+          (org-glance-cache--inventory-tick)
+          (should (= 0 censuses)))))))
+
+(ert-deftest org-glance-test:inventory-timer-uses-the-refresh-interval ()
+  "The session timer wakes at the configured cache refresh cadence."
+  (let ((org-glance-cache--inventory-timer nil)
+        (org-glance-cache-refresh-interval 37)
+        scheduled)
+    (cl-letf (((symbol-function 'run-with-timer)
+               (lambda (&rest args)
+                 (setq scheduled args)
+                 'inventory-timer)))
+      (org-glance-cache--start-inventory-timer nil)
+      (should (equal '(1 37 org-glance-cache--inventory-tick) scheduled)))))
+
+(ert-deftest org-glance-test:graph-open-queues-cache-refresh-off-caller-thread ()
+  "Opening a graph returns before its cache reconciliation starts."
+  (with-temp-directory dir
+    (let ((graph (org-glance-graph dir)))
+      (org-glance-graph:add graph
+        (org-glance-test:headline "observed" "* Observed"))
+      (remhash (org-glance-graph:directory graph) org-glance-graph:list))
+    (let ((org-glance-cache--refresh-synchronously nil))
+      (let ((refreshes 0)
+            queued)
+        (cl-letf (((symbol-function 'make-thread)
+                   (lambda (function &optional _name)
+                     (setq queued function)
+                     'queued-thread))
+                  ((symbol-function 'org-glance-cache:refresh)
+                   (lambda (_graph) (cl-incf refreshes))))
+          (let ((graph (org-glance-graph dir)))
+            (should (= 0 refreshes))
+            (should (functionp queued))
+            (should (equal '("observed") (org-glance-test:ids graph)))))))))
+
+(ert-deftest org-glance-test:headline-read-queues-stale-inventory-off-caller-thread ()
+  "A read queues stale-inventory work without reconciling on its caller."
+  (with-temp-directory dir
+    (let ((queued 0)
+          (synchronous 0))
+      (cl-letf (((symbol-function 'org-glance-cache:refresh-async)
+                 (lambda (_graph) (cl-incf queued)))
+                ((symbol-function 'org-glance-cache:reconcile-inventory)
+                 (lambda (_graph) (cl-incf synchronous))))
+        (let ((graph (org-glance-graph dir)))
+          (setq queued 0)
+          (make-directory (f-join (org-glance-graph:data-path graph) "changed"))
+          (setf (org-glance-graph:-external-checked graph) 0)
+          (org-glance-graph:headlines graph)
+          (should (= 0 synchronous))
+          (should (= 1 queued)))))))
 
 (ert-deftest org-glance-test:shared-cache-inventory-finds-a-relay-free-snapshot ()
   "A live inventory fold discovers an immutable Snapshot without a relay line."

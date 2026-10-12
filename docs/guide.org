@@ -180,6 +180,7 @@ A headline with a repeater (=SCHEDULED: <… +1d>=) stays ONE headline.  With =o
 | =org-glance-plugins=                    | =nil=                           | plugins to load at init (e.g. =(llm)=); =I= enables one, =U= disables                            |
 | =org-glance-conflict-resolution=        | =ask=                           | git-conflict healing: =ask= / =union= / =nil= (error)                                            |
 | =org-glance-tag-config-dir=             | =nil=                           | override dir of per-tag config files (=config/tags/=)                                        |
+| =org-glance-cache-refresh-interval=      | =60=                            | minimum seconds between automatic background family-cache refreshes                           |
 
 Example — org-text views, everything visible, daily history for a year:
 

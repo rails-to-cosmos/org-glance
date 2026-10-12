@@ -1,0 +1,51 @@
+#+TITLE: Nonblocking cache reconciliation
+#+DATE: 2026-10-12
+
+Status: *done*
+
+* Problem
+
+Graph construction ran a complete immutable-family cache refresh on the Emacs
+caller thread.  The session timer then ran the complete reconciliation every
+second, even when the persisted inventory proof was current.  Large stores
+therefore delayed startup and could repeatedly freeze an otherwise open Emacs.
+
+* Decision
+
+Startup, passive reads, and the session timer queue one cache refresh on an
+Emacs worker thread.  One graph has at most one active worker, and automatic
+requests are limited to one per minute.  Reads continue from the last verified
+SQLite projection and the compatibility WAL while reconciliation runs.
+
+An external relay fold remains a synchronous publication boundary.  Its
+bounded notification work and inventory reconciliation complete before the
+caller observes the relayed write.  Local family publication retains its
+synchronous SQLite commit.
+
+The explicit =org-glance-cache:refresh= and
+=org-glance-cache:reconcile-inventory= functions remain synchronous maintenance
+operations.
+
+* Executable contract
+
+- =graph-open-queues-cache-refresh-off-caller-thread= proves graph construction
+  queues work before cached rows are read.
+- =headline-read-queues-stale-inventory-off-caller-thread= proves passive reads
+  do not run a family census.
+- =inventory-tick-skips-a-proven-current-store= proves the timer does not repeat
+  a proven census.
+- =explicit-refresh-detects-after-nonblocking-read= proves explicit maintenance
+  still discovers a relay-free Snapshot.
+- The external-fold tests retain immediate relay visibility.
+
+* Verification
+
+- =eask recompile=
+- focused five-test cache/external regression set
+- =make test= (473 tests)
+
+On the real 7,099-directory =~/sync/views= store, a forced-stale synchronous
+startup exceeded the 120-second measurement cap.  The asynchronous caller path
+returned in 437 ms.  The background census remains optimization work; it no
+longer occupies the startup caller thread.
+
