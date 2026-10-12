@@ -5,6 +5,14 @@ Notable user-facing changes.  Versions date-based
 
 * Unreleased
 
+* 1.55.0.0.20261012.8
+
+** Changed
+
+- Legacy-migration discovery uses Git's exact tracked, untracked, and ignored
+  path inventory when available, avoiding a recursive filesystem walk during
+  startup. Non-Git stores retain the complete recursive fallback.
+
 * 1.55.0.0.20261012.7
 
 ** Changed

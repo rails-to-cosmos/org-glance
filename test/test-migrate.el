@@ -11,6 +11,29 @@
       (should (= 1 (length found)))
       (should (s-ends-with? "foo.metadata.el" (car found))))))
 
+(ert-deftest org-glance-test:migrate-detect-uses-exact-git-inventory ()
+  "Git discovery includes tracked, untracked, and ignored legacy metadata."
+  (skip-unless (executable-find "git"))
+  (with-temp-directory dir
+    (let ((tracked (f-join dir "tracked.metadata.el"))
+          (untracked (f-join dir "nested" "untracked.metadata.el"))
+          (ignored (f-join dir "ignored.metadata.el")))
+      (org-glance-test:write (f-join dir ".gitignore") "ignored.metadata.el\n")
+      (dolist (file (list tracked untracked ignored))
+        (org-glance-test:write file "#s(hash-table)"))
+      (let ((default-directory dir))
+        (should (= 0 (process-file "git" nil nil nil "init" "-q")))
+        (should (= 0 (process-file "git" nil nil nil "add"
+                                   ".gitignore" "tracked.metadata.el")))
+        (should (= 0 (process-file
+                      "git" nil nil nil "-c" "user.name=Benchmark"
+                      "-c" "user.email=benchmark@example.invalid"
+                      "commit" "-qm" "fixture"))))
+      (cl-letf (((symbol-function 'directory-files-recursively)
+                 (lambda (&rest _) (error "Git inventory must avoid a tree walk"))))
+        (should (equal (sort (list tracked untracked ignored) #'string<)
+                       (sort (org-glance-legacy-metadata-files dir) #'string<)))))))
+
 (ert-deftest org-glance-test:migrate ()
   "Migration ingests id-bearing headlines intact and backs up legacy metadata."
   (with-temp-directory dir

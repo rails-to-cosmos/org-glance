@@ -6,7 +6,7 @@
 
 ;; Author: Dmitry Akatov <dmitry.akatov@protonmail.com>
 ;; Created: 29 September, 2018
-;; Version: 1.55.0.0.20261012.7
+;; Version: 1.55.0.0.20261012.8
 ;; Package-Requires: ((emacs "29.1") (org) (aes) (dash) (f) (s) (transient) (table-view "0"))
 ;; Keywords: org-mode, outlines, data, database, store, projections
 ;; Homepage: https://github.com/rails-to-cosmos/org-glance
@@ -151,12 +151,33 @@ Open its graph store and warn when legacy metadata awaits `org-glance-migrate'."
 
 ;; Migration RE-SCANS the org sources: v1's `begin' pointers may be stale.
 
+(cl-defun org-glance--git-files (directory &rest args)
+  "Return `(t . FILES)' from Git ARGS in DIRECTORY, or nil on failure."
+  (when (and (executable-find "git") (f-exists? directory))
+    (with-temp-buffer
+      (let ((default-directory (file-name-as-directory
+                                (expand-file-name directory))))
+        (when (= 0 (apply #'process-file "git" nil (current-buffer) nil args))
+          (cons t (split-string (buffer-string) "\0" t)))))))
+
 (cl-defun org-glance-legacy-metadata-files (&optional (directory org-glance-directory))
   "Return the list of legacy v1 `*.metadata.el' files under DIRECTORY."
   (when (f-exists? directory)
-    (cl-loop for file in (directory-files-recursively directory "\\.metadata\\.el\\'")
-             unless (string-match-p "/\\.org-glance/" file)
-             collect file)))
+    (if-let* ((ordinary
+               (org-glance--git-files
+                directory "ls-files" "-z" "--cached" "--others"
+                "--exclude-standard" "--" "*.metadata.el"))
+              (ignored
+               (org-glance--git-files
+                directory "ls-files" "-z" "--others" "--ignored"
+                "--exclude-standard" "--" "*.metadata.el")))
+        (cl-loop for file in (delete-dups (append (cdr ordinary) (cdr ignored)))
+                 for absolute = (expand-file-name file directory)
+                 unless (string-match-p "/\\.org-glance/" absolute)
+                 collect absolute)
+      (cl-loop for file in (directory-files-recursively directory "\\.metadata\\.el\\'")
+               unless (string-match-p "/\\.org-glance/" file)
+               collect file))))
 
 (cl-defun org-glance-migrate--source-files (directory)
   "Canonical org source files under DIRECTORY, excluding the store."
