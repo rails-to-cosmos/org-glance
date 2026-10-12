@@ -5,6 +5,13 @@ Notable user-facing changes.  Versions date-based
 
 * Unreleased
 
+* 1.55.0.0.20261012.0
+
+** Changed
+
+- Startup refresh reuses its completed immutable-family inventory proof for
+  the first Overview read.
+
 * 1.55.0.0.20261011.1
 
 ** Changed

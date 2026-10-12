@@ -1301,9 +1301,9 @@ a later read."
             (condition-case err
                 (org-glance-graph:refresh-external graph survey)
               (error (message "org-glance: refresh-external skipped: %S" err)))))
-        (when (fboundp 'org-glance-cache:reconcile-inventory)
+        (when (fboundp 'org-glance-cache:reconcile-inventory-maybe)
           (condition-case err
-              (org-glance-cache:reconcile-inventory graph)
+              (org-glance-cache:reconcile-inventory-maybe graph)
             (error (message "org-glance: inventory reconciliation skipped: %S"
                             err))))))))
 

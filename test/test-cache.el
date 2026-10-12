@@ -496,6 +496,32 @@
               (should (= 0 directory-censuses))))
         (sqlite-close db)))))
 
+(ert-deftest org-glance-test:startup-refresh-proves-the-first-read-current ()
+  "A startup proof skips one unchanged census and detects a new event."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "observed" "* Observed"))
+    (let ((censuses 0)
+          (original (symbol-function 'org-glance-cache--inventory-event-ids)))
+      (setf (org-glance-graph:-external-checked graph) 0)
+      (cl-letf (((symbol-function 'float-time) (lambda (&optional _) 100.0))
+                ((symbol-function 'org-glance-cache--inventory-event-ids)
+                 (lambda (&rest args)
+                   (cl-incf censuses)
+                   (apply original args))))
+        (org-glance-cache:refresh graph)
+        (let ((startup-censuses censuses))
+          (should (> startup-censuses 0))
+          (org-glance-graph:headlines graph)
+          (should (= startup-censuses censuses))
+          (let* ((dir (org-glance-graph:headline-data-path graph "observed"))
+                 (leaf (car (org-glance-version:current dir "observed"))))
+            (org-glance-version:write-snapshot
+             dir "observed" (list (org-glance-version:id leaf)) "peer"
+             "* Changed\n"))
+          (setf (org-glance-graph:-external-checked graph) 0)
+          (org-glance-graph:headlines graph)
+          (should (> censuses startup-censuses)))))))
+
 (ert-deftest org-glance-test:shared-cache-inventory-finds-a-relay-free-snapshot ()
   "A live inventory fold discovers an immutable Snapshot without a relay line."
   (org-glance-test:with-graph graph

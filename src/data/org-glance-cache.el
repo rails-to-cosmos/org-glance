@@ -221,16 +221,19 @@
   "Return every event-directory name currently observable below DIR."
   (let ((versions (f-join dir "versions")))
     (when (file-directory-p versions)
-      (sort
-       (mapcar #'file-name-nondirectory
-               (cl-remove-if
-                (lambda (path)
-                  (let ((name (file-name-nondirectory path)))
-                    (or (file-symlink-p path)
-                        (string-prefix-p ".version-" name)
-                        (string-suffix-p ".tmp" name))))
-                (f-directories versions)))
-       #'string<))))
+      (org-glance-cache--observe-inventory-directory
+       versions
+       (lambda ()
+         (sort
+          (mapcar #'file-name-nondirectory
+                  (cl-remove-if
+                   (lambda (path)
+                     (let ((name (file-name-nondirectory path)))
+                       (or (file-symlink-p path)
+                           (string-prefix-p ".version-" name)
+                           (string-suffix-p ".tmp" name))))
+                   (f-directories versions)))
+          #'string<))))))
 
 (cl-defun org-glance-cache--inventory-proof (event-ids)
   "Return a stable local inventory proof for EVENT-IDS."
@@ -409,15 +412,66 @@
     (cl-labels
         ((walk
           (dir)
-          (cl-loop
-           for path in (directory-files dir t directory-files-no-dot-files-regexp)
-           when (and (file-directory-p path) (not (file-symlink-p path)))
-           if (file-directory-p (f-join path "versions"))
-           collect (mapconcat #'identity
-                              (split-string (file-relative-name path data) "/" t)
-                              "")
-           else append (walk path))))
+          (org-glance-cache--observe-inventory-directory
+           dir
+           (lambda ()
+             (cl-loop
+              for path in (directory-files dir t directory-files-no-dot-files-regexp)
+              when (and (file-directory-p path) (not (file-symlink-p path)))
+              if (file-directory-p (f-join path "versions"))
+              collect (mapconcat #'identity
+                                 (split-string (file-relative-name path data) "/" t)
+                                 "")
+              else append (walk path))))))
       (if (file-directory-p data) (sort (delete-dups (walk data)) #'string<) nil))))
+
+(defvar org-glance-cache--inventory-directory-proofs
+  (make-hash-table :test #'eq :weakness 'key)
+  "Stable directory stamps for each live graph's last complete inventory.")
+
+(defvar org-glance-cache--collect-inventory-proof nil
+  "Non-nil while a complete inventory records stable directory stamps.")
+
+(defvar org-glance-cache--observed-inventory-directories nil
+  "Directory stamps accumulated by the current complete inventory.")
+
+(cl-defun org-glance-cache--directory-stamp (dir)
+  "Return DIR's entry-change stamp, or nil when DIR disappeared."
+  (when-let* ((attributes (file-attributes dir 'string)))
+    (file-attribute-modification-time attributes)))
+
+(cl-defun org-glance-cache--observe-inventory-directory (dir thunk)
+  "Call THUNK while recording a stable entry stamp for DIR."
+  (if (not org-glance-cache--collect-inventory-proof)
+      (funcall thunk)
+    (cl-loop repeat 3
+             for before = (org-glance-cache--directory-stamp dir)
+             for result = (funcall thunk)
+             for after = (org-glance-cache--directory-stamp dir)
+             when (equal before after)
+             return (progn
+                      (push (cons dir after)
+                            org-glance-cache--observed-inventory-directories)
+                      result)
+             finally (error "org-glance: immutable inventory changed during census: %s"
+                            dir))))
+
+(cl-defun org-glance-cache--inventory-proof-current-p (graph)
+  "Return non-nil when GRAPH's last directory-entry proof remains current."
+  (when-let* ((proof (gethash graph org-glance-cache--inventory-directory-proofs)))
+    (cl-every (lambda (entry)
+                (equal (cdr entry)
+                       (org-glance-cache--directory-stamp (car entry))))
+              proof)))
+
+(cl-defun org-glance-cache--record-complete-inventory (graph thunk)
+  "Call THUNK and retain GRAPH's stable directory-entry proof on success."
+  (let ((org-glance-cache--collect-inventory-proof t)
+        (org-glance-cache--observed-inventory-directories nil))
+    (prog1 (funcall thunk)
+      (puthash graph
+               (delete-dups org-glance-cache--observed-inventory-directories)
+               org-glance-cache--inventory-directory-proofs))))
 
 (cl-defun org-glance-cache--after-append (graph specs)
   "Apply GRAPH's appended SPECS to the shared cache."
@@ -456,16 +510,19 @@
 
 (cl-defun org-glance-cache:refresh (graph)
   "Reconcile GRAPH's live headlines into the shared cache."
-  (let* ((headlines (org-glance-cache--headlines graph))
-         (families (delete-dups
-                    (append (mapcar #'org-glance-headline-metadata:id headlines)
-                            (org-glance-cache--family-ids graph)))))
-    (org-glance-cache--with-db
-     graph
-     (lambda (db)
-       (org-glance-cache--transaction
-        db
-        (lambda ()
+  (org-glance-cache--record-complete-inventory
+   graph
+   (lambda ()
+     (let* ((headlines (org-glance-cache--headlines graph))
+            (families (delete-dups
+                       (append (mapcar #'org-glance-headline-metadata:id headlines)
+                               (org-glance-cache--family-ids graph)))))
+       (org-glance-cache--with-db
+        graph
+        (lambda (db)
+          (org-glance-cache--transaction
+           db
+           (lambda ()
           (let ((live (mapcar #'org-glance-headline-metadata:id headlines)))
             (dolist (row (sqlite-select db "SELECT headline.org_id,org_headline.path FROM org_headline JOIN headline USING(id)"))
               (unless (member (car row) live)
@@ -485,7 +542,7 @@
             (org-glance-cache--project-edges db metadata))
           (sqlite-execute
            db
-           "DELETE FROM source WHERE producer='org-glance' AND NOT EXISTS (SELECT 1 FROM headline WHERE headline.path=source.path)")))))))
+           "DELETE FROM source WHERE producer='org-glance' AND NOT EXISTS (SELECT 1 FROM headline WHERE headline.path=source.path)")))))))))
 
 (cl-defun org-glance-cache:reconcile-families (graph ids)
   "Reconcile immutable family IDS into GRAPH's shared projection."
@@ -501,11 +558,14 @@
 (cl-defun org-glance-cache:reconcile-inventory (graph)
   "Reconcile immutable families whose inventory checkpoint changed in GRAPH.
 Return the number of families folded."
-  (let ((current (org-glance-cache--family-ids graph)))
-    (org-glance-cache--with-db
-     graph
-     (lambda (db)
-       (let* ((held (sqlite-select
+  (org-glance-cache--record-complete-inventory
+   graph
+   (lambda ()
+     (let ((current (org-glance-cache--family-ids graph)))
+       (org-glance-cache--with-db
+        graph
+        (lambda (db)
+          (let* ((held (sqlite-select
                      db
                      "SELECT logical_id,reconciled_epoch,verified FROM headline_family"))
               (ids (sort (delete-dups
@@ -531,7 +591,12 @@ Return the number of families folded."
             (dolist (family changed)
               (org-glance-cache--project-family
                db graph (car family) (cdr family)))))
-         (length changed))))))
+            (length changed))))))))
+
+(cl-defun org-glance-cache:reconcile-inventory-maybe (graph)
+  "Reconcile GRAPH's immutable inventory when its directory proof changed."
+  (unless (org-glance-cache--inventory-proof-current-p graph)
+    (org-glance-cache:reconcile-inventory graph)))
 
 (defvar org-glance-cache--inventory-timer nil
   "Timer that reconciles immutable inventories for open graphs.")
