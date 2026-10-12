@@ -16,8 +16,13 @@
 (declare-function org-glance-version:history-from-directories
                   "org-glance-version" (headline-dir headline directories))
 
-(defconst org-glance-cache:version 5
+(defconst org-glance-cache:version 6
   "Shared Glance cache schema version.")
+
+(defcustom org-glance-cache-progress-step 25
+  "Family interval between cache rebuild progress messages."
+  :type 'natnum
+  :group 'org-glance)
 
 (defconst org-glance-cache--schema
   '("CREATE TABLE IF NOT EXISTS source (path TEXT PRIMARY KEY, digest TEXT NOT NULL, producer TEXT NOT NULL)"
@@ -27,7 +32,7 @@
     "CREATE TABLE IF NOT EXISTS org_headline (id TEXT PRIMARY KEY REFERENCES headline(id) ON DELETE CASCADE, path TEXT NOT NULL, digest TEXT NOT NULL, content_hash TEXT NOT NULL, record TEXT NOT NULL, producer TEXT NOT NULL)"
     "CREATE TABLE IF NOT EXISTS edge (src TEXT NOT NULL REFERENCES headline(id) ON DELETE CASCADE, dst TEXT NOT NULL REFERENCES headline(id) ON DELETE CASCADE, kind TEXT, via TEXT NOT NULL, PRIMARY KEY(src, dst, kind, via))"
     "CREATE INDEX IF NOT EXISTS edge_dst ON edge(dst)"
-    "CREATE TABLE IF NOT EXISTS headline_family (logical_id TEXT PRIMARY KEY, state TEXT NOT NULL, current_version_id TEXT, family_fingerprint TEXT NOT NULL, reconciled_epoch TEXT, verified INTEGER NOT NULL)"
+    "CREATE TABLE IF NOT EXISTS headline_family (logical_id TEXT PRIMARY KEY, state TEXT NOT NULL, current_version_id TEXT, family_fingerprint TEXT NOT NULL, reconciled_epoch TEXT, verified INTEGER NOT NULL, revived INTEGER NOT NULL)"
     "CREATE TABLE IF NOT EXISTS headline_event (logical_id TEXT NOT NULL REFERENCES headline_family(logical_id) ON DELETE CASCADE, event_id TEXT NOT NULL, kind TEXT NOT NULL, parents_json TEXT NOT NULL, targets_json TEXT NOT NULL, observed_leaves_json TEXT NOT NULL, payload_digest TEXT, producer TEXT NOT NULL, created TEXT NOT NULL, envelope TEXT NOT NULL, PRIMARY KEY(logical_id,event_id))"
     "CREATE TABLE IF NOT EXISTS headline_payload_observation (logical_id TEXT NOT NULL, event_id TEXT NOT NULL, path TEXT NOT NULL, observed_digest TEXT, payload_state TEXT NOT NULL, PRIMARY KEY(logical_id,event_id), FOREIGN KEY(logical_id,event_id) REFERENCES headline_event(logical_id,event_id) ON DELETE CASCADE)"
     "CREATE TABLE IF NOT EXISTS headline_projection (logical_id TEXT NOT NULL REFERENCES headline_family(logical_id) ON DELETE CASCADE, event_id TEXT, role TEXT NOT NULL, source_digest TEXT, parser_contract TEXT NOT NULL, record_payload TEXT, PRIMARY KEY(logical_id,event_id))"
@@ -241,6 +246,20 @@
   "Return a stable local inventory proof for EVENT-IDS."
   (secure-hash 'sha256 (mapconcat #'identity event-ids "\n")))
 
+(cl-defun org-glance-cache--revived-p (history current)
+  "Return non-nil when CURRENT descends from a Tombstone in HISTORY."
+  (let ((by-id (make-hash-table :test #'equal)))
+    (dolist (version history)
+      (puthash (org-glance-version:id version) version by-id))
+    (cl-labels ((visit (id seen)
+                  (unless (member id seen)
+                    (when-let* ((version (gethash id by-id)))
+                      (or (eq 'tombstone (org-glance-version:kind version))
+                          (cl-some (lambda (parent)
+                                     (visit parent (cons id seen)))
+                                   (org-glance-version:parents version)))))))
+      (and current (visit current nil)))))
+
 (cl-defun org-glance-cache--project-family
     (db graph id &optional (inventory nil inventory-supplied-p))
   "Replace logical family ID's folded cache projection in DB."
@@ -265,6 +284,8 @@
                  ((org-glance-version:valid sole) "live")
                  (t "damaged")))
          (current (and sole (org-glance-version:id sole)))
+         (revived (and (member state '("live" "damaged"))
+                       (org-glance-cache--revived-p history current)))
          (ordered (sort (copy-sequence history)
                         (lambda (a b) (string< (org-glance-version:id a)
                                                (org-glance-version:id b)))))
@@ -297,15 +318,15 @@
            (vector inventory-proof id))
         (sqlite-execute
          db
-         "INSERT INTO headline_family(logical_id,state,current_version_id,family_fingerprint,reconciled_epoch,verified) VALUES(?,?,?,?,?,0)"
+         "INSERT INTO headline_family(logical_id,state,current_version_id,family_fingerprint,reconciled_epoch,verified,revived) VALUES(?,?,?,?,?,0,0)"
          (vector id "empty" nil fingerprint inventory-proof)))
       (cl-return-from org-glance-cache--project-family nil))
     (sqlite-execute db "DELETE FROM headline_family WHERE logical_id=?" (vector id))
     (when history
       (sqlite-execute
        db
-       "INSERT INTO headline_family(logical_id,state,current_version_id,family_fingerprint,reconciled_epoch,verified) VALUES(?,?,?,?,?,?)"
-       (vector id state current fingerprint inventory-proof 1))
+       "INSERT INTO headline_family(logical_id,state,current_version_id,family_fingerprint,reconciled_epoch,verified,revived) VALUES(?,?,?,?,?,?,?)"
+       (vector id state current fingerprint inventory-proof 1 (if revived 1 0)))
       (dolist (version history)
         (let* ((event (org-glance-version:id version))
                (version-kind (org-glance-version:kind version))
@@ -513,6 +534,29 @@
          (equal (org-glance-cache--inventory-proof (cdr family))
                 (nth 1 row)))))
 
+(cl-defun org-glance-cache--elapsed (started)
+  "Format seconds elapsed since STARTED."
+  (format "%.1fs" (- (float-time) started)))
+
+(cl-defun org-glance-cache--report-progress
+    (started phase completed total &optional (unit "families"))
+  "Report cache rebuild PHASE and counts since STARTED.
+COMPLETED and TOTAL count UNIT values."
+  (message "org-glance: cache rebuild: %s (%d/%d %s, %s)"
+           phase completed total unit (org-glance-cache--elapsed started)))
+
+(cl-defun org-glance-cache--report-complete (started rebuilt total)
+  "Report REBUILT of TOTAL families completed since STARTED."
+  (message "org-glance: cache rebuild complete (%d/%d families rebuilt, %s)"
+           rebuilt total (org-glance-cache--elapsed started)))
+
+(cl-defun org-glance-cache--progress-point-p (completed total)
+  "Return non-nil when COMPLETED of TOTAL merits a progress message."
+  (or (= completed total)
+      (= completed 0)
+      (and (> org-glance-cache-progress-step 0)
+           (= 0 (% completed org-glance-cache-progress-step)))))
+
 (cl-defun org-glance-cache--after-append (graph specs)
   "Apply GRAPH's appended SPECS to the shared cache."
   (let* ((headlines (org-glance-cache--headlines graph))
@@ -550,51 +594,102 @@
 
 (cl-defun org-glance-cache:refresh (graph)
   "Reconcile GRAPH's live headlines into the shared cache."
-  (unless (org-glance-cache--inventory-proof-current-p graph)
-    (org-glance-cache--record-complete-inventory
-     graph
-     (lambda ()
-     (let* ((headlines (org-glance-cache--headlines graph))
-            (families (delete-dups
-                       (append (mapcar #'org-glance-headline-metadata:id headlines)
-                               (org-glance-cache--family-ids graph))))
-            (observed
-             (mapcar
-              (lambda (id)
-                (cons id (org-glance-cache--inventory-event-ids
-                          (org-glance-graph:headline-data-path graph id))))
-              families)))
-       (org-glance-cache--with-db
-        graph
-        (lambda (db)
-          (let ((held (sqlite-select
+  (let ((started (float-time)))
+    (if (org-glance-cache--inventory-proof-current-p graph)
+        (message "org-glance: cache proof current (0 families rebuilt, %s)"
+                 (org-glance-cache--elapsed started))
+      (message "org-glance: cache rebuild: census (0/? families, %s)"
+               (org-glance-cache--elapsed started))
+      (org-glance-cache--record-complete-inventory
+       graph
+       (lambda ()
+         (let* ((headlines (org-glance-cache--headlines graph))
+                (families
+                 (delete-dups
+                  (append (mapcar #'org-glance-headline-metadata:id headlines)
+                          (org-glance-cache--family-ids graph))))
+                (total (length families))
+                (headline-total (length headlines))
+                observed
+                (rebuilt 0))
+           (org-glance-cache--report-progress started "census" 0 total)
+           (cl-loop for id in families
+                    for completed from 1
+                    do (push
+                        (cons id (org-glance-cache--inventory-event-ids
+                                  (org-glance-graph:headline-data-path graph id)))
+                        observed)
+                    when (org-glance-cache--progress-point-p completed total)
+                    do (org-glance-cache--report-progress
+                        started "census" completed total))
+           (unless families
+             (org-glance-cache--report-progress started "census" 0 0))
+           (setq observed (nreverse observed))
+           (org-glance-cache--with-db
+            graph
+            (lambda (db)
+              (let* ((held
+                      (sqlite-select
                        db
-                       "SELECT logical_id,reconciled_epoch,verified FROM headline_family")))
-            (org-glance-cache--transaction
-             db
-             (lambda ()
-          (let ((live (mapcar #'org-glance-headline-metadata:id headlines)))
-            (dolist (row (sqlite-select db "SELECT headline.org_id,org_headline.path FROM org_headline JOIN headline USING(id)"))
-              (unless (member (car row) live)
-                (sqlite-execute db "DELETE FROM source WHERE path=?"
-                                (vector (cadr row))))))
-          (dolist (family observed)
-            (unless (org-glance-cache--inventory-current-p held family)
-              (org-glance-cache--project-family
-               db graph (car family) (cdr family))))
-          (dolist (metadata headlines)
-            (let* ((id (org-glance-headline-metadata:id metadata))
-                   (state (caar (sqlite-select
-                                 db
-                                 "SELECT state FROM headline_family WHERE logical_id=?"
-                                 (vector id)))))
-              (when (or (null state) (member state '("live" "damaged")))
-                (org-glance-cache--project db graph metadata))))
-          (dolist (metadata headlines)
-            (org-glance-cache--project-edges db metadata))
-          (sqlite-execute
-           db
-           "DELETE FROM source WHERE producer='org-glance' AND NOT EXISTS (SELECT 1 FROM headline WHERE headline.path=source.path)")))))))))))
+                       "SELECT logical_id,reconciled_epoch,verified FROM headline_family"))
+                     (changed
+                      (cl-remove-if
+                       (lambda (family)
+                         (org-glance-cache--inventory-current-p held family))
+                       observed))
+                     (changed-total (length changed)))
+                (org-glance-cache--report-progress
+                 started "families" 0 changed-total)
+                (org-glance-cache--transaction
+                 db
+                 (lambda ()
+                   (let ((live (mapcar #'org-glance-headline-metadata:id headlines)))
+                     (dolist (row (sqlite-select db "SELECT headline.org_id,org_headline.path FROM org_headline JOIN headline USING(id)"))
+                       (unless (member (car row) live)
+                         (sqlite-execute db "DELETE FROM source WHERE path=?"
+                                         (vector (cadr row))))))
+                   (dolist (family changed)
+                     (org-glance-cache--project-family
+                      db graph (car family) (cdr family))
+                     (cl-incf rebuilt)
+                     (when (org-glance-cache--progress-point-p
+                            rebuilt changed-total)
+                       (org-glance-cache--report-progress
+                        started "families" rebuilt changed-total)))
+                   (org-glance-cache--report-progress
+                    started "headlines" 0 headline-total "headlines")
+                   (cl-loop for metadata in headlines
+                            for completed from 1
+                            do
+                            (let* ((id (org-glance-headline-metadata:id metadata))
+                                   (state
+                                    (caar
+                                     (sqlite-select
+                                      db
+                                      "SELECT state FROM headline_family WHERE logical_id=?"
+                                      (vector id)))))
+                              (when (or (null state)
+                                        (member state '("live" "damaged")))
+                                (org-glance-cache--project db graph metadata)))
+                            when (org-glance-cache--progress-point-p
+                                  completed headline-total)
+                            do (org-glance-cache--report-progress
+                                started "headlines" completed
+                                headline-total "headlines"))
+                   (org-glance-cache--report-progress
+                    started "relations" 0 headline-total "headlines")
+                   (cl-loop for metadata in headlines
+                            for completed from 1
+                            do (org-glance-cache--project-edges db metadata)
+                            when (org-glance-cache--progress-point-p
+                                  completed headline-total)
+                            do (org-glance-cache--report-progress
+                                started "relations" completed
+                                headline-total "headlines"))
+                   (sqlite-execute
+                    db
+                    "DELETE FROM source WHERE producer='org-glance' AND NOT EXISTS (SELECT 1 FROM headline WHERE headline.path=source.path)"))))))
+           (org-glance-cache--report-complete started rebuilt total)))))))
 
 (cl-defun org-glance-cache:reconcile-families (graph ids)
   "Reconcile immutable family IDS into GRAPH's shared projection."
@@ -678,27 +773,11 @@ Return the number of families folded."
            (org-glance-headline-metadata:deserialize
             (json-parse-string (caar rows) :object-type 'plist))))))))
 
-(cl-defun org-glance-cache--revived-family-ids (db families)
+(cl-defun org-glance-cache--persisted-revived-family-ids (db)
   "Return family IDs whose current event descends from a Tombstone in DB."
-  (cl-loop
-   for (logical-id state current) in families
-   when (and current (member state '("live" "damaged")))
-   for events = (sqlite-select
-                 db
-                 "SELECT event_id,kind,parents_json FROM headline_event WHERE logical_id=?"
-                 (vector logical-id))
-   when (cl-labels
-            ((tombstone-ancestor-p
-              (event-id seen)
-              (unless (member event-id seen)
-                (when-let* ((event (assoc event-id events)))
-                  (or (equal "tombstone-published" (cadr event))
-                      (cl-some
-                       (lambda (parent)
-                         (tombstone-ancestor-p parent (cons event-id seen)))
-                       (json-parse-string (nth 2 event) :array-type 'list)))))))
-          (tombstone-ancestor-p current nil))
-   collect logical-id))
+  (mapcar #'car
+          (sqlite-select db
+                         "SELECT logical_id FROM headline_family WHERE revived=1")))
 
 (cl-defun org-glance-cache:authority (graph)
   "Return GRAPH's family-derived families and searchable projections."
@@ -720,7 +799,7 @@ Return the number of families folded."
                      db
                      "SELECT record_payload FROM headline_projection WHERE role IN ('current','conflict','recovery','rejected') ORDER BY logical_id,event_id")))))
         (list :families families
-              :revived (org-glance-cache--revived-family-ids db families)
+              :revived (org-glance-cache--persisted-revived-family-ids db)
               :headlines headlines))))
    (list :families nil :revived nil :headlines nil)))
 

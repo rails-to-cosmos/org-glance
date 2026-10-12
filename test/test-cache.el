@@ -13,7 +13,7 @@
     (let ((db (sqlite-open (org-glance-cache:path graph))))
       (unwind-protect
           (progn
-          (should (equal '((5)) (sqlite-select db "PRAGMA user_version")))
+          (should (equal '((6)) (sqlite-select db "PRAGMA user_version")))
             (should
              (equal
               '(("headline_event") ("headline_family")
@@ -206,8 +206,14 @@
                                ":PROPERTIES:\n"
                                ":ORG_GLANCE_ID: " id "\n"
                                ":END:\n")))
-        (org-glance-version:write-snapshot
-         dir id (list (org-glance-version:id parent)) "glance" contents 10))
+        (let* ((revived
+                (org-glance-version:write-snapshot
+                 dir id (list (org-glance-version:id parent)) "glance" contents 10))
+               (later
+                (org-glance-version:write-snapshot
+                 dir id (list (org-glance-version:id revived)) "glance" contents 10)))
+          (org-glance-version:write-snapshot
+           dir id (list (org-glance-version:id later)) "glance" contents 10)))
 
       (should (equal "Alpha"
                      (org-glance-headline-metadata:title
@@ -230,7 +236,14 @@
         (org-glance-version:write-snapshot
          dir id (list (org-glance-version:id parent)) "glance" contents 10))
       (org-glance-cache:refresh graph)
-      (should (member id (plist-get (org-glance-cache:authority graph) :revived)))
+      (let ((parses 0)
+            (original (symbol-function 'json-parse-string)))
+        (cl-letf (((symbol-function 'json-parse-string)
+                   (lambda (&rest args)
+                     (cl-incf parses)
+                     (apply original args))))
+          (should (member id (plist-get (org-glance-cache:authority graph) :revived)))
+          (should (= 1 parses))))
       (should (equal "Gamma"
                      (org-glance-headline-metadata:title
                       (org-glance-cache:metadata graph id))))
@@ -434,6 +447,41 @@
                            (sqlite-select db
                             "SELECT verified FROM headline_family WHERE logical_id='staging'")))
           (sqlite-close db))))))
+
+(ert-deftest org-glance-test:cache-refresh-reports-proof-and-rebuild-progress ()
+  "A slow cache boundary names its mode, phase, exact count, and elapsed time."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "progress" "* Progress"))
+    (org-glance-cache:refresh graph)
+    (let (messages)
+      (cl-letf (((symbol-function 'message)
+                 (lambda (format-string &rest args)
+                   (push (apply #'format format-string args) messages))))
+        (org-glance-cache:refresh graph))
+      (should (cl-some
+               (lambda (text)
+                 (string-match-p
+                  "org-glance: cache proof current (0 families rebuilt, [0-9.]+s)"
+                  text))
+               messages)))
+    (make-directory (f-join (org-glance-graph:data-path graph) "unrelated"))
+    (let (messages)
+      (cl-letf (((symbol-function 'message)
+                 (lambda (format-string &rest args)
+                   (push (apply #'format format-string args) messages))))
+        (org-glance-cache:refresh graph))
+      (should (cl-some
+               (lambda (text)
+                 (string-match-p
+                  "org-glance: cache rebuild: census (1/1 families, [0-9.]+s)"
+                  text))
+               messages))
+      (should (cl-some
+               (lambda (text)
+                 (string-match-p
+                  "org-glance: cache rebuild complete (0/1 families rebuilt, [0-9.]+s)"
+                  text))
+               messages)))))
 
 (ert-deftest org-glance-test:family-projection-observes-filesystem-once ()
   (org-glance-test:with-graph graph

@@ -5,6 +5,21 @@ Notable user-facing changes.  Versions date-based
 
 * Unreleased
 
+* 1.55.0.0.20261012.4
+
+** Changed
+
+- Cache startup reports whether it accepted a proof or is rebuilding, plus the
+  current phase, exact family or headline count, and elapsed time.  Long loops
+  report every 25 items and at completion.
+
+* 1.55.0.0.20261012.3
+
+** Changed
+
+- Shared cache schema 6 stores revived-family state once during projection;
+  Overview no longer decodes event ancestry on every authority read.
+
 * 1.55.0.0.20261012.2
 
 ** Changed
