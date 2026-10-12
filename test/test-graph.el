@@ -325,13 +325,13 @@ MANIFEST mtimes are pinned, so only [seg-01] -> [seg-02] differs."
 
 (ert-deftest org-glance-test:graph-cache-patched-not-rebuilt ()
   "An append PATCHES the read cache; the next read never re-scans the WAL.
-Rebuilds are counted as `org-glance-graph--latest-records' calls."
+Rebuilds are counted as `org-glance-graph--read-state' calls."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "a" "* TODO A"))
     (should (org-glance-graph:headlines graph))          ; warm the cache
     (let ((rebuilds 0))
-      (cl-letf* ((orig (symbol-function 'org-glance-graph--latest-records))
-                 ((symbol-function 'org-glance-graph--latest-records)
+      (cl-letf* ((orig (symbol-function 'org-glance-graph--read-state))
+                 ((symbol-function 'org-glance-graph--read-state)
                   (lambda (&rest args) (cl-incf rebuilds) (apply orig args))))
         (org-glance-graph:add graph (org-glance-test:headline "b" "* TODO B"))
         (should (equal '("a" "b") (org-glance-test:ids graph)))

@@ -68,6 +68,11 @@ argument in [[file:proposals][docs/proposals/]].
    Two Emacsen folding one =EXTERNAL.jsonl= need no lock: inv 34 leaves them nothing to
    serialise.
 
+   Cold open performs one WAL fold.  Healing derives the maximum storage
+   ordinal and seeds the read cache from that same decoded state; the first
+   consumer reuses it while the store snapshot is unchanged.  Re-scanning in
+   the first Overview makes startup work proportional twice over.
+
 8. *Git conflicts heal by union merge.*  Gated by =org-glance-conflict-resolution=
    (ask/union/nil).  THE RESOLVER IS THE WAL'S AND NAMES IT POSITIVELY:
    =--conflicted-jsonl-files= takes the open segment and the sealed =seg-<gen>.jsonl=

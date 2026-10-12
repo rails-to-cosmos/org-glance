@@ -344,21 +344,31 @@ A parse error is ignored on the open segment's final line only (invariant 32)."
   (dolist (seg (org-glance-graph--live-segments graph))
     (org-glance-graph--scan-file graph seg fn)))
 
+(cl-defun org-glance-graph--read-state (graph)
+  "Decode GRAPH's WAL once into records, total count, and maximum sequence."
+  (let ((latest (make-hash-table :test 'equal))
+        (order nil)
+        (total 0)
+        (max-seq 0))
+    (org-glance-graph--scan-forward
+     graph (lambda (record)
+             (cl-incf total)
+             (when-let* ((seq (plist-get record :seq)))
+               (setq max-seq (max max-seq seq)))
+             (let ((id (plist-get record :id)))
+               (unless (gethash id latest) (push id order))
+               (puthash id record latest))))
+    (list :records (cl-loop for id in (nreverse order)
+                            collect (gethash id latest))
+          :total total
+          :max-seq max-seq)))
+
 (cl-defun org-glance-graph--latest-records (graph)
   "Return (RECORDS . TOTAL): the latest record per id, first-sighting order.
 RECORDS includes tombstones (invariant 1); TOTAL counts every raw record in
 GRAPH's live segments."
-  (let ((latest (make-hash-table :test 'equal))
-        (order nil)
-        (total 0))
-    (org-glance-graph--scan-forward
-     graph (lambda (record)
-             (cl-incf total)
-             (let ((id (plist-get record :id)))
-               (unless (gethash id latest) (push id order))
-               (puthash id record latest))))
-    (cons (cl-loop for id in (nreverse order) collect (gethash id latest))
-          total)))
+  (let ((state (org-glance-graph--read-state graph)))
+    (cons (plist-get state :records) (plist-get state :total))))
 
 ;;; In-memory read cache
 
@@ -375,6 +385,20 @@ a seal or a compaction on any clock (invariant 7)."
 (cl-defun org-glance-graph--invalidate-cache (graph)
   "Drop GRAPH's read cache; in-process mutations call this (invariant 7)."
   (setf (org-glance-graph:-meta-cache graph) nil))
+
+(cl-defun org-glance-graph--cache-records (graph records)
+  "Install GRAPH's read cache from latest WAL RECORDS."
+  (let ((by-id (make-hash-table :test 'equal)))
+    (dolist (record records)
+      (puthash (plist-get record :id) record by-id))
+    (setf (org-glance-graph:-meta-cache graph)
+          (list :snapshot (org-glance-graph--store-snapshot graph)
+                :by-id by-id
+                :live (nreverse
+                       (cl-loop for record in records
+                                unless (plist-get record :tombstone)
+                                collect (org-glance-headline-metadata:deserialize
+                                         record)))))))
 
 (cl-defun org-glance-graph--patch-cache (graph records)
   "Fold just-appended RECORDS into GRAPH's read cache, then re-stamp its snapshot.
@@ -427,26 +451,14 @@ an external write moving a blob and never the WAL (invariant 33)."
   (let ((snap (org-glance-graph--store-snapshot graph))
         (cache (org-glance-graph:-meta-cache graph)))
     (unless (and cache (equal (plist-get cache :snapshot) snap))
-      (let ((records (car (org-glance-graph--latest-records graph)))
-            (by-id (make-hash-table :test 'equal))
-            (live nil))
-        (dolist (record records)
-          (puthash (plist-get record :id) record by-id))
-        (setq live (nreverse
-                    (cl-loop for record in records
-                             unless (plist-get record :tombstone)
-                             collect (org-glance-headline-metadata:deserialize record))))
-        (setf cache (list :snapshot snap :by-id by-id :live live)
-              (org-glance-graph:-meta-cache graph) cache)))
+      (org-glance-graph--cache-records
+       graph (car (org-glance-graph--latest-records graph)))
+      (setq cache (org-glance-graph:-meta-cache graph)))
     cache))
 
 (cl-defun org-glance-graph--max-seq (graph)
   "Return the highest `seq' in GRAPH's records, or 0 when none has one."
-  (let ((mx 0))
-    (org-glance-graph--scan-forward
-     graph (lambda (r) (let ((s (plist-get r :seq)))
-                         (when (and (integerp s) (> s mx)) (setq mx s)))))
-    mx))
+  (plist-get (org-glance-graph--read-state graph) :max-seq))
 
 (cl-defun org-glance-graph--ensure-newline-terminated (path)
   "Drop PATH's newline-less final line, rewriting PATH only when there is one."
@@ -1560,9 +1572,10 @@ them (invariant 1).  Reap other orphans; idempotent."
     (when adopt
       (org-glance-graph--write-manifest graph (append listed (sort adopt #'string<)))))
   (org-glance-graph--ensure-newline-terminated (org-glance-graph--open-segment-path graph))
-  (setf (org-glance-graph:seq graph) (org-glance-graph--max-seq graph))
-  (org-glance-graph--gc-orphans graph)
-  (org-glance-graph--invalidate-cache graph))
+  (let ((state (org-glance-graph--read-state graph)))
+    (setf (org-glance-graph:seq graph) (plist-get state :max-seq))
+    (org-glance-graph--gc-orphans graph)
+    (org-glance-graph--cache-records graph (plist-get state :records))))
 
 (cl-defun org-glance-graph:compact (graph)
   "Merge all of GRAPH's segments into one, dropping superseded and dead records.

@@ -5,6 +5,13 @@ Notable user-facing changes.  Versions date-based
 
 * Unreleased
 
+* 1.55.0.0.20261012.6
+
+** Changed
+
+- A cold graph open derives the WAL sequence and live read cache in one fold,
+  so the first Overview does not decode every compatibility record again.
+
 * 1.55.0.0.20261012.5
 
 ** Changed

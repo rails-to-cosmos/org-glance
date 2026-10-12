@@ -13,6 +13,25 @@
       (should (string= manifest-before
                        (f-read-text (org-glance-graph--manifest-path graph) 'utf-8))))))
 
+(ert-deftest org-glance-test:cold-open-scans-each-wal-record-once ()
+  "Opening then reading a graph shares one decoded WAL fold."
+  (org-glance-test:with-graph graph
+    (dotimes (index 8)
+      (org-glance-graph:add
+       graph (org-glance-test:headline
+              (format "open-once-%d" index) (format "* Row %d" index))))
+    (let ((records 0)
+          (original (symbol-function 'org-glance-graph--scan-file)))
+      (cl-letf (((symbol-function 'org-glance-graph--scan-file)
+                 (lambda (held path fn)
+                   (funcall original held path
+                            (lambda (record)
+                              (cl-incf records)
+                              (funcall fn record))))))
+        (let ((cold (org-glance-test:reopen graph)))
+          (should (= 8 (length (org-glance-graph:headlines cold))))
+          (should (= 8 records)))))))
+
 (ert-deftest org-glance-test:segments-seal-at-threshold ()
   "The open segment seals into seg-* once it crosses the byte cap."
   (org-glance-test:with-graph graph
