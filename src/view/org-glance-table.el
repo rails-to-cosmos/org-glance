@@ -23,6 +23,10 @@
 
 (declare-function org-glance-cache:headlines-for-filter
                   "org-glance-cache" (graph filter))
+(declare-function org-glance-property-index:cached-property
+                  "org-glance-property-index" (graph id content-hash property))
+(declare-function org-glance-property-index:current?
+                  "org-glance-property-index" (graph id content-hash))
 
 (require 'org-glance-core)
 (declare-function org-glance-overview:visit "org-glance-overview")
@@ -65,18 +69,24 @@ foreground, then `org-glance-table-default-state-color'."
       (org-glance-table--face-color (cdr (assoc state org-todo-keyword-faces)))
       org-glance-table-default-state-color))
 
-(cl-defun org-glance-table--split-states (graph)
+(cl-defun org-glance-table--split-states
+    (graph &optional (states nil states-supplied-p))
   "Split GRAPH's states into sorted (ACTIVE . DONE) lists.
 Read `org-done-keywords', bound per tag by `org-glance-table:visit'."
-  (let ((states (org-glance-graph:states graph))
+  (let ((states (if states-supplied-p states
+                  (org-glance-graph:states graph)))
         (done-kw (org-glance--done-keywords)))
     (cons (cl-remove-if     (lambda (s) (member s done-kw)) states)
           (cl-remove-if-not (lambda (s) (member s done-kw)) states))))
 
-(cl-defun org-glance-table--state-badges (graph)
+(cl-defun org-glance-table--state-badges
+    (graph &optional (states nil states-supplied-p))
   "Return GRAPH's state badge palette, a list of ((value . S) (color . C)).
 Active states come first, so the order doubles as the sort priority."
-  (pcase-let ((`(,active . ,done) (org-glance-table--split-states graph)))
+  (pcase-let ((`(,active . ,done)
+               (if states-supplied-p
+                   (org-glance-table--split-states graph states)
+                 (org-glance-table--split-states graph))))
     (cl-loop for state in (append active done)
              collect `((value . ,state) (color . ,(org-glance-table--state-color state))))))
 
@@ -85,10 +95,14 @@ Active states come first, so the order doubles as the sort priority."
   (propertize state 'face
               (list :foreground (org-glance-table--state-color state) :weight 'bold)))
 
-(cl-defun org-glance-table--todo-line (graph)
+(cl-defun org-glance-table--todo-line
+    (graph &optional (states nil states-supplied-p))
   "Return a coloured `#+TODO:' line of GRAPH's states, or nil when it has none.
 Active, then `|', then done; it is the table `subtitle', never hidden by `?'."
-  (pcase-let ((`(,active . ,done) (org-glance-table--split-states graph)))
+  (pcase-let ((`(,active . ,done)
+               (if states-supplied-p
+                   (org-glance-table--split-states graph states)
+                 (org-glance-table--split-states graph))))
     (when (or active done)
       (concat "#+TODO: "
               (mapconcat #'org-glance-table--colorize-state active " ")
@@ -98,11 +112,14 @@ Active, then `|', then done; it is the table `subtitle', never hidden by `?'."
 
 ;;; Spec and rows
 
-(cl-defun org-glance-table--base-columns (graph)
+(cl-defun org-glance-table--base-columns
+    (graph &optional (states nil states-supplied-p))
   "Return the built-in table columns for GRAPH, in default order.
 The single source of the built-in key set (invariants 15-16)."
   `(((key . "state")    (header . "State")     (type . "badge") (sortable . t) (align . "left")
-     (badges . ,(org-glance-table--state-badges graph)))
+     (badges . ,(if states-supplied-p
+                    (org-glance-table--state-badges graph states)
+                  (org-glance-table--state-badges graph))))
     ((key . "title")    (header . "Title")     (type . "text")  (sortable . t) (align . "left"))
     ((key . "schedule") (header . "Scheduled") (type . "text")  (sortable . t) (align . "left"))
     ((key . "deadline") (header . "Deadline")  (type . "text")  (sortable . t) (align . "left"))
@@ -116,13 +133,19 @@ The single source of the built-in key set (invariants 15-16)."
   "Non-nil when column KEY may never be removed or hidden (invariant 15)."
   (equal key "title"))
 
-(cl-defun org-glance-table--spec (graph filter)
+(cl-defun org-glance-table--spec
+    (graph filter &optional (states nil states-supplied-p))
   "Build the `table-view' spec alist, without rows, for GRAPH under FILTER.
 FILTER titles it and keys its per-tag columns; it sorts by state by default."
   `((title . ,(format "org-glance table: %s" (org-glance-filter:describe filter)))
-    (subtitle . ,(org-glance-table--todo-line graph))
+    (subtitle . ,(if states-supplied-p
+                     (org-glance-table--todo-line graph states)
+                   (org-glance-table--todo-line graph)))
     (columns . ,(org-glance-table--apply-schema
-                 graph filter (org-glance-table--base-columns graph)))
+                 graph filter
+                 (if states-supplied-p
+                     (org-glance-table--base-columns graph states)
+                   (org-glance-table--base-columns graph))))
     (actions . (((key . "RET")     (command . "materialize") (label . "Materialize"))
                 ((key . "j")       (command . "open")        (label . "Open link"))
                 ((key . "o")       (command . "open")        (label . "Open link"))
@@ -162,6 +185,7 @@ Cells are display strings: tags `:'-joined, priority its letter, absent \"\"."
   (let ((tags (org-glance-headline-metadata:tag-strings metadata))
         (priority (org-glance-headline-metadata:priority metadata)))
     `((id . ,(org-glance-headline-metadata:id metadata))
+      (content-hash . ,(org-glance-headline-metadata:hash metadata))
       (cells . ((state    . ,(or (org-glance-headline-metadata:state metadata) ""))
                 (title    . ,(or (org-glance-headline-metadata:title metadata) ""))
                 (tags     . ,(if tags (s-join ":" tags) ""))
@@ -398,8 +422,15 @@ PROPERTY is upcased; HEADER defaults to it capitalised."
       (sortable . t)
       (align . "left")
       (prop . ,prop)
-      (value-fn . ,(lambda (id _row)
-                     (or (org-glance-property-index:property graph id prop) ""))))))
+      (value-fn . ,(lambda (id row)
+                     (let ((hash (alist-get 'content-hash row)))
+                       (or (if (and row
+                                    (org-glance-property-index:current?
+                                     graph id hash))
+                               (org-glance-property-index:cached-property
+                                graph id hash prop)
+                             (org-glance-property-index:property graph id prop))
+                           "")))))))
 
 (cl-defun org-glance-table--edge-column (graph kind &optional header)
   "Return a `table-view' column of each row's KIND-edge target titles in GRAPH.
@@ -786,11 +817,14 @@ Marks survive."
         (cons "schedule" (lambda (id _row) (org-glance-table--act-planning graph id 'schedule)))
         (cons "deadline" (lambda (id _row) (org-glance-table--act-planning graph id 'deadline)))))
 
-(cl-defun org-glance-table--visit-spec (graph spec &key saved ref-entry context)
+(cl-defun org-glance-table--visit-spec
+    (graph spec &key saved ref-entry context (states nil states-supplied-p))
   "Return GRAPH's display spec for SPEC, its columns resolved by view kind.
 A relation view (CONTEXT) takes REF-ENTRY's whole set, else defaults, both with
 `Relation' (invariant 18); any other view restores SAVED's column order."
-  (let ((s (org-glance-table--spec graph spec)))
+  (let ((s (if states-supplied-p
+               (org-glance-table--spec graph spec states)
+             (org-glance-table--spec graph spec))))
     (cond (context
            (let ((cols (org-glance-table--context-columns graph context)))
              (setf (alist-get 'columns s)
@@ -815,11 +849,18 @@ scoped layout (invariant 18) and the `Relation' column."
          (org-done-keywords
           (org-glance-tag-config:done-keywords-for-filter graph spec))
          (keep? (org-glance-filter:predicate spec))
+         (metadata (org-glance-cache:headlines-for-filter graph spec))
+         (states (org-glance--sorted-distinct
+                  (delq nil (mapcar #'org-glance-headline-metadata:state
+                                    metadata))))
+         (initial-rows (mapcar #'org-glance-table--row metadata))
          (buffer-name (format "*org-glance-table: %s*" (org-glance-filter:describe spec)))
          (src (org-glance-graph:headline-meta-path graph))
          (fill-fn (lambda (buf)
                     (with-current-buffer buf
-                      (let ((rows (org-glance-table--rows graph keep? spec)))
+                      (let ((rows (or (prog1 initial-rows
+                                        (setq initial-rows nil))
+                                      (org-glance-table--rows graph keep? spec))))
                         (table-view-set-rows buf rows)
                         (org-glance-property-index--flush-if-dirty graph)
                         (org-glance-view:snapshot-mtime src)))))
@@ -827,7 +868,8 @@ scoped layout (invariant 18) and the `Relation' column."
                buffer-name
                (org-glance-table--visit-spec graph spec :saved saved
                                             :ref-entry ref-entry
-                                            :context context)
+                                            :context context
+                                            :states states)
                (org-glance-table--handlers graph spec)
                fill-fn)))
     (with-current-buffer buf

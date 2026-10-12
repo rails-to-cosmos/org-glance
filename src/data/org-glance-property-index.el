@@ -86,6 +86,20 @@ A hash miss costs one blob parse, memoized unless ID is gone; never flushes."
   (alist-get (org-glance--property-key property)
              (org-glance-property-index:drawer graph id) nil nil #'string=))
 
+(cl-defun org-glance-property-index:cached-property
+    (graph id content-hash property)
+  "Return ID's cached PROPERTY when its entry matches CONTENT-HASH in GRAPH.
+This read never opens the headline or repairs the derived property index."
+  (when-let* ((entry (gethash id (org-glance-property-index--table graph)))
+              ((equal content-hash (car entry))))
+    (alist-get (org-glance--property-key property)
+               (plist-get (cdr entry) :drawer) nil nil #'string=)))
+
+(cl-defun org-glance-property-index:current? (graph id content-hash)
+  "Non-nil when GRAPH has ID's property entry for CONTENT-HASH."
+  (when-let* ((entry (gethash id (org-glance-property-index--table graph))))
+    (equal content-hash (car entry))))
+
 (cl-defun org-glance-property-index:ensure (graph ids)
   "Refresh GRAPH's index for IDS (parse stale/absent ones); flush if changed."
   (dolist (id ids) (org-glance-property-index--entry graph id))

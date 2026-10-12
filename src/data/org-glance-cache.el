@@ -889,13 +889,27 @@ Return the number of families folded."
   "Return the current Emacs executable for a batch reconciliation worker."
   (expand-file-name invocation-name invocation-directory))
 
+(cl-defun org-glance-cache--worker-load-paths ()
+  "Return existing load paths for a batch worker, newest package first.
+The sibling scan covers a package upgraded after this Emacs loaded its now
+removed predecessor directory."
+  (let* ((loaded (symbol-file 'org-glance-cache:refresh-async 'defun))
+         (loaded-dir (and loaded (file-name-directory loaded)))
+         (parent (and loaded-dir
+                      (file-name-directory
+                       (directory-file-name loaded-dir))))
+         (installed
+          (when (and parent (file-directory-p parent))
+            (sort (directory-files parent t "\\`org-glance-[0-9]" t)
+                  #'string>))))
+    (delete-dups
+     (cl-loop for path in (append installed load-path)
+              when (and path (file-directory-p path))
+              collect (expand-file-name path)))))
+
 (cl-defun org-glance-cache--worker-command (graph)
   "Return the argv that reconciles GRAPH in an isolated batch Emacs."
-  (let ((paths
-         (delete-dups
-          (cl-loop for path in load-path
-                   when (and path (file-directory-p path))
-                   collect (expand-file-name path)))))
+  (let ((paths (org-glance-cache--worker-load-paths)))
     (append
      (list (org-glance-cache--emacs-program) "--quick" "--batch")
      (cl-loop for path in paths append (list "-L" path))
@@ -917,7 +931,8 @@ Return the number of families folded."
     (if (and (eq (process-status process) 'exit)
              (= 0 (process-exit-status process)))
         (message "org-glance: cache reconciliation process complete")
-      (message "org-glance: cache reconciliation process failed: %s"
+      (message "org-glance: cache reconciliation process failed; see %s: %s"
+               (buffer-name (process-buffer process))
                (string-trim event)))))
 
 (cl-defun org-glance-cache:refresh-async (graph &optional initial)

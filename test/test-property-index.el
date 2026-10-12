@@ -52,6 +52,27 @@
             (should (equal "AUTHOR" (alist-get 'key col)))
             (should (equal "Tolkien" (funcall (alist-get 'value-fn col) "a" nil))))))))
 
+(ert-deftest org-glance-test:table-property-column-uses-the-row-cache-only ()
+  "A property cell must not reopen History after its Row has been selected."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-test:headline-props
+       "a" "* TODO A :book:" '(("AUTHOR" . "Tolkien"))))
+    (let* ((metadata (org-glance-cache:headline graph "a"))
+           (row (org-glance-table--row metadata))
+           (column (org-glance-table--property-column graph "AUTHOR")))
+      ;; Prime the derived sidecar as a normal publication/write path would.
+      (should (equal "Tolkien"
+                     (org-glance-property-index:property graph "a" "AUTHOR")))
+      (cl-letf (((symbol-function 'org-glance-graph:live-meta)
+                 (lambda (&rest _)
+                   (ert-fail "property cell crossed the committed-cache boundary")))
+                ((symbol-function 'org-glance-graph:headline)
+                 (lambda (&rest _)
+                   (ert-fail "property cell opened History"))))
+        (should (equal "Tolkien"
+                       (funcall (alist-get 'value-fn column) "a" row)))))))
+
 (ert-deftest org-glance-test:table-extract-via-index ()
   "The table `e' action extracts a body KEY:value read from the property index."
   (org-glance-test:with-graph graph

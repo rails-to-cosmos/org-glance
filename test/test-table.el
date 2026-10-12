@@ -596,6 +596,23 @@ relies on `org-add-log-note' switching buffers for real."
   (should (equal "article+book" (org-glance-table--schema-key '(:tags ("book" "article")))))
   (should (equal ":none:" (org-glance-table--schema-key nil))))
 
+(ert-deftest org-glance-test:table-visit-builds-its-palette-from-cache-rows ()
+  "Opening Table must not ask the compatibility graph for its state palette."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add
+     graph (org-glance-test:headline "a" "* TODO A :book:"))
+    (cl-letf (((symbol-function 'org-glance-graph:states)
+               (lambda (&rest _)
+                 (ert-fail "Table state palette crossed the cache boundary")))
+              ((symbol-function 'org-glance-graph:headlines)
+               (lambda (&rest _)
+                 (ert-fail "Table opened the compatibility graph"))))
+      (let ((buffer (org-glance-table:visit graph "book")))
+        (unwind-protect
+            (with-current-buffer buffer
+              (should (= 1 (length table-view--rows))))
+          (when (buffer-live-p buffer) (kill-buffer buffer)))))))
+
 (ert-deftest org-glance-test:table-add-property-column-shows-drawer-value ()
   "An added property column displays each headline's drawer property."
   (org-glance-test:with-graph graph

@@ -880,6 +880,20 @@
                      (plist-get process-args :command)))
             (should (equal '("observed") (org-glance-test:ids graph)))))))))
 
+(ert-deftest org-glance-test:cache-worker-finds-a-package-upgraded-in-place ()
+  "A live session can launch its worker after its loaded package was replaced."
+  (org-glance-test:with-graph graph
+    (with-temp-directory elpa
+      (let* ((old (f-join elpa "org-glance-20261010.1211"))
+             (current (f-join elpa "org-glance-20261012.1838"))
+             (loaded (f-join old "org-glance-cache.elc"))
+             (load-path (list old)))
+        (make-directory current)
+        (cl-letf (((symbol-function 'symbol-file)
+                   (lambda (&rest _) loaded)))
+          (should (member current
+                          (org-glance-cache--worker-load-paths))))))))
+
 (ert-deftest org-glance-test:startup-refresh-leaves-first-read-due ()
   "Startup work does not throttle the first post-open inventory request."
   (org-glance-test:with-graph graph
