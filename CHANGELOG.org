@@ -5,6 +5,16 @@ Notable user-facing changes.  Versions date-based
 
 * Unreleased
 
+* 1.55.0.0.20261012.11
+
+** Fixed
+
+- Startup reconciliation leaves the first post-open inventory request due, so
+  a Git update arriving just after startup is discovered without waiting for
+  the one-minute steady-state throttle.
+- Background rebuilds yield between families, events, candidates, headlines,
+  and relations so a large reconciliation cannot monopolize interactive Emacs.
+
 * 1.55.0.0.20261012.10
 
 ** Changed

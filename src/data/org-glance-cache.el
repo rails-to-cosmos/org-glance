@@ -361,7 +361,8 @@
                        (org-glance-version:data-file dir event)
                        (and (equal "available" (car observation))
                             (org-glance-version:content-sha256 version))
-                       (car observation)))))))
+                       (car observation))))))
+        (org-glance-cache--yield))
       (dolist (version candidates)
         (when (eq 'snapshot (org-glance-version:kind version))
           (let* ((event (org-glance-version:id version))
@@ -395,7 +396,8 @@
               (sqlite-execute
                db
                "INSERT INTO producer_projection(logical_id,event_id,producer,parser_contract,record_payload) VALUES(?,?,?,?,?)"
-               (vector id event "org-glance" "org-glance:1" payload))))))
+               (vector id event "org-glance" "org-glance:1" payload)))))
+        (org-glance-cache--yield))
       (unless (or projected (member state '("deleted" "empty")))
         (let* ((observation (and sole
                                  (eq 'snapshot (org-glance-version:kind sole))
@@ -601,6 +603,13 @@ COMPLETED and TOTAL count UNIT values."
       (and (> org-glance-cache-progress-step 0)
            (= 0 (% completed org-glance-cache-progress-step)))))
 
+(defvar org-glance-cache--cooperative nil)
+
+(cl-defun org-glance-cache--yield ()
+  "Yield to interactive Emacs work during a cooperative cache rebuild."
+  (when org-glance-cache--cooperative
+    (thread-yield)))
+
 (cl-defun org-glance-cache--after-append (graph specs)
   "Apply GRAPH's appended SPECS to the shared cache."
   (let* ((headlines (org-glance-cache--headlines graph))
@@ -663,6 +672,7 @@ COMPLETED and TOTAL count UNIT values."
                         (cons id (org-glance-cache--inventory-event-ids
                                   (org-glance-graph:headline-data-path graph id)))
                         observed)
+                    do (org-glance-cache--yield)
                     when (org-glance-cache--progress-point-p completed total)
                     do (org-glance-cache--report-progress
                         started "census" completed total))
@@ -696,6 +706,7 @@ COMPLETED and TOTAL count UNIT values."
                      (org-glance-cache--project-family
                       db graph (car family) (cdr family))
                      (cl-incf rebuilt)
+                     (org-glance-cache--yield)
                      (when (org-glance-cache--progress-point-p
                             rebuilt changed-total)
                        (org-glance-cache--report-progress
@@ -715,6 +726,7 @@ COMPLETED and TOTAL count UNIT values."
                               (when (or (null state)
                                         (member state '("live" "damaged")))
                                 (org-glance-cache--project db graph metadata)))
+                            do (org-glance-cache--yield)
                             when (org-glance-cache--progress-point-p
                                   completed headline-total)
                             do (org-glance-cache--report-progress
@@ -725,6 +737,7 @@ COMPLETED and TOTAL count UNIT values."
                    (cl-loop for metadata in headlines
                             for completed from 1
                             do (org-glance-cache--project-edges db metadata)
+                            do (org-glance-cache--yield)
                             when (org-glance-cache--progress-point-p
                                   completed headline-total)
                             do (org-glance-cache--report-progress
@@ -804,28 +817,34 @@ Return the number of families folded."
 (defvar org-glance-cache--refresh-synchronously nil
   "Non-nil makes graph-open refresh deterministic for the test harness.")
 
-(cl-defun org-glance-cache:refresh-async (graph)
-  "Queue GRAPH's cache reconciliation off the caller thread when due."
+(cl-defun org-glance-cache:refresh-async (graph &optional initial)
+  "Queue GRAPH's cache reconciliation off the caller thread when due.
+INITIAL queues startup work without consuming the first post-open refresh."
   (let ((active (gethash graph org-glance-cache--refresh-threads))
         (now (float-time)))
     (unless (or (eq active 'starting)
                 (and (threadp active) (thread-live-p active))
-                (< (- now (gethash graph org-glance-cache--refresh-requested-at
-                                   most-negative-fixnum))
-                   org-glance-cache-refresh-interval))
-      (puthash graph now org-glance-cache--refresh-requested-at)
+                (and (not initial)
+                     (< (- now
+                           (gethash graph
+                                    org-glance-cache--refresh-requested-at
+                                    most-negative-fixnum))
+                        org-glance-cache-refresh-interval)))
+      (unless initial
+        (puthash graph now org-glance-cache--refresh-requested-at))
       (puthash graph 'starting org-glance-cache--refresh-threads)
       (condition-case err
           (let ((thread
                  (make-thread
                   (lambda ()
-                    (unwind-protect
-                        (condition-case refresh-error
-                            (org-glance-cache:refresh graph)
-                          (error
-                           (message "org-glance: cache refresh skipped: %S"
-                                    refresh-error)))
-                      (remhash graph org-glance-cache--refresh-threads)))
+                    (let ((org-glance-cache--cooperative t))
+                      (unwind-protect
+                          (condition-case refresh-error
+                              (org-glance-cache:refresh graph)
+                            (error
+                             (message "org-glance: cache refresh skipped: %S"
+                                      refresh-error)))
+                        (remhash graph org-glance-cache--refresh-threads))))
                   "org-glance-cache-refresh")))
             (when (eq 'starting
                       (gethash graph org-glance-cache--refresh-threads))
@@ -838,7 +857,7 @@ Return the number of families folded."
   "Refresh GRAPH according to the current startup execution policy."
   (if org-glance-cache--refresh-synchronously
       (org-glance-cache:refresh graph)
-    (org-glance-cache:refresh-async graph)))
+    (org-glance-cache:refresh-async graph t)))
 
 (cl-defun org-glance-cache--inventory-tick ()
   "Reconcile immutable inventories for every open graph."

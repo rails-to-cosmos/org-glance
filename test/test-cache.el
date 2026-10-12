@@ -562,6 +562,25 @@
                   text))
                messages)))))
 
+(ert-deftest org-glance-test:cache-refresh-yields-between-projection-units ()
+  "A background rebuild returns to Emacs between independent units."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-test:headline "one" "* One"))
+    (let ((db (sqlite-open (org-glance-cache:path graph))))
+      (unwind-protect
+          (sqlite-execute
+           db "UPDATE headline_family SET verified=0 WHERE logical_id='one'")
+        (sqlite-close db)))
+    (let ((org-glance-cache--cooperative t)
+          (yields 0))
+      (cl-letf (((symbol-function 'org-glance-cache--inventory-proof-current-p)
+                 (lambda (_graph) nil))
+                ((symbol-function 'thread-yield)
+                 (lambda () (cl-incf yields))))
+        (org-glance-cache:refresh graph)
+        (should (>= yields 5))))))
+
 (ert-deftest org-glance-test:family-projection-observes-filesystem-once ()
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "observed" "* Observed"))
@@ -731,7 +750,9 @@
       (org-glance-graph:add graph
         (org-glance-test:headline "observed" "* Observed"))
       (remhash (org-glance-graph:directory graph) org-glance-graph:list))
-    (let ((org-glance-cache--refresh-synchronously nil))
+    (let ((org-glance-cache--refresh-synchronously nil)
+          (org-glance-cache--refresh-threads (make-hash-table :test #'eq))
+          (org-glance-cache--refresh-requested-at (make-hash-table :test #'eq)))
       (let ((refreshes 0)
             queued)
         (cl-letf (((symbol-function 'make-thread)
@@ -744,6 +765,25 @@
             (should (= 0 refreshes))
             (should (functionp queued))
             (should (equal '("observed") (org-glance-test:ids graph)))))))))
+
+(ert-deftest org-glance-test:startup-refresh-leaves-first-read-due ()
+  "Startup work does not throttle the first post-open inventory request."
+  (org-glance-test:with-graph graph
+    (let ((org-glance-cache--refresh-threads (make-hash-table :test #'eq))
+          (org-glance-cache--refresh-requested-at (make-hash-table :test #'eq))
+          queued)
+      (cl-letf (((symbol-function 'make-thread)
+                 (lambda (function &optional _name)
+                   (setq queued function)
+                   'queued-thread)))
+        (org-glance-cache:refresh-async graph t)
+        (should-not (gethash graph org-glance-cache--refresh-requested-at))
+        (funcall queued)
+        (setq queued nil)
+        (org-glance-cache:refresh-async graph)
+        (should (functionp queued))
+        (should (numberp
+                 (gethash graph org-glance-cache--refresh-requested-at)))))))
 
 (ert-deftest org-glance-test:headline-read-queues-stale-inventory-off-caller-thread ()
   "A read queues stale-inventory work without reconciling on its caller."

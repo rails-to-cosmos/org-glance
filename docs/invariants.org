@@ -797,14 +797,17 @@ today, up from 50.
     =shared-cache-commit-failure-reaches-the-writer=.
 
 42. *Automatic family reconciliation does not block interactive reads.*  Graph
-    open, passive reads and the inventory timer queue one worker per graph,
-    limited to one automatic request per minute.  They serve the last verified
-    SQLite projection and compatibility WAL while that worker runs.  Local
+    open, passive reads and the inventory timer queue one worker per graph.
+    Startup does not consume the first post-open request; steady-state requests
+    are limited to one per minute.  Reads serve the last verified SQLite
+    projection and compatibility WAL while that worker runs.  The worker
+    yields between families, events, candidates, headlines and relations.  Local
     publication and an observed external relay remain synchronous commit
     boundaries.  Explicit cache refresh and inventory reconciliation remain
     synchronous maintenance operations.  Pinned by
     =graph-open-queues-cache-refresh-off-caller-thread=,
     =headline-read-queues-stale-inventory-off-caller-thread=,
+    =cache-refresh-yields-between-projection-units=,
     =inventory-tick-skips-a-proven-current-store= and
     =explicit-refresh-detects-after-nonblocking-read=.
 

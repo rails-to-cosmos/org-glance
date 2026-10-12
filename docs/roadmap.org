@@ -52,6 +52,8 @@ CLOSED: [2026-10-12]
 - [X] Return from graph open before immutable-family reconciliation.
 - [X] Serve the last verified SQLite/WAL projection while reconciliation runs.
 - [X] Limit each graph to one background worker and one request per minute.
+- [X] Leave the first post-open request due for an immediate Git update.
+- [X] Yield within family projection and between cache rebuild units.
 - [X] Keep relay-backed external publication immediately visible.
 
 [[file:proposals/2026-10-12-nonblocking-cache-reconciliation.done.org][Proposal: nonblocking cache reconciliation]]
