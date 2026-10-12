@@ -5,6 +5,8 @@
 
 ;;; Code:
 
+(declare-function org-glance--batch-worker-command "org-glance-core")
+
 (require 'cl-lib)
 (require 'json)
 (require 'sqlite)
@@ -885,38 +887,11 @@ Return the number of families folded."
 (defvar org-glance-cache--refresh-synchronously nil
   "Non-nil makes graph-open refresh deterministic for the test harness.")
 
-(cl-defun org-glance-cache--emacs-program ()
-  "Return the current Emacs executable for a batch reconciliation worker."
-  (expand-file-name invocation-name invocation-directory))
-
-(cl-defun org-glance-cache--worker-load-paths ()
-  "Return existing load paths for a batch worker, newest package first.
-The sibling scan covers a package upgraded after this Emacs loaded its now
-removed predecessor directory."
-  (let* ((loaded (symbol-file 'org-glance-cache:refresh-async 'defun))
-         (loaded-dir (and loaded (file-name-directory loaded)))
-         (parent (and loaded-dir
-                      (file-name-directory
-                       (directory-file-name loaded-dir))))
-         (installed
-          (when (and parent (file-directory-p parent))
-            (sort (directory-files parent t "\\`org-glance-[0-9]" t)
-                  #'string>))))
-    (delete-dups
-     (cl-loop for path in (append installed load-path)
-              when (and path (file-directory-p path))
-              collect (expand-file-name path)))))
-
 (cl-defun org-glance-cache--worker-command (graph)
   "Return the argv that reconciles GRAPH in an isolated batch Emacs."
-  (let ((paths (org-glance-cache--worker-load-paths)))
-    (append
-     (list (org-glance-cache--emacs-program) "--quick" "--batch")
-     (cl-loop for path in paths append (list "-L" path))
-     (list "-l" "org-glance-cache" "--eval"
-           (prin1-to-string
-            (list 'org-glance-cache:refresh-batch
-                  (org-glance-graph:directory graph)))))))
+  (org-glance--batch-worker-command
+   'org-glance-cache:refresh-batch
+   (list (org-glance-graph:directory graph))))
 
 (cl-defun org-glance-cache:refresh-batch (directory)
   "Reconcile DIRECTORY once in the current noninteractive Emacs."

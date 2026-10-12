@@ -5,6 +5,13 @@ Notable user-facing changes.  Versions date-based
 
 * Unreleased
 
+* 1.55.0.0.20261012.17
+
+** Changed
+
+- =M-x org-glance-reindex= runs in an isolated batch Emacs process and returns
+  immediately; completion and failure are reported in the originating Emacs.
+
 * 1.55.0.0.20261012.16
 
 ** Changed

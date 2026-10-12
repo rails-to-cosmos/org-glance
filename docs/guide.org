@@ -223,7 +223,7 @@ Everything derived rebuilds from the org files, so these are safe to run at any 
 
 | Command                                    | What it does                                     |
 |--------------------------------------------+--------------------------------------------------|
-| =M-x org-glance-reindex=                     | rebuild every derived index from the org files   |
+| =M-x org-glance-reindex=                     | rebuild derived indexes in a background process |
 | =M-x org-glance-graph:refresh-external=      | fold in edits made by another program right now  |
 | =M-x org-glance-graph:clear-spent-external=  | delete spent notification files to reclaim space |
 

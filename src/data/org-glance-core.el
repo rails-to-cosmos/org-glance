@@ -30,6 +30,38 @@
   (or org-glance-graph
       (progn (org-glance-init) org-glance-graph)))
 
+(cl-defun org-glance--batch-worker-load-paths (entry-point)
+  "Return existing load paths for a batch worker running ENTRY-POINT.
+Prefer newer sibling package directories so a live session survives an
+in-place package upgrade."
+  (let* ((loaded (symbol-file entry-point 'defun))
+         (loaded-dir (and loaded (file-name-directory loaded)))
+         (parent (and loaded-dir
+                      (file-name-directory
+                       (directory-file-name loaded-dir))))
+         (installed
+          (when (and parent (file-directory-p parent))
+            (sort (directory-files parent t "\\`org-glance-[0-9]" t)
+                  #'string>))))
+    (delete-dups
+     (cl-loop for path in (append installed load-path)
+              when (and path (file-directory-p path))
+              collect (expand-file-name path)))))
+
+(cl-defun org-glance--batch-worker-command (entry-point args)
+  "Return argv for an isolated batch Emacs calling ENTRY-POINT with ARGS."
+  (let* ((source (symbol-file entry-point 'defun))
+         (library (and source (file-name-base source)))
+         (paths (org-glance--batch-worker-load-paths entry-point)))
+    (unless library
+      (error "Cannot locate batch worker entry point: %S" entry-point))
+    (append
+     (list (expand-file-name invocation-name invocation-directory)
+           "--quick" "--batch")
+     (cl-loop for path in paths append (list "-L" path))
+     (list "-l" library "--eval"
+           (prin1-to-string (cons entry-point args))))))
+
 (defcustom org-glance-overview-default-view 'org-glance-table
   "Which view `org-glance-overview' opens by default.
 `org-glance-table' (table dashboard) or `org-glance-overview' (org text); `T'

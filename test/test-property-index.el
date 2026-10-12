@@ -98,8 +98,84 @@ Reopen prunes a legacy `config/' sidecar; reindex drops `cache/'."
       (should-not (f-exists? legacy)))
     (f-mkdir-full-path (org-glance-graph:cache-path graph))
     (f-write-text "nil" 'utf-8 (org-glance-graph:cache-file graph "llm-sessions.eld"))
-    (org-glance-reindex (org-glance-graph:directory graph))
+    (org-glance--reindex-batch (org-glance-graph:directory graph))
     (should-not (f-exists? (org-glance-graph:cache-path graph)))))
+
+(ert-deftest org-glance-test:reindex-queues-one-batch-process ()
+  "Reindex returns immediately and shares one worker per graph."
+  (org-glance-test:with-graph graph
+    (let ((org-glance--reindex-processes (make-hash-table :test #'equal))
+          process-args)
+      (cl-letf (((symbol-function 'make-process)
+                 (lambda (&rest args)
+                   (setq process-args args)
+                   'queued-process))
+                ((symbol-function 'processp)
+                 (lambda (process) (eq process 'queued-process)))
+                ((symbol-function 'process-live-p)
+                 (lambda (process) (eq process 'queued-process)))
+                ((symbol-function 'org-glance--reindex-now)
+                 (lambda (&rest _)
+                   (ert-fail "reindex occupied the caller"))))
+        (should (eq 'queued-process
+                    (org-glance-reindex
+                     (org-glance-graph:directory graph))))
+        (should (eq 'queued-process
+                    (org-glance-reindex
+                     (org-glance-graph:directory graph))))
+        (should (equal "org-glance-reindex"
+                       (plist-get process-args :name)))
+        (should (member "--batch" (plist-get process-args :command)))
+        (should (member "--quick" (plist-get process-args :command)))
+        (should (cl-find-if
+                 (lambda (arg)
+                   (s-contains? (org-glance-graph:directory graph) arg))
+                 (plist-get process-args :command)))))))
+
+(ert-deftest org-glance-test:reindex-batch-disables-open-workers ()
+  "The reindex worker opens one graph without launching nested workers."
+  (with-temp-directory dir
+    (let ((opens 0))
+      (cl-letf (((symbol-function 'org-glance--reindex-now)
+                 (lambda (directory)
+                   (should (equal dir directory))
+                   (should-not org-glance-graph-after-open-functions)
+                   (cl-incf opens)
+                   7)))
+        (should (= 7 (org-glance--reindex-batch dir)))
+        (should (= 1 opens))))))
+
+(ert-deftest org-glance-test:reindex-worker-runs-in-separate-emacs ()
+  "The real worker backfills metadata and exits successfully."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add
+        graph
+      (org-glance-test:headline
+       "worker-reindex" "* Worker reindex" "[[https://example.test]]"))
+    (org-glance-graph:insert
+        graph
+      (list (list :id "worker-reindex" :state "" :title "Worker reindex")))
+    (should-not (org-glance-test:field graph "worker-reindex" linked?))
+    (let* ((buffer (generate-new-buffer " *org-glance-reindex-test*"))
+           (process
+            (make-process
+             :name "org-glance-reindex-test"
+             :buffer buffer
+             :command
+             (org-glance--batch-worker-command
+              'org-glance--reindex-batch
+              (list (org-glance-graph:directory graph)))
+             :connection-type 'pipe
+             :coding 'utf-8-unix
+             :noquery t)))
+      (unwind-protect
+          (progn
+            (while (process-live-p process)
+              (accept-process-output process 0.1))
+            (should (= 0 (process-exit-status process)))
+            (should (= 1 (org-glance--reindex-count process)))
+            (should (org-glance-test:field graph "worker-reindex" linked?)))
+        (when (buffer-live-p buffer) (kill-buffer buffer))))))
 
 (provide 'test-property-index)
 ;;; test-property-index.el ends here

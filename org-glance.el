@@ -6,7 +6,7 @@
 
 ;; Author: Dmitry Akatov <dmitry.akatov@protonmail.com>
 ;; Created: 29 September, 2018
-;; Version: 1.55.0.0.20261012.16
+;; Version: 1.55.0.0.20261012.17
 ;; Package-Requires: ((emacs "29.1") (org) (aes) (dash) (f) (s) (transient) (table-view "0"))
 ;; Keywords: org-mode, outlines, data, database, store, projections
 ;; Homepage: https://github.com/rails-to-cosmos/org-glance
@@ -66,6 +66,8 @@
 (require 'org-glance-table)
 (require 'org-glance-relations)
 (require 'org-glance-tags)
+
+(declare-function org-glance--batch-worker-command "org-glance-core")
 
 (defcustom org-glance-plugins nil
   "Optional org-glance plugins to load at init, as feature-name suffixes.
@@ -282,10 +284,8 @@ skips no source renames each legacy `*.metadata.el' to `*.metadata.el.bak'."
                  (length legacy))))
     count))
 
-(cl-defun org-glance-reindex (&optional (directory org-glance-directory))
-  "Re-derive metadata for every headline in DIRECTORY's graph from its content.
-Run it after an upgrade to backfill new fields; it also drops derived caches."
-  (interactive)
+(cl-defun org-glance--reindex-now (directory)
+  "Reindex DIRECTORY synchronously and return the number of headlines."
   (let* ((graph (org-glance-graph directory))
          (n (org-glance-graph:reindex graph)))
     (org-glance-property-index:clear graph)   ; in-session memo (+ its file)
@@ -293,9 +293,87 @@ Run it after an upgrade to backfill new fields; it also drops derived caches."
     (dolist (dir (list (org-glance-graph:cache-path graph)
                        (org-glance-overview:cache-path graph)))
       (ignore-errors (f-delete dir t)))
-    (when (called-interactively-p 'any)
-      (message "org-glance: re-indexed %d headline(s)." n))
     n))
+
+(cl-defun org-glance--reindex-batch (directory)
+  "Reindex DIRECTORY in the current noninteractive Emacs; return the count."
+  (let ((org-glance-graph-after-open-functions nil))
+    (let ((n (org-glance--reindex-now directory)))
+      (princ (format "org-glance: re-indexed %d headline(s).\n" n))
+      n)))
+
+(defvar org-glance--reindex-processes (make-hash-table :test #'equal)
+  "Active reindex subprocess keyed by canonical graph directory.")
+
+(cl-defun org-glance--reindex-count (process)
+  "Return the completed headline count reported by PROCESS, or nil."
+  (when-let* ((buffer (process-buffer process))
+              ((buffer-live-p buffer)))
+    (with-current-buffer buffer
+      (save-excursion
+        (goto-char (point-max))
+        (when (re-search-backward
+               "org-glance: re-indexed \\([0-9]+\\) headline" nil t)
+          (string-to-number (match-string 1)))))))
+
+(cl-defun org-glance--reindex-finished (directory graph process event)
+  "Retire DIRECTORY's reindex PROCESS and report its terminal EVENT for GRAPH."
+  (when (memq (process-status process) '(exit signal failed))
+    (when (eq process (gethash directory org-glance--reindex-processes))
+      (remhash directory org-glance--reindex-processes))
+    (if (and (eq (process-status process) 'exit)
+             (= 0 (process-exit-status process)))
+        (progn
+          (remhash (org-glance-graph:store-path graph)
+                   org-glance-property-index--cache)
+          (org-glance-graph--notify-commit graph :structural)
+          (org-glance-cache:refresh-async graph t)
+          (message "org-glance: re-indexed %d headline(s)"
+                   (or (org-glance--reindex-count process) 0)))
+      (message "org-glance: re-index failed; see %s: %s"
+               (buffer-name (process-buffer process))
+               (string-trim event)))))
+
+(cl-defun org-glance-reindex (&optional (directory org-glance-directory))
+  "Re-derive DIRECTORY's metadata and caches in an isolated batch Emacs.
+Return the active process immediately.  Repeated calls while it runs reuse it."
+  (interactive)
+  (let* ((graph (org-glance-graph directory))
+         (directory (org-glance-graph:directory graph))
+         (active (gethash directory org-glance--reindex-processes)))
+    (if (and (processp active) (process-live-p active))
+        (progn
+          (when (called-interactively-p 'any)
+            (message "org-glance: re-index already running"))
+          active)
+      (condition-case err
+          (let* ((buffer
+                  (get-buffer-create
+                   (format " *org-glance-reindex:%s*"
+                           (sxhash-equal directory))))
+                 (_ (with-current-buffer buffer
+                      (let ((inhibit-read-only t)) (erase-buffer))))
+                 (process
+                  (make-process
+                   :name "org-glance-reindex"
+                   :buffer buffer
+                   :command
+                   (org-glance--batch-worker-command
+                    'org-glance--reindex-batch (list directory))
+                   :connection-type 'pipe
+                   :coding 'utf-8-unix
+                   :noquery t
+                   :sentinel
+                   (lambda (process event)
+                     (org-glance--reindex-finished
+                      directory graph process event)))))
+            (puthash directory process org-glance--reindex-processes)
+            (when (called-interactively-p 'any)
+              (message "org-glance: re-index started"))
+            process)
+        (error
+         (user-error "org-glance: re-index could not start: %s"
+                     (error-message-string err)))))))
 
 (cl-defun org-glance-graph-compact (&optional (directory org-glance-directory))
   "Compact DIRECTORY's metadata store; a no-op when already compact.
