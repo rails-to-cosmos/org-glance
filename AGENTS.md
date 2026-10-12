@@ -2,6 +2,13 @@
 
 `CLAUDE.md` is a symlink to this file.
 
+## Commit gate
+
+Before every commit, run the focused correctness tests and the applicable
+performance contract for each changed behavior. Treat any unexplained latency
+or work-counter regression as a failing gate and fix it before committing; a
+regression may ship only with the user's explicit acceptance.
+
 ## Documentation
 
 - Docs are org-mode (`.org`); cross-references are org-links —
