@@ -522,6 +522,26 @@
           (org-glance-graph:headlines graph)
           (should (> censuses startup-censuses)))))))
 
+(ert-deftest org-glance-test:warm-refresh-projects-only-changed-families ()
+  "A persisted family proof skips warm projection and narrows stale work."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "observed" "* Before"))
+    (let ((projects 0)
+          (original (symbol-function 'org-glance-cache--project-family)))
+      (cl-letf (((symbol-function 'org-glance-cache--project-family)
+                 (lambda (&rest args)
+                   (cl-incf projects)
+                   (apply original args))))
+        (org-glance-cache:refresh graph)
+        (should (= 0 projects))
+        (let* ((dir (org-glance-graph:headline-data-path graph "observed"))
+               (leaf (car (org-glance-version:current dir "observed"))))
+          (org-glance-version:write-snapshot
+           dir "observed" (list (org-glance-version:id leaf)) "peer"
+           "* After\n"))
+        (org-glance-cache:refresh graph)
+        (should (= 1 projects))))))
+
 (ert-deftest org-glance-test:shared-cache-inventory-finds-a-relay-free-snapshot ()
   "A live inventory fold discovers an immutable Snapshot without a relay line."
   (org-glance-test:with-graph graph

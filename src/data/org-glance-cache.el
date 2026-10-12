@@ -473,6 +473,14 @@
                (delete-dups org-glance-cache--observed-inventory-directories)
                org-glance-cache--inventory-directory-proofs))))
 
+(cl-defun org-glance-cache--inventory-current-p (held family)
+  "Return non-nil when HELD proves observed FAMILY is already projected."
+  (let ((row (assoc (car family) held)))
+    (and row
+         (= 1 (or (nth 2 row) 0))
+         (equal (org-glance-cache--inventory-proof (cdr family))
+                (nth 1 row)))))
+
 (cl-defun org-glance-cache--after-append (graph specs)
   "Apply GRAPH's appended SPECS to the shared cache."
   (let* ((headlines (org-glance-cache--headlines graph))
@@ -516,20 +524,31 @@
      (let* ((headlines (org-glance-cache--headlines graph))
             (families (delete-dups
                        (append (mapcar #'org-glance-headline-metadata:id headlines)
-                               (org-glance-cache--family-ids graph)))))
+                               (org-glance-cache--family-ids graph))))
+            (observed
+             (mapcar
+              (lambda (id)
+                (cons id (org-glance-cache--inventory-event-ids
+                          (org-glance-graph:headline-data-path graph id))))
+              families)))
        (org-glance-cache--with-db
         graph
         (lambda (db)
-          (org-glance-cache--transaction
-           db
-           (lambda ()
+          (let ((held (sqlite-select
+                       db
+                       "SELECT logical_id,reconciled_epoch,verified FROM headline_family")))
+            (org-glance-cache--transaction
+             db
+             (lambda ()
           (let ((live (mapcar #'org-glance-headline-metadata:id headlines)))
             (dolist (row (sqlite-select db "SELECT headline.org_id,org_headline.path FROM org_headline JOIN headline USING(id)"))
               (unless (member (car row) live)
                 (sqlite-execute db "DELETE FROM source WHERE path=?"
                                 (vector (cadr row))))))
-          (dolist (id families)
-            (org-glance-cache--project-family db graph id))
+          (dolist (family observed)
+            (unless (org-glance-cache--inventory-current-p held family)
+              (org-glance-cache--project-family
+               db graph (car family) (cdr family))))
           (dolist (metadata headlines)
             (let* ((id (org-glance-headline-metadata:id metadata))
                    (state (caar (sqlite-select
@@ -542,7 +561,7 @@
             (org-glance-cache--project-edges db metadata))
           (sqlite-execute
            db
-           "DELETE FROM source WHERE producer='org-glance' AND NOT EXISTS (SELECT 1 FROM headline WHERE headline.path=source.path)")))))))))
+           "DELETE FROM source WHERE producer='org-glance' AND NOT EXISTS (SELECT 1 FROM headline WHERE headline.path=source.path)"))))))))))
 
 (cl-defun org-glance-cache:reconcile-families (graph ids)
   "Reconcile immutable family IDS into GRAPH's shared projection."
@@ -579,11 +598,7 @@ Return the number of families folded."
               (changed
                (cl-remove-if-not
                 (lambda (family)
-                  (let* ((id (car family))
-                         (row (assoc id held))
-                         (proof (org-glance-cache--inventory-proof (cdr family))))
-                    (or (null row) (/= 1 (or (nth 2 row) 0))
-                        (not (equal proof (nth 1 row))))))
+                  (not (org-glance-cache--inventory-current-p held family)))
                 observed)))
          (org-glance-cache--transaction
           db

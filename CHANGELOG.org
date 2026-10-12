@@ -5,6 +5,13 @@ Notable user-facing changes.  Versions date-based
 
 * Unreleased
 
+* 1.55.0.0.20261012.1
+
+** Changed
+
+- Unchanged warm startup reuses verified family projections instead of decoding
+  and rewriting them.
+
 * 1.55.0.0.20261012.0
 
 ** Changed
