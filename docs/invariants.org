@@ -750,6 +750,12 @@ today, up from 50.
     records accelerate compatibility ingestion but do not gate discovery. A
     local mutation runs the family cache hook outside error demotion; failure
     reaches the caller after the immutable event remains available for retry.
+    Startup retains stable directory-entry stamps from its completed census;
+    an unchanged proof skips the immediate duplicate census, while publication
+    invalidates the proof synchronously. Enforced by
+    [[https://github.com/rails-to-cosmos/org-glance/commit/4352397][4352397]]
+    =src/data/org-glance-cache.el:438= and pinned by
+    =test/test-cache.el:499=.
     Pinned by =shared-cache-inventory-finds-a-relay-free-snapshot= and
     =shared-cache-commit-failure-reaches-the-writer=.
 
