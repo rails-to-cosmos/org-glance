@@ -72,8 +72,8 @@ benchmark also measures the full Table entrypoint and rejects any census,
 History read, reconciliation request, or cache transaction.
 
 On the persisted reference corpus, seven exact-ID graph reads measured
-0.410--0.539 ms (0.426 ms median) on an existing graph. The first lookup on a
-fresh graph measured 0.538--0.719 ms (0.652 ms median). The old paths measured
+0.557--0.800 ms (0.575 ms median) on an existing graph. The first lookup on a
+fresh graph measured 0.718--0.888 ms (0.776 ms median). The old paths measured
 17.234 and 15.737 seconds. Every candidate sample records one correct Row and
 zero censuses, History reads, reconciliation requests, and cache transactions.
 
