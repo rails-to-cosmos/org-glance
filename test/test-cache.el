@@ -3,27 +3,6 @@
 (require 'ert)
 (require 'org-glance-cache)
 
-(ert-deftest org-glance-test:graph-point-read-uses-one-cache-lookup ()
-  "The public ID lookup delegates directly to the committed cache index."
-  (org-glance-test:with-graph graph
-    (org-glance-graph:add graph
-      (org-glance-test:headline "point-read" "* TODO Point read"))
-    (setf (org-glance-graph:-meta-cache graph) nil)
-    (let ((lookups 0)
-          (original (symbol-function 'org-glance-cache:headline)))
-      (cl-letf (((symbol-function 'org-glance-cache:headline)
-                 (lambda (&rest args)
-                   (cl-incf lookups)
-                   (apply original args)))
-                ((symbol-function 'org-glance-graph--ensure-cache)
-                 (lambda (&rest _) (ert-fail "point read rebuilt the WAL cache")))
-                ((symbol-function 'org-glance-cache:authority)
-                 (lambda (&rest _) (ert-fail "point read decoded all families"))))
-        (should (equal "Point read"
-                       (org-glance-headline-metadata:title
-                        (org-glance-graph:get-headline graph "point-read"))))
-        (should (= 1 lookups))))))
-
 (ert-deftest org-glance-test:interactive-reads-use-committed-cache-only ()
   "List and point reads neither scan the WAL nor enter cache maintenance."
   (org-glance-test:with-graph graph
