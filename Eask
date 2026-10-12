@@ -1,4 +1,4 @@
-(package "org-glance" "1.55.0.0.20261012.11" "Org-mode projections")
+(package "org-glance" "1.55.0.0.20261012.13" "Org-mode projections")
 
 (website-url "https://github.com/rails-to-cosmos/org-glance")
 (keywords "org-mode" "outlines" "data" "database" "store" "projections")
@@ -44,6 +44,7 @@
   (load "test/test-graph.el")
   (load "test/test-version.el")
   (load "test/test-cache.el")
+  (load "test/test-checkpoint.el")
   (load "test/test-external.el")
   (load "test/test-filter.el")
   (load "test/test-segments.el")

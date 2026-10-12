@@ -5,6 +5,37 @@ Notable user-facing changes.  Versions date-based
 
 * Unreleased
 
+* 1.55.0.0.20261012.13
+
+** Added
+
+- =org-glance-checkpoint:seal= publishes a deterministic compressed logical
+  projection and proof descriptor under immutable content-addressed paths.
+- Cold startup can hydrate a missing SQLite projection from an exact compatible
+  checkpoint; append-only family tails reconcile after publication.
+
+** Changed
+
+- Materialize, Open link, and Overview read the last committed SQLite
+  projection without scanning the compatibility WAL or entering a cache write
+  transaction. Background reconciliation can continue without blocking them.
+
+** Fixed
+
+- Opening Material during a large background cache rebuild no longer waits for
+  the rebuild's write transaction. Its live relation decoration uses indexed
+  incoming edges and exact cache reads instead of enumerating every headline.
+  An exact cache miss still folds a targeted external notification so newly
+  published links remain immediately usable.
+
+* 1.55.0.0.20261012.12
+
+** Added
+
+- A verified checkpoint source inventory exports the exact portable paths for
+  live WAL segments, admitted family events and available payloads while
+  refusing stale inventory, unsafe files, or any unverified family.
+
 * 1.55.0.0.20261012.11
 
 ** Fixed

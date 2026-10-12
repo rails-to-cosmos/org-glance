@@ -88,6 +88,29 @@ the external =org-glance-llm= plugin.
 
 Measure every change with =make bench= before and after.
 
+** DONE Export one verified authority path set for portable checkpoints
+The shared cache now exports sorted graph-relative paths from its current
+production inventory and refuses stale inventory, unverified families,
+symlinks, cache state and paths outside the graph. This supplies the missing
+source boundary for Glance's portable checkpoint admission contract.
+
+** DONE Seal and hydrate portable projection checkpoints
+Explicit sealing writes one gzip-compressed logical projection and one
+proof-bound descriptor at immutable content-addressed paths. Cold open hydrates
+an exact compatible artifact before asynchronous reconciliation; an append-only
+family tail hydrates the base and replays the tail. Corruption, configuration
+drift, ambiguity and publication failure refuse the artifact without replacing
+the live cache. Normal edits write no tracked checkpoint state.
+
+** DONE Keep transient read entrypoints on the committed cache
+Materialize, Open link and Overview no longer cross the WAL census or cache
+writer boundary. Exact and list reads use transaction-free SQLite readers while
+reconciliation runs in the background. On the 6,780-Row reference projection,
+their p50 model-read times are 513.9, 269.9 and 96.3 ms respectively, with
+zero full censuses and zero maintenance transactions. Opening a selected
+Material Row now uses indexed relation and exact Row reads, reducing its p50
+from 16,684.6 ms to 66.0 ms.
+
 ** TODO Publish graph changes to incremental consumers
 [[file:proposals/2026-07-09-graph-change-listeners.proposed.org][Proposal: graph change listeners]]
 

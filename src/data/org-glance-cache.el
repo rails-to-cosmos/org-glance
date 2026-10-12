@@ -29,6 +29,7 @@
     "CREATE TABLE IF NOT EXISTS glance_payload (path TEXT PRIMARY KEY REFERENCES source(path) ON DELETE CASCADE, config TEXT NOT NULL, parser_version INTEGER NOT NULL, producer TEXT NOT NULL, payload TEXT NOT NULL)"
     "CREATE TABLE IF NOT EXISTS headline (id TEXT PRIMARY KEY, path TEXT NOT NULL REFERENCES source(path) ON DELETE CASCADE, digest TEXT NOT NULL, org_id TEXT, org_id_property TEXT, title TEXT NOT NULL, state TEXT, priority TEXT, tags TEXT NOT NULL, scheduled TEXT, deadline TEXT, closed TEXT, category TEXT NOT NULL, created TEXT, producer TEXT NOT NULL)"
     "CREATE INDEX IF NOT EXISTS headline_path ON headline(path)"
+    "CREATE INDEX IF NOT EXISTS headline_org_id ON headline(org_id)"
     "CREATE TABLE IF NOT EXISTS org_headline (id TEXT PRIMARY KEY REFERENCES headline(id) ON DELETE CASCADE, path TEXT NOT NULL, digest TEXT NOT NULL, content_hash TEXT NOT NULL, record TEXT NOT NULL, producer TEXT NOT NULL)"
     "CREATE TABLE IF NOT EXISTS edge (src TEXT NOT NULL REFERENCES headline(id) ON DELETE CASCADE, dst TEXT NOT NULL REFERENCES headline(id) ON DELETE CASCADE, kind TEXT, via TEXT NOT NULL, PRIMARY KEY(src, dst, kind, via))"
     "CREATE INDEX IF NOT EXISTS edge_dst ON edge(dst)"
@@ -89,6 +90,17 @@
              db (lambda () (org-glance-cache--initialise db)))
             (funcall fn db))
         (sqlite-close db)))))
+
+(cl-defun org-glance-cache--read-db (graph fn)
+  "Call FN against GRAPH's last committed cache without taking a write lock."
+  (let ((path (org-glance-cache:path graph)))
+    (when (and (sqlite-available-p) (file-exists-p path))
+      (let ((db (sqlite-open path)))
+        (unwind-protect
+            (progn
+              (sqlite-execute db "PRAGMA busy_timeout=50")
+              (funcall fn db))
+          (sqlite-close db))))))
 
 (cl-defun org-glance-cache--file-digest (path)
   "Return PATH's raw SHA-256 digest."
@@ -580,6 +592,61 @@
          (equal (org-glance-cache--inventory-proof (cdr family))
                 (nth 1 row)))))
 
+(cl-defun org-glance-cache--checkpoint-relative-path (graph path)
+  "Return portable PATH relative to GRAPH, refusing unsafe source files."
+  (let ((root (file-name-as-directory (org-glance-graph:directory graph)))
+        (absolute (expand-file-name path)))
+    (unless (and (f-file? absolute)
+                 (not (file-symlink-p absolute))
+                 (file-in-directory-p absolute root))
+      (error "org-glance: checkpoint authority path is unsafe: %s" path))
+    (file-relative-name absolute root)))
+
+(cl-defun org-glance-cache:checkpoint-source-paths (graph)
+  "Return GRAPH's exact verified authority paths for checkpoint admission.
+Paths are sorted, distinct, relative to GRAPH, and exclude local cache state."
+  (unless (org-glance-cache--inventory-proof-current-p graph)
+    (error "org-glance: checkpoint requires a current source inventory"))
+  (org-glance-cache--with-db
+   graph
+   (lambda (db)
+     (when (sqlite-select
+            db "SELECT logical_id FROM headline_family WHERE verified!=1 LIMIT 1")
+       (error "org-glance: checkpoint requires every family to be verified"))
+     (let ((paths
+            (append
+             (list (org-glance-graph--manifest-path graph))
+             (org-glance-graph--live-segments graph)
+             (let ((system (org-glance-graph:config-file graph "system.org"))
+                   (tags (org-glance-graph:config-file graph "tags")))
+               (append
+                (when (file-regular-p system) (list system))
+                (when (and (not (and (boundp 'org-glance-tag-config-dir)
+                                     org-glance-tag-config-dir))
+                           (file-directory-p tags))
+                  (directory-files tags t "\\.org\\'"))))
+             (mapcar #'car (sqlite-select db "SELECT path FROM source"))
+             (mapcar #'car
+                     (sqlite-select
+                      db
+                      "SELECT path FROM headline_payload_observation WHERE payload_state!='missing'"))
+             (mapcar
+              (lambda (row)
+                (f-join
+                 (org-glance-version:path
+                  (org-glance-graph:headline-data-path graph (car row))
+                  (cadr row))
+                 "meta.json"))
+              (sqlite-select
+               db "SELECT logical_id,event_id FROM headline_event")))))
+       (sort
+        (delete-dups
+         (mapcar
+          (lambda (path)
+            (org-glance-cache--checkpoint-relative-path graph path))
+          paths))
+        #'string<)))))
+
 (cl-defun org-glance-cache--elapsed (started)
   "Format seconds elapsed since STARTED."
   (format "%.1fs" (- (float-time) started)))
@@ -877,7 +944,7 @@ INITIAL queues startup work without consuming the first post-open refresh."
 
 (cl-defun org-glance-cache:metadata (graph id)
   "Return ID's sole family-derived metadata from GRAPH's shared cache."
-  (org-glance-cache--with-db
+  (org-glance-cache--read-db
    graph
    (lambda (db)
      (let ((rows (sqlite-select
@@ -889,6 +956,114 @@ INITIAL queues startup work without consuming the first post-open refresh."
            (org-glance-headline-metadata:deserialize
             (json-parse-string (caar rows) :object-type 'plist))))))))
 
+(cl-defun org-glance-cache--decode-metadata (payload)
+  "Decode one serialized metadata PAYLOAD, returning nil when malformed."
+  (ignore-errors
+    (org-glance-headline-metadata:deserialize
+     (json-parse-string payload :object-type 'plist))))
+
+(cl-defun org-glance-cache--read-projection (db)
+  "Return the complete committed live metadata projection from DB."
+  (let* ((ordinary
+          (delq nil
+                (mapcar (lambda (row)
+                          (org-glance-cache--decode-metadata (car row)))
+                        (sqlite-select
+                         db
+                         "SELECT org_headline.record FROM org_headline JOIN headline USING(id) ORDER BY headline.rowid"))))
+         (families (sqlite-select
+                    db
+                    "SELECT logical_id,state FROM headline_family"))
+         (projected
+          (delq nil
+                (mapcar (lambda (row)
+                          (org-glance-cache--decode-metadata (car row)))
+                        (sqlite-select
+                         db
+                         "SELECT record_payload FROM headline_projection WHERE role IN ('current','conflict','recovery','rejected') ORDER BY logical_id,event_id"))))
+         (states (make-hash-table :test #'equal :size (length families)))
+         (family-rows (make-hash-table :test #'equal :size (length projected)))
+         (ordinary-ids (make-hash-table :test #'equal :size (length ordinary))))
+    (dolist (family families)
+      (puthash (car family) (cadr family) states))
+    (dolist (metadata projected)
+      (let ((id (org-glance-headline-metadata:id metadata)))
+        (unless (gethash id family-rows)
+          (puthash id metadata family-rows))))
+    (dolist (metadata ordinary)
+      (puthash (org-glance-headline-metadata:id metadata) t ordinary-ids))
+    (append
+     (delq nil
+           (mapcar
+            (lambda (metadata)
+              (let* ((id (org-glance-headline-metadata:id metadata))
+                     (state (gethash id states))
+                     (family (gethash id family-rows)))
+                (cond
+                 ((equal state "deleted") nil)
+                 (family
+                  (org-glance-graph--prefer-family-metadata family metadata))
+                 (t metadata))))
+            ordinary))
+     (cl-remove-if
+      (lambda (metadata)
+        (gethash (org-glance-headline-metadata:id metadata) ordinary-ids))
+      projected))))
+
+(cl-defun org-glance-cache:headlines (graph)
+  "Return GRAPH's complete last committed searchable metadata projection."
+  (org-glance-cache--read-db graph #'org-glance-cache--read-projection))
+
+(cl-defun org-glance-cache--ordinary-headline (db id)
+  "Return ordinary compatibility-WAL ID from DB, or nil."
+  (when-let* ((row (car (sqlite-select
+                         db
+                         "SELECT org_headline.record FROM org_headline JOIN headline USING(id) WHERE headline.org_id=? ORDER BY headline.rowid LIMIT 1"
+                         (vector id)))))
+    (org-glance-cache--decode-metadata (car row))))
+
+(cl-defun org-glance-cache:headline (graph id)
+  "Return ID from GRAPH's committed projection, `tombstone', or nil."
+  (org-glance-cache--read-db
+   graph
+   (lambda (db)
+     (let* ((family (car (sqlite-select
+                          db
+                          "SELECT state FROM headline_family WHERE logical_id=?"
+                          (vector id))))
+            (state (car family))
+            (ordinary (org-glance-cache--ordinary-headline db id))
+            (projected-rows
+             (and family
+                  (sqlite-select
+                   db
+                   "SELECT record_payload FROM headline_projection WHERE logical_id=? AND role IN ('current','conflict','recovery','rejected') ORDER BY event_id"
+                   (vector id))))
+            (projected
+             (and (= 1 (length projected-rows))
+                  (org-glance-cache--decode-metadata
+                   (caar projected-rows)))))
+       (cond
+        ((equal state "deleted") 'tombstone)
+        (projected
+         (org-glance-graph--prefer-family-metadata projected ordinary))
+        (family nil)
+        (t ordinary))))))
+
+(cl-defun org-glance-cache:incoming-relations (graph id)
+  "Return indexed (SOURCE-ID . KIND) relations targeting ID in GRAPH."
+  (or
+   (org-glance-cache--read-db
+    graph
+    (lambda (db)
+      (mapcar
+       (lambda (row) (cons (car row) (cadr row)))
+       (sqlite-select
+        db
+        "SELECT DISTINCT source.org_id,edge.kind FROM headline AS target JOIN edge ON edge.dst=target.id JOIN headline AS source ON edge.src=source.id WHERE target.org_id=? ORDER BY source.org_id,edge.kind"
+        (vector id)))))
+   nil))
+
 (cl-defun org-glance-cache--persisted-revived-family-ids (db)
   "Return family IDs whose current event descends from a Tombstone in DB."
   (mapcar #'car
@@ -898,7 +1073,7 @@ INITIAL queues startup work without consuming the first post-open refresh."
 (cl-defun org-glance-cache:authority (graph)
   "Return GRAPH's family-derived families and searchable projections."
   (or
-   (org-glance-cache--with-db
+   (org-glance-cache--read-db
     graph
     (lambda (db)
       (let ((families (sqlite-select

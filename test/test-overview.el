@@ -22,8 +22,8 @@
     (org-glance-graph:add graph
       (org-glance-test:headline "one-read" "* TODO One read :work:"))
     (let ((reads 0)
-          (original (symbol-function 'org-glance-graph:headlines)))
-      (cl-letf (((symbol-function 'org-glance-graph:headlines)
+          (original (symbol-function 'org-glance-cache:headlines)))
+      (cl-letf (((symbol-function 'org-glance-cache:headlines)
                  (lambda (&rest args)
                    (cl-incf reads)
                    (apply original args))))

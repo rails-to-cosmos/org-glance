@@ -6,7 +6,7 @@
 
 ;; Author: Dmitry Akatov <dmitry.akatov@protonmail.com>
 ;; Created: 29 September, 2018
-;; Version: 1.55.0.0.20261012.11
+;; Version: 1.55.0.0.20261012.13
 ;; Package-Requires: ((emacs "29.1") (org) (aes) (dash) (f) (s) (transient) (table-view "0"))
 ;; Keywords: org-mode, outlines, data, database, store, projections
 ;; Homepage: https://github.com/rails-to-cosmos/org-glance
@@ -57,6 +57,7 @@
 (require 'org-glance-headline)
 (require 'org-glance-graph)
 (require 'org-glance-cache)
+(require 'org-glance-checkpoint)
 (require 'org-glance-tag-metrics)
 (require 'org-glance-property-index)
 (require 'org-glance-view)

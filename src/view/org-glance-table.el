@@ -14,6 +14,7 @@
 (require 'table-view)
 (require 'org-glance-utils)
 (require 'org-glance-graph)
+(require 'org-glance-cache)
 (require 'org-glance-property-index)
 (require 'org-glance-filter)
 (require 'org-glance-tag-config)
@@ -173,7 +174,7 @@ Cells are display strings: tags `:'-joined, priority its letter, absent \"\"."
   "Normalised filter spec the current table buffer was generated with.")
 (cl-defun org-glance-table--rows (graph keep?)
   "Return rows for GRAPH's live headlines satisfying KEEP?, in graph order."
-  (cl-loop for meta in (org-glance-graph:headlines graph)
+  (cl-loop for meta in (org-glance-cache:headlines graph)
            when (funcall keep? meta)
            collect (org-glance-table--row meta)))
 

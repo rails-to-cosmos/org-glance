@@ -16,6 +16,7 @@
 (require 'org-glance-utils)
 (require 'org-glance-headline)
 (require 'org-glance-graph)
+(require 'org-glance-cache)
 (require 'org-glance-filter)
 (require 'org-glance-tag)
 (require 'org-glance-tag-config)
@@ -23,6 +24,9 @@
 (require 'org-glance-view)
 
 (require 'org-glance-core)
+
+(declare-function org-glance-cache:incoming-relations
+                  "org-glance-cache" (graph id))
 
 ;;; Selection
 
@@ -33,25 +37,35 @@
     (concat (if tags (format "[%s] " (s-join "," tags)) "")
             (org-glance--title-clean (org-glance-headline-metadata:title metadata)))))
 
+(cl-defun org-glance-material--candidates (metas filter)
+  "Return completion entries built from METAS accepted by FILTER."
+  (let* ((metas (cl-remove-if-not (or filter #'always) metas))
+         (labels (mapcar #'org-glance-material:label metas))
+         (counts (-frequencies labels)))
+    (cl-mapcar (lambda (meta label)
+                 (cons (if (> (alist-get label counts 0 nil #'equal) 1)
+                           (format "%s ·%s" label
+                                   (s-left 8 (org-glance-headline-metadata:id meta)))
+                         label)
+                       meta))
+               metas labels)))
+
+(cl-defun org-glance-material:candidates (graph &optional filter)
+  "Return indexed completion entries for GRAPH accepted by FILTER."
+  (cl-check-type graph org-glance-graph)
+  (let ((org-done-keywords (org-glance--done-keywords)))
+    (org-glance-material--candidates
+     (org-glance-cache:headlines graph) filter)))
+
 (cl-defun org-glance-material:completing-read (graph &key (prompt "Headline: ") filter)
   "Choose a live headline from GRAPH under PROMPT; return its metadata.
 FILTER, if non-nil, is a predicate on the metadata."
   (cl-check-type graph org-glance-graph)
-  (let* ((org-done-keywords (org-glance--done-keywords))
-         (metas (cl-loop for meta in (org-glance-graph:headlines graph)
-                         when (or (null filter) (funcall filter meta))
-                         collect meta))
-         (labels (mapcar #'org-glance-material:label metas))
-         (counts (-frequencies labels))
-         (candidates (cl-mapcar (lambda (meta label)
-                                  (cons (if (> (alist-get label counts 0 nil #'equal) 1)
-                                            (format "%s ·%s" label
-                                                    (s-left 8 (org-glance-headline-metadata:id meta)))
-                                          label)
-                                        meta))
-                                metas labels)))
+  (let* ((metas (org-glance-cache:headlines graph))
+         (org-done-keywords (org-glance--done-keywords))
+         (candidates (org-glance-material--candidates metas filter)))
     (unless candidates
-      (let ((total (length (org-glance-graph:headlines graph)))
+      (let ((total (length metas))
             (dir (org-glance-graph:directory graph)))
         (user-error
          (if (zerop total)
@@ -518,14 +532,18 @@ KIND supplies its relation label and STAMP names the source snapshot time."
     (concat "- " label " "
             (org-link-make-string
              (org-glance--edge->link-path id (and (eq direction 'out) kind))
-             (org-glance-graph:title-or-id graph id))
+             (let ((meta (org-glance-cache:headline graph id)))
+               (if (org-glance-headline-metadata? meta)
+                   (org-glance-headline-metadata:title meta)
+                 id)))
             (and stamp (concat " at " stamp))
             "\n")))
 
 (cl-defun org-glance-material--relation-lines (graph id)
   "Return current outgoing and incoming relation log lines for ID in GRAPH."
-  (let* ((meta (org-glance-graph:live-meta graph id))
-         (outgoing (and meta (org-glance-headline-metadata:relations meta)))
+  (let* ((meta (org-glance-cache:headline graph id))
+         (outgoing (and (org-glance-headline-metadata? meta)
+                        (org-glance-headline-metadata:relations meta)))
          (out-stamp (and outgoing
                          (org-glance-material--relation-stamp graph id))))
     (concat
@@ -536,21 +554,15 @@ KIND supplies its relation label and STAMP names the source snapshot time."
                               graph target :kind kind :direction 'out
                               :stamp out-stamp)))
      (apply #'concat
-            (cl-loop for source in (org-glance-graph:headlines graph)
-                     for source-id = (org-glance-headline-metadata:id source)
+            (cl-loop for (source-id . kind)
+                     in (org-glance-cache:incoming-relations graph id)
                      unless (equal source-id id)
-                     append
-                     (let ((matches
-                            (cl-remove-if-not
-                             (lambda (edge) (equal (car edge) id))
-                             (org-glance-headline-metadata:relations source))))
-                       (when matches
-                         (let ((stamp (org-glance-material--relation-stamp
-                                       graph source-id)))
-                           (cl-loop for (_target . kind) in matches
-                                    collect (org-glance-material--relation-line
-                                             graph source-id :kind kind
-                                             :direction 'in :stamp stamp))))))))))
+                     when (org-glance-headline-metadata?
+                           (org-glance-cache:headline graph source-id))
+                     collect (org-glance-material--relation-line
+                              graph source-id :kind kind :direction 'in
+                              :stamp (org-glance-material--relation-stamp
+                                      graph source-id)))))))
 
 (cl-defun org-glance-material--remove-derived-relations ()
   "Remove every live relation region from the current material buffer."
@@ -721,8 +733,11 @@ Crypt blocks stay SEALED unless DECRYPT; an open material buffer for ID is
 reused.  Signal a `user-error' when ID is dead or has no stored blob."
   (cl-check-type graph org-glance-graph)
   (cl-check-type id string)
-  (let ((meta (org-glance-graph:live-meta graph id)))
-    (unless meta
+  (let ((meta (org-glance-cache:headline graph id)))
+    (unless (org-glance-headline-metadata? meta)
+      (org-glance-graph:refresh-external graph)
+      (setq meta (org-glance-cache:headline graph id)))
+    (unless (org-glance-headline-metadata? meta)
       (user-error "No live headline with id %s" id))
     (let ((path (org-glance-graph:content-path graph id)))
       (unless (f-exists? path)
@@ -1164,7 +1179,9 @@ The transient's `-d' switch decrypts it on open; otherwise it opens sealed."
                     graph :prompt prompt
                     :filter (lambda (m) (and (funcall keep? m)
                                         (funcall extra-pred m))))))
-    (org-glance-graph:headline graph (org-glance-headline-metadata:id metadata))))
+    (let* ((id (org-glance-headline-metadata:id metadata))
+           (contents (org-glance-graph:get-content graph id)))
+      (and contents (org-glance-graph--reparse-blob graph metadata contents)))))
 
 ;;;###autoload
 (cl-defun org-glance-open ()

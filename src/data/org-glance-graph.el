@@ -1362,15 +1362,17 @@ then the file may rotate.  Return the number of entries refreshed."
                 unless (eq kind 'tombstone)
                 collect id)))
     (pcase-dolist (`(,id . ,kind) entries)
-      (let (spec reason)
+      (let ((cached (and (fboundp 'org-glance-cache:headline)
+                         (org-glance-cache:headline graph id)))
+            spec reason)
         (if (eq kind 'tombstone)
             (setq spec (org-glance-graph--wal-tombstone-spec graph id)
                   reason "unknown or deleted")
           ;; invariant 30; an unknown id parses first to pick its todo cycle.
-          (if (eq (org-glance-graph:get-headline graph id) 'tombstone)
+          (if (eq cached 'tombstone)
               (setq spec nil reason "already deleted")
             (let* ((contents (org-glance-graph:get-content graph id))
-                   (basis (or (org-glance-graph:live-meta graph id)
+                   (basis (or (and (org-glance-headline-metadata? cached) cached)
                               (and contents
                                    (ignore-errors
                                      (org-glance-headline:metadata*

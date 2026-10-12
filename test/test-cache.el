@@ -3,6 +3,55 @@
 (require 'ert)
 (require 'org-glance-cache)
 
+(ert-deftest org-glance-test:interactive-reads-use-committed-cache-only ()
+  "List and point reads neither scan the WAL nor enter cache maintenance."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-test:headline "fast-read" "* TODO Fast read :work:"))
+    (setf (org-glance-graph:-meta-cache graph) nil)
+    (cl-letf (((symbol-function 'org-glance-graph--wal-headlines)
+               (lambda (&rest _) (ert-fail "interactive WAL census")))
+              ((symbol-function 'org-glance-graph--ensure-cache)
+               (lambda (&rest _) (ert-fail "interactive WAL cache rebuild")))
+              ((symbol-function 'org-glance-cache--transaction)
+               (lambda (&rest _) (ert-fail "interactive cache maintenance"))))
+      (let ((rows (org-glance-cache:headlines graph))
+            (one (org-glance-cache:headline graph "fast-read")))
+        (should (equal '("fast-read")
+                       (mapcar #'org-glance-headline-metadata:id rows)))
+        (should (equal "Fast read"
+                       (org-glance-headline-metadata:title one)))))))
+
+(ert-deftest org-glance-test:transient-action-models-never-start-a-census ()
+  "Materialize, Open link, and Overview consume the committed projection."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add
+     graph
+     (org-glance-test:headline
+      "entry" "* TODO Entry :work:" "[[https://example.invalid][Jump]]"))
+    (setf (org-glance-graph:-meta-cache graph) nil)
+    (cl-letf (((symbol-function 'org-glance-graph--wal-headlines)
+               (lambda (&rest _) (ert-fail "transient WAL census")))
+              ((symbol-function 'org-glance-graph--ensure-cache)
+               (lambda (&rest _) (ert-fail "transient WAL cache rebuild")))
+              ((symbol-function 'org-glance-cache--transaction)
+               (lambda (&rest _) (ert-fail "transient cache maintenance"))))
+      (should (= 1 (length (org-glance-material:candidates graph))))
+      (should (= 1 (length
+                    (org-glance-material:candidates
+                     graph #'org-glance-headline-metadata:linked?))))
+      (should (string-match-p "Entry" (org-glance-overview:render graph)))
+      (should (= 1 (length (org-glance-table--rows graph #'always))))
+      (cl-letf (((symbol-function 'org-glance-cache:headlines)
+                 (lambda (&rest _) (ert-fail "materialize full cache scan")))
+                ((symbol-function 'org-glance-graph:refresh-external)
+                 (lambda (&rest _) (ert-fail "materialize external refresh"))))
+        (let ((buffer (org-glance-material:open graph "entry")))
+          (unwind-protect
+              (should (buffer-live-p buffer))
+            (when (buffer-live-p buffer)
+              (kill-buffer buffer))))))))
+
 (ert-deftest org-glance-test:shared-cache-projects-distinct-digests ()
   "The shared row keeps raw-file and org-glance content hashes distinct."
   (org-glance-test:with-graph graph
@@ -580,6 +629,37 @@
                  (lambda () (cl-incf yields))))
         (org-glance-cache:refresh graph)
         (should (>= yields 5))))))
+
+(ert-deftest org-glance-test:checkpoint-source-paths-come-from-verified-inventory ()
+  "Checkpoint admission receives the exact portable authority path set."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-test:headline "portable" "* Portable"))
+    (org-glance-cache:refresh graph)
+    (let* ((root (org-glance-graph:directory graph))
+           (family (org-glance-graph:headline-data-path graph "portable"))
+           (event (file-name-nondirectory
+                   (car (f-directories (f-join family "versions")))))
+           (relative (lambda (path) (file-relative-name path root))))
+      (should
+       (equal
+        (sort
+         (list
+          (funcall relative (org-glance-graph--manifest-path graph))
+          (funcall relative (org-glance-graph:headline-meta-path graph))
+          (funcall relative
+                   (f-join family "versions" event "meta.json"))
+          (funcall relative
+                   (org-glance-version:data-file family event)))
+         #'string<)
+        (org-glance-cache:checkpoint-source-paths graph)))
+      (let ((db (sqlite-open (org-glance-cache:path graph))))
+        (unwind-protect
+            (sqlite-execute
+             db "UPDATE headline_family SET verified=0 WHERE logical_id='portable'")
+          (sqlite-close db)))
+      (should-error (org-glance-cache:checkpoint-source-paths graph)
+                    :type 'error))))
 
 (ert-deftest org-glance-test:family-projection-observes-filesystem-once ()
   (org-glance-test:with-graph graph

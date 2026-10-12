@@ -12,6 +12,7 @@
 (require 'transient)
 
 (require 'org-glance-graph)
+(require 'org-glance-cache)
 (require 'org-glance-filter)
 (require 'org-glance-tag-config)
 (require 'org-glance-material)
@@ -97,7 +98,7 @@ id."
 FILTER is nil (all), a bare tag, or a plist (`org-glance-filter:predicate').
 Prefix the pragmas FILTER's tags agree on; select by their cycle's done-set."
   (cl-check-type graph org-glance-graph)
-  (let* ((metas (org-glance-graph:headlines graph))
+  (let* ((metas (org-glance-cache:headlines graph))
          (titles (make-hash-table :test #'equal :size (length metas)))
          (cycle (org-glance-tag-config:cycle-for-filter graph filter metas))
          (org-done-keywords (if cycle

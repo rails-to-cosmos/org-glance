@@ -55,6 +55,13 @@ argument in [[file:proposals][docs/proposals/]].
    the id dir at compaction, so a tombstoned id's snapshots linger until then.
    Violation: unrebuildable facts or half-states.
 
+   A portable checkpoint is an explicit immutable release artifact below
+   =.org-glance/checkpoints/=. Its descriptor binds the exact authority
+   inventory, effective configuration, parser, producer and cache schema. Its
+   compressed logical tables accelerate only a missing local SQLite
+   projection. Normal edits never write checkpoint files; failed admission or
+   hydration leaves authority untouched and selects replay.
+
 6. *Path safety before filesystem.*  An id is checked (reject empty, =/= and =..=) via
    =error= — never =cl-assert=, which can be compiled out — before feeding any path
    (=org-glance-graph:headline-data-path=).  Violation: a hand-edited id escapes the
@@ -122,6 +129,12 @@ argument in [[file:proposals][docs/proposals/]].
     no I/O, never touches point); views re-fill at display boundaries; freshness checks
     are strict — when in doubt, rebuild.  Enforced: =org-glance-view=,
     =org-glance-material:sync=.  Violation: serving stale is the only real bug.
+
+    Materialize, Open link and Overview consume one committed SQLite generation
+    through =org-glance-cache:headlines= or =org-glance-cache:headline=. These
+    entrypoints never scan the complete WAL or enter cache maintenance.
+    Reconciliation owns freshness in the background. An exact-ID cache miss may
+    fold its small external-notification tail and retry the indexed point read.
 
 11. *Never clobber unsaved edits.*  Any operation rewriting a blob open in a modified
     buffer must =user-error= or skip that row (=org-glance-material--replace-headline=,
@@ -724,7 +737,7 @@ today, up from 50.
     A read joins compatibility-WAL, family, and projected Rows through id hash
     indexes.  Overview acquires that joined Row set once and reuses it for tag
     cycles, preamble, filtering, rendering, and relation-title lookup.  This
-    keeps both reconciliation and relation rendering linear in the Row and edge
+    keeps reconciliation and Overview rendering linear in the Row and edge
     counts.  Pinned by =family-authority-join-scales-linearly=,
     =overview-render-reads-headlines-once= and
     =overview-render-resolves-relations-from-its-row-set=.
@@ -749,6 +762,8 @@ today, up from 50.
     =Referred by= and typed edges capitalize =<type>=.  Entries carry the current
     source snapshot's creation timestamp; synthetic legacy roots carry none.
     Incoming links omit the kind query so scanning cannot create a reversed edge.
+    Material open obtains incoming links from =edge_dst= and resolves only the
+    participating source Rows; it never enumerates the full headline projection.
     Pinned by =material-relations-actualize-in-logbook=.
 
 39. *Immutable version metadata is shared with Glance.*  New writes use schema 2
@@ -810,6 +825,14 @@ today, up from 50.
     =cache-refresh-yields-between-projection-units=,
     =inventory-tick-skips-a-proven-current-store= and
     =explicit-refresh-detects-after-nonblocking-read=.
+
+43. *Checkpoint source paths come from one verified production inventory.*
+    =org-glance-cache:checkpoint-source-paths= accepts a current inventory proof
+    and only verified families.  It returns sorted graph-relative regular files
+    for the live compatibility WAL, admitted event envelopes, available payloads
+    and projected ordinary sources.  Local cache files, symlinks and paths
+    outside the graph are refused.  Pinned by
+    =checkpoint-source-paths-come-from-verified-inventory=.
 
 * Known hazards
 

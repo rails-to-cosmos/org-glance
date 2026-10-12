@@ -12,6 +12,7 @@
 (require 'table-view)
 (require 'org-glance-utils)
 (require 'org-glance-graph)
+(require 'org-glance-cache)
 
 (defvar-local org-glance-view--graph nil
   "The graph this buffer is a view of; its presence marks an org-glance view.")
@@ -43,7 +44,10 @@ A missing snapshot or PATH counts as stale (invariant 10)."
 (cl-defun org-glance-view:completing-read-tag (&optional (prompt "Tag (empty for all): "))
   "Prompt with PROMPT for a tag from the graph's headlines; empty input = nil."
   (org-glance-ensure-init)
-  (let ((choice (completing-read prompt (org-glance-graph:tags org-glance-graph))))
+  (let ((choice (completing-read
+                 prompt
+                 (org-glance-graph:tags
+                  org-glance-graph (org-glance-cache:headlines org-glance-graph)))))
     (unless (string-empty-p choice) choice)))
 
 (defcustom org-glance-view-fill-frame t
@@ -168,12 +172,17 @@ another view.  STALE-FN and RELOAD-FN register pull refresh, else `g' only."
 
 (cl-defun org-glance-view:live-headline (graph id)
   "Return the live `org-glance-headline' for ID in GRAPH; `user-error' if gone."
-  (or (org-glance-graph:headline graph id)
-      (user-error "%s" org-glance-view--stale-message)))
+  (let* ((metadata (org-glance-cache:headline graph id))
+         (contents (and metadata (not (eq metadata 'tombstone))
+                        (org-glance-graph:get-content graph id))))
+    (or (and contents
+             (org-glance-graph--reparse-blob graph metadata contents))
+        (user-error "%s" org-glance-view--stale-message))))
 
 (cl-defun org-glance-view:live-metadata (graph id)
   "Return the live headline metadata for ID in GRAPH; `user-error' if gone."
-  (or (org-glance-graph:live-meta graph id)
+  (or (let ((metadata (org-glance-cache:headline graph id)))
+        (and (org-glance-headline-metadata? metadata) metadata))
       (user-error "%s" org-glance-view--stale-message)))
 
 (provide 'org-glance-view)
