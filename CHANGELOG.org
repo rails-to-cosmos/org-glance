@@ -5,6 +5,17 @@ Notable user-facing changes.  Versions date-based
 
 * Unreleased
 
+* 1.55.0.0.20261012.18
+
+** Changed
+
+- =org-glance-graph:live-meta= resolves one =ORG_GLANCE_ID= through the
+  committed SQLite index.
+
+** Fixed
+
+- Metadata projected by Glance decodes JSON nulls as absent optional values.
+
 * 1.55.0.0.20261012.17
 
 ** Changed

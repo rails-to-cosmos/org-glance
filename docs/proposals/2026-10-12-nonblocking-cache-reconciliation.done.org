@@ -43,6 +43,8 @@ operations.
 - =table-visit-builds-its-palette-from-cache-rows= and
   =table-property-column-uses-the-row-cache-only= keep a warm tagged Table on
   its committed Row and property projections.
+- =graph-live-point-read-uses-one-cache-lookup= keeps exact-ID lookup on one
+  committed SQLite query.
 - =startup-refresh-leaves-first-read-due= proves startup cannot hide a Git
   update behind the steady-state throttle.
 - =inventory-tick-skips-a-proven-current-store= proves the timer does not repeat
@@ -55,7 +57,7 @@ operations.
 
 - =eask recompile=
 - focused cache/process/material-read regression sets
-- =make test= (502 tests)
+- =make test= (507 tests)
 
 On the real 7,099-directory =~/sync/views= store, a forced-stale synchronous
 startup exceeded the 120-second measurement cap. The asynchronous caller path
@@ -68,4 +70,10 @@ The 448-Row =alberblanc= Table with its saved property column rendered in
 0.367 seconds after [[https://github.com/rails-to-cosmos/org-glance/commit/eff816c][eff816c]], down from a run exceeding 30 seconds. The action
 benchmark also measures the full Table entrypoint and rejects any census,
 History read, reconciliation request, or cache transaction.
+
+On the persisted reference corpus, seven exact-ID graph reads measured
+0.410--0.539 ms (0.426 ms median) on an existing graph. The first lookup on a
+fresh graph measured 0.538--0.719 ms (0.652 ms median). The old paths measured
+17.234 and 15.737 seconds. Every candidate sample records one correct Row and
+zero censuses, History reads, reconciliation requests, and cache transactions.
 

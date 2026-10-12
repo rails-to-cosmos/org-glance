@@ -2,6 +2,20 @@
 
 (require 'test-helpers)
 
+(ert-deftest org-glance-test:metadata-deserialize-normalizes-json-null ()
+  "Glance JSON nulls become absent optional metadata values."
+  (let ((metadata
+         (org-glance-headline-metadata:deserialize
+          '(:id "id1" :state :null :title "Title" :tags [] :hash "hash"
+            :schedule :null :deadline :null :priority :null :linked :null
+            :propertized :null :encrypted :null :relations [] :links []
+            :archived :null :commented :null :range :null :recovery :null))))
+    (should-not (org-glance-headline-metadata:state metadata))
+    (should-not (org-glance-headline-metadata:schedule metadata))
+    (should-not (org-glance-headline-metadata:priority metadata))
+    (should-not (org-glance-headline-metadata:recovery metadata))
+    (should-not (org-glance-headline-metadata:repeated? metadata))))
+
 (ert-deftest org-glance-test:graph-add-get ()
   "A headline added to the graph is retrievable by id with its fields intact."
   (org-glance-test:with-graph graph

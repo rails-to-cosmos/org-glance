@@ -148,7 +148,8 @@ evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
 29. `--from-element` strips org's `ARCHIVE` marker from the parsed tag set; it is
     bookkeeping (the `archived?` flag), never a collection tag.
 30. `org-glance-graph:get-headline` is tri-state — nil (unknown) / `tombstone` / metadata.
-    Read-only callers collapse it via `org-glance-graph:live-meta`; `graph:delete` and the
+    Read-only callers use the committed SQLite point read
+    `org-glance-graph:live-meta`; `graph:delete` and the
     external fold need the tombstone case and share one guard, `graph--tombstone-spec`.
 31. `org-glance-material` never top-level `require`s `org-glance-table` (table requires
     material); the relation pivot requires it at call time.

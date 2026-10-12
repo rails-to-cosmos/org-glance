@@ -11,6 +11,8 @@
 (require 'org-glance-headline)
 (require 'org-glance-version)
 
+(declare-function org-glance-cache:headline "org-glance-cache")
+
 (defvar org-glance-graph:list (make-hash-table :test #'equal)
   "Registered instances of `org-glance-graph' in current session.")
 
@@ -117,14 +119,15 @@ Lists become vectors, the only shape `json-serialize' writes as an array."
 (cl-defun org-glance-headline-metadata--decode (kind value)
   "Coerce deserialized VALUE per DECODE kind KIND.
 Edge kinds canonicalize to dash-slugs here (invariant 13)."
-  (pcase kind
-    ('bool (eq t value))                ; JSON false/null both read as nil
-    ('strings-list (append value nil))
-    ('edges-list (cl-loop for edge across (or value [])
-                          for e = (append edge nil)
-                          collect (cons (car e)
-                                        (when (cadr e) (org-glance--kind-slug (cadr e))))))
-    (_ value)))
+  (let ((value (unless (eq value :null) value)))
+    (pcase kind
+      ('bool (eq t value))
+      ('strings-list (append value nil))
+      ('edges-list (cl-loop for edge across (or value [])
+                            for e = (append edge nil)
+                            collect (cons (car e)
+                                          (when (cadr e) (org-glance--kind-slug (cadr e))))))
+      (_ value))))
 
 (cl-defun org-glance-headline:metadata (headline)
   (cl-check-type headline org-glance-headline)
@@ -172,7 +175,8 @@ Older records classified those links as plain links; this leaves the WAL
 untouched while making their relation view current (invariant 5)."
   (cl-check-type data list)
   (let (edges plain)
-    (dolist (link (append (plist-get data :links) nil))
+    (dolist (link (org-glance-headline-metadata--decode
+                   'strings-list (plist-get data :links)))
       (let ((edge (and (string-match
                         "\\`\\[\\[glance:\\([^]]+\\)\\]\\(?:\\[[^]]*\\]\\)?\\]\\'" link)
                        (org-glance--link-edge "glance" (match-string 1 link)))))
@@ -782,7 +786,7 @@ Full headlines also persist their contents (invariant 5)."
   graph)
 
 (cl-defun org-glance-graph:get-headline (graph id)
-  "Return the most recent metadata for ID in GRAPH, from the read cache.
+  "Return the most recent metadata for ID in GRAPH, from the committed cache.
 Return `tombstone' if ID was deleted, or nil if unknown (invariant 30)."
   (cl-check-type graph org-glance-graph)
   (cl-check-type id string)
@@ -802,22 +806,24 @@ Return `tombstone' if ID was deleted, or nil if unknown (invariant 30)."
            (not (member id (plist-get authority :revived))))
       'tombstone)
      (family
-        (cond
-         ((equal "deleted" (cadr family)) 'tombstone)
-         ((= 1 (length projected))
-          (org-glance-graph--prefer-family-metadata
-           (car projected)
-           (and record
-                (not (plist-get record :tombstone))
-                (org-glance-headline-metadata:deserialize record))))
-         (t nil)))
+      (cond
+       ((equal "deleted" (cadr family)) 'tombstone)
+       ((= 1 (length projected))
+        (org-glance-graph--prefer-family-metadata
+         (car projected)
+         (and record
+              (not (plist-get record :tombstone))
+              (org-glance-headline-metadata:deserialize record))))
+       (t nil)))
      ((null record) nil)
      (t (org-glance-headline-metadata:deserialize record)))))
 
 (cl-defun org-glance-graph:live-meta (graph id)
   "Return GRAPH's metadata for ID, or nil when unknown or tombstoned.
 The read-only collapse of `org-glance-graph:get-headline' (invariant 30)."
-  (let ((meta (org-glance-graph:get-headline graph id)))
+  (let ((meta (if (fboundp 'org-glance-cache:headline)
+                  (org-glance-cache:headline graph id)
+                (org-glance-graph:get-headline graph id))))
     (and (org-glance-headline-metadata? meta) meta)))
 
 (cl-defun org-glance-graph:headline (graph id)
