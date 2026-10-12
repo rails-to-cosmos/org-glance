@@ -710,6 +710,14 @@ today, up from 50.
     Glance daemon and verifies schema version, both producers, both hashes and
     the parsers' resolved typed edge.
 
+    A read joins compatibility-WAL, family, and projected Rows through id hash
+    indexes.  Overview acquires that joined Row set once and reuses it for tag
+    cycles, preamble, filtering, rendering, and relation-title lookup.  This
+    keeps both reconciliation and relation rendering linear in the Row and edge
+    counts.  Pinned by =family-authority-join-scales-linearly=,
+    =overview-render-reads-headlines-once= and
+    =overview-render-resolves-relations-from-its-row-set=.
+
 36. *Graph identity is the canonical full directory truename.*  The constructor
     canonicalizes every registry key before lookup.  Path aliases therefore share one
     graph instance, cache and after-open pass.  Skipping that boundary splits one store

@@ -185,16 +185,22 @@ Org derives them, so the split matches what a `#+TODO:' header produces."
         (delay-mode-hooks (org-mode))
         (copy-sequence org-done-keywords)))))
 
-(cl-defun org-glance-tag-config--tags-for-filter (graph filter)
+(cl-defun org-glance-tag-config--tags-for-filter
+    (graph filter &optional (metas nil metas-supplied-p))
   "Return FILTER's tags, or every live tag in GRAPH when FILTER is nil."
   (if filter
       (org-glance-filter:tags filter)
     (and (org-glance-graph? graph)
-         (mapcar #'org-glance-tag:from-string (org-glance-graph:tags graph)))))
+         (mapcar #'org-glance-tag:from-string
+                 (if metas-supplied-p
+                     (org-glance-graph:tags graph metas)
+                   (org-glance-graph:tags graph))))))
 
-(cl-defun org-glance-tag-config--cycle-sources (graph filter)
+(cl-defun org-glance-tag-config--cycle-sources
+    (graph filter &optional (metas nil metas-supplied-p))
   "Return distinct TODO cycles and their source files for FILTER in GRAPH.
-Each result is (CYCLE SOURCE...), ordered system first and then by tag."
+Each result is (CYCLE SOURCE...), ordered system first and then by tag.  METAS,
+when supplied, is GRAPH's precomputed live Row projection."
   (let ((system-file (org-glance-tag-config:system-file graph))
         groups)
     (cl-labels ((add (cycle source)
@@ -206,7 +212,9 @@ Each result is (CYCLE SOURCE...), ordered system first and then by tag."
         (with-temp-buffer
           (insert-file-contents system-file)
           (add (org-glance-tag-config--file-keyword "TODO") system-file)))
-      (dolist (tag (org-glance-tag-config--tags-for-filter graph filter))
+      (dolist (tag (if metas-supplied-p
+                       (org-glance-tag-config--tags-for-filter graph filter metas)
+                     (org-glance-tag-config--tags-for-filter graph filter)))
         (when-let* ((config (org-glance-tag-config:resolve graph tag)))
           (add (org-glance-tag-config:todo config)
                (org-glance-tag-config:file graph tag)))))
@@ -215,13 +223,22 @@ Each result is (CYCLE SOURCE...), ordered system first and then by tag."
       (setcdr group (nreverse (cdr group))))
     groups))
 
-(cl-defun org-glance-tag-config:cycles-for-filter (graph filter)
+(cl-defun org-glance-tag-config:cycles-for-filter
+    (graph filter &optional (metas nil metas-supplied-p))
   "Return system then distinct tag TODO sequences for FILTER in GRAPH."
-  (mapcar #'car (org-glance-tag-config--cycle-sources graph filter)))
+  (mapcar #'car
+          (if metas-supplied-p
+              (org-glance-tag-config--cycle-sources graph filter metas)
+            (org-glance-tag-config--cycle-sources graph filter))))
 
-(cl-defun org-glance-tag-config:cycle-for-filter (graph filter)
-  "Return GRAPH's system and FILTER's tag TODO cycles, newline-separated."
-  (when-let* ((cycles (org-glance-tag-config:cycles-for-filter graph filter)))
+(cl-defun org-glance-tag-config:cycle-for-filter
+    (graph filter &optional (metas nil metas-supplied-p))
+  "Return GRAPH's system and FILTER's tag TODO cycles, newline-separated.
+Use precomputed METAS when supplied."
+  (when-let* ((cycles
+               (if metas-supplied-p
+                   (org-glance-tag-config:cycles-for-filter graph filter metas)
+                 (org-glance-tag-config:cycles-for-filter graph filter))))
     (mapconcat #'identity cycles "\n")))
 
 (cl-defun org-glance-tag-config:preamble (config)
@@ -232,11 +249,15 @@ Each result is (CYCLE SOURCE...), ordered system first and then by tag."
                                                        slot config)))))
 
 (cl-defun org-glance-tag-config:preamble-for-filter
-    (graph filter &optional source-comments)
+    (graph filter &optional source-comments (metas nil metas-supplied-p))
   "Return separate `#+TODO:' lines for system and FILTER's tags in GRAPH.
-With SOURCE-COMMENTS, prefix each line with comments naming its config files."
+With SOURCE-COMMENTS, prefix each line with comments naming its config files.
+Use precomputed METAS when supplied."
   (if source-comments
-      (when-let* ((groups (org-glance-tag-config--cycle-sources graph filter)))
+      (when-let* ((groups
+                   (if metas-supplied-p
+                       (org-glance-tag-config--cycle-sources graph filter metas)
+                     (org-glance-tag-config--cycle-sources graph filter))))
         (apply
          #'concat
          (mapcar

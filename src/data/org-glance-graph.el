@@ -818,17 +818,25 @@ destructively; the read-only structs are shared with the cache."
                          (org-glance-cache:authority graph)))
          (families (plist-get authority :families))
          (projected (plist-get authority :headlines))
-         (wal-ids (mapcar #'org-glance-headline-metadata:id wal)))
+         (states (make-hash-table :test #'equal :size (length families)))
+         (family-rows
+          (make-hash-table :test #'equal :size (length projected)))
+         (wal-ids (make-hash-table :test #'equal :size (length wal))))
+    (dolist (family families)
+      (puthash (car family) (cadr family) states))
+    (dolist (meta projected)
+      (let ((id (org-glance-headline-metadata:id meta)))
+        (unless (gethash id family-rows)
+          (puthash id meta family-rows))))
+    (dolist (meta wal)
+      (puthash (org-glance-headline-metadata:id meta) t wal-ids))
     (append
      (delq nil
            (mapcar
             (lambda (meta)
               (let* ((id (org-glance-headline-metadata:id meta))
-                     (state (cadr (assoc id families)))
-                     (family
-                      (cl-find id projected
-                               :key #'org-glance-headline-metadata:id
-                               :test #'equal)))
+                     (state (gethash id states))
+                     (family (gethash id family-rows)))
                 (cond
                  ((equal state "deleted") nil)
                  (family
@@ -836,7 +844,8 @@ destructively; the read-only structs are shared with the cache."
                  (t meta))))
             wal))
      (cl-remove-if
-      (lambda (meta) (member (org-glance-headline-metadata:id meta) wal-ids))
+      (lambda (meta)
+        (gethash (org-glance-headline-metadata:id meta) wal-ids))
       projected))))
 
 (cl-defun org-glance-graph--distinct (graph extract &optional ids)
@@ -847,9 +856,14 @@ EXTRACT returns a list per metadata; IDS, when non-nil, limits the fold."
    (cl-loop for meta in (org-glance-graph--metas graph ids)
             append (funcall extract meta))))
 
-(cl-defun org-glance-graph:tags (graph)
-  "Return the sorted distinct tags across GRAPH's live headlines."
-  (org-glance-graph--distinct graph #'org-glance-headline-metadata:tag-strings))
+(cl-defun org-glance-graph:tags (graph &optional (metas nil metas-supplied-p))
+  "Return the sorted distinct tags across GRAPH's live headlines.
+Use precomputed METAS when supplied."
+  (if metas-supplied-p
+      (org-glance--sorted-distinct
+       (cl-loop for meta in metas
+                append (org-glance-headline-metadata:tag-strings meta)))
+    (org-glance-graph--distinct graph #'org-glance-headline-metadata:tag-strings)))
 
 (cl-defun org-glance-graph:states (graph)
   "Return the sorted distinct non-empty todo states of GRAPH's live headlines."

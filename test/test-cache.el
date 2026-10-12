@@ -140,6 +140,34 @@
                      "SELECT record_payload FROM headline_projection WHERE logical_id='family-only'")))
           (sqlite-close db))))))
 
+(ert-deftest org-glance-test:family-authority-join-scales-linearly ()
+  "Joining WAL and family Rows performs bounded metadata identity reads."
+  (let* ((count 64)
+         (metas
+          (cl-loop for index below count
+                   for id = (format "linear-%03d" index)
+                   collect (make-org-glance-headline-metadata
+                            :id id :title id :tags [])))
+         (families
+          (mapcar (lambda (meta)
+                    (list (org-glance-headline-metadata:id meta) "live" "event"))
+                  metas))
+         (authority (list :families families :headlines metas :revived nil))
+         (reads 0)
+         (original-id
+          (symbol-function 'org-glance-headline-metadata:id))
+         (graph (make-org-glance-graph :directory default-directory)))
+    (cl-letf (((symbol-function 'org-glance-cache:authority)
+               (lambda (_graph) authority))
+              ((symbol-function 'org-glance-graph--wal-headlines)
+               (lambda (_graph) metas))
+              ((symbol-function 'org-glance-headline-metadata:id)
+               (lambda (metadata)
+                 (cl-incf reads)
+                 (funcall original-id metadata))))
+      (should (= count (length (org-glance-graph:headlines graph))))
+      (should (< reads (* 8 count))))))
+
 (ert-deftest org-glance-test:family-damage-keeps-precise-logical-recovery-rows ()
   "Damaged Snapshot payloads remain searchable with precise recovery state."
   (org-glance-test:with-graph graph

@@ -5,6 +5,14 @@ Notable user-facing changes.  Versions date-based
 
 * Unreleased
 
+* 1.55.0.0.20261012.5
+
+** Changed
+
+- Overview joins WAL, family, and projection Rows with hash indexes, acquires
+  the live Row projection once, and resolves relation titles from that same
+  projection.  Warm fixed-fixture JSON parsing falls from 1,034 to 520.
+
 * 1.55.0.0.20261012.4
 
 ** Changed

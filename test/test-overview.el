@@ -16,6 +16,37 @@
       (should (s-contains? "* Beta" text))
       (should (s-contains? ":ORG_GLANCE_ID: o2" text)))))
 
+(ert-deftest org-glance-test:overview-render-reads-headlines-once ()
+  "One Overview render shares one live-Row projection across its phases."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-test:headline "one-read" "* TODO One read :work:"))
+    (let ((reads 0)
+          (original (symbol-function 'org-glance-graph:headlines)))
+      (cl-letf (((symbol-function 'org-glance-graph:headlines)
+                 (lambda (&rest args)
+                   (cl-incf reads)
+                   (apply original args))))
+        (org-glance-overview:render graph)
+        (should (= 1 reads))))))
+
+(ert-deftest org-glance-test:overview-render-resolves-relations-from-its-row-set ()
+  "Relation labels reuse the render's Row projection without point reads."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-test:headline
+       "source" "* TODO Source" "[[glance:target?kind=blocks][Target link]]")
+      (org-glance-test:headline "target" "* TODO Target title"))
+    (let ((lookups 0)
+          (original (symbol-function 'org-glance-graph:title-or-id)))
+      (cl-letf (((symbol-function 'org-glance-graph:title-or-id)
+                 (lambda (&rest args)
+                   (cl-incf lookups)
+                   (apply original args))))
+        (let ((text (org-glance-overview:render graph)))
+          (should (s-contains? "Target title" text))
+          (should (= 0 lookups)))))))
+
 (ert-deftest org-glance-test:overview-id-at-point ()
   "The headline id under point is read from its ORG_GLANCE_ID property."
   (org-glance-test:with-graph graph

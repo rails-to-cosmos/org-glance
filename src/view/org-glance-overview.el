@@ -50,9 +50,10 @@ chars of the SHA-1 of its `org-glance-filter:identity'.
          (string= (org-glance-filter:identity filter)
                   (s-trim (f-read-text sidecar 'utf-8))))))
 
-(cl-defun org-glance-overview:render-headline (graph metadata)
+(cl-defun org-glance-overview:render-headline (graph metadata &optional titles)
   "Render METADATA as one self-sufficient org heading (invariant 20).
-Relation titles resolve live from GRAPH, falling back to a gone target's id."
+Relation titles resolve from TITLES or GRAPH, falling back to a gone target's
+id."
   (let ((state (org-glance-headline-metadata:state metadata))
         (priority (org-glance-headline-metadata:priority metadata))
         (schedule (org-glance-headline-metadata:schedule metadata))
@@ -81,7 +82,11 @@ Relation titles resolve live from GRAPH, falling back to a gone target's id."
                    (cl-loop for (target . kind) in (org-glance-headline-metadata:relations metadata)
                             collect (concat "- "
                                             (org-glance--edge->string
-                                             target kind (org-glance-graph:title-or-id graph target))
+                                             target kind
+                                             (if titles
+                                                 (or (gethash target titles) target)
+                                               (org-glance-graph:title-or-id
+                                                graph target)))
                                             "\n")))
             (apply #'concat
                    (cl-loop for link in (org-glance-headline-metadata:links metadata)
@@ -92,18 +97,25 @@ Relation titles resolve live from GRAPH, falling back to a gone target's id."
 FILTER is nil (all), a bare tag, or a plist (`org-glance-filter:predicate').
 Prefix the pragmas FILTER's tags agree on; select by their cycle's done-set."
   (cl-check-type graph org-glance-graph)
-  (let* ((cycle (org-glance-tag-config:cycle-for-filter graph filter))
+  (let* ((metas (org-glance-graph:headlines graph))
+         (titles (make-hash-table :test #'equal :size (length metas)))
+         (cycle (org-glance-tag-config:cycle-for-filter graph filter metas))
          (org-done-keywords (if cycle
                                 (org-glance-tag-config:done-keywords cycle)
                               org-done-keywords))
          (keep? (org-glance-filter:predicate filter)))
+    (dolist (meta metas)
+      (let ((id (org-glance-headline-metadata:id meta)))
+        (unless (gethash id titles)
+          (puthash id (org-glance-headline-metadata:title meta) titles))))
     ;; Join ONCE: `cl-loop ... concat' re-copies the accumulator -- O(N^2).
     (apply #'concat
            org-glance-overview:header
-           (or (org-glance-tag-config:preamble-for-filter graph filter t) "")
-           (cl-loop for meta in (org-glance-graph:headlines graph)
+           (or (org-glance-tag-config:preamble-for-filter graph filter t metas) "")
+           (cl-loop for meta in metas
                     when (funcall keep? meta)
-                    collect (org-glance-overview:render-headline graph meta)))))
+                    collect (org-glance-overview:render-headline
+                             graph meta titles)))))
 
 (cl-defun org-glance-overview:file (graph)
   "Path to GRAPH's unfiltered overview file (inside the hidden store)."
