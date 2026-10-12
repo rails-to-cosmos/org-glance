@@ -99,9 +99,8 @@ colour (string, plist or face) before the default."
            (ids (org-glance-test:row-ids rows)))
       (should (equal '("f1") ids)))))
 
-(ert-deftest org-glance-test:table-stale-flag-on-save ()
-  "A materialized save FLAGS an open table stale without re-filling it on the hot
-path; a display-boundary refresh re-fills it and clears the flag."
+(ert-deftest org-glance-test:table-stale-flag-on-graph-commit ()
+  "A graph commit flags every open table stale without a mutation-site push."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "p1" "* TODO Foo :work:"))
     (org-glance-test:with-table (graph)
@@ -109,12 +108,12 @@ path; a display-boundary refresh re-fills it and clears the flag."
         (should-not org-glance-view--stale)
         (org-glance-graph:add graph (org-glance-test:headline "p2" "* TODO Bar :work:"))
         (org-glance-test:store-mtime graph 100)
-        (org-glance-view:mark-graph-stale graph)
         (should org-glance-view--stale)
         (should (= 1 (length table-view--rows)))
         (org-glance-view--refresh-when-stale)
         (should (= 2 (length table-view--rows)))
-        (should-not org-glance-view--stale))))
+        (should-not org-glance-view--stale)
+        (should-not org-glance-view--pending-changes))))
 
 (ert-deftest org-glance-test:table-stale-detection ()
   "A table is stale when the store's mtime advances past its recorded mtime."

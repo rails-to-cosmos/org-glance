@@ -1,8 +1,28 @@
 #+TITLE: Graph change-notification API (pub/sub) + incremental overview render
 #+DATE: 2026-07-09
 
-Status: *proposed* · performance audit 2026-07-09 · part of
+Status: *done* · performance audit 2026-07-09 · part of
 [[file:2026-07-06-performance-audit.org][Performance audit]]
+
+* Resolution (2026-10-12)
+
+Status: *done* in =1.55.0.0.20261012.14=.
+
+- The graph publishes scoped, removable, error-isolated commit listeners with
+  bounded logical IDs or =:structural=.
+- Append emits after the family projection commit; compaction emits structural
+  invalidation; segment sealing does not double-notify.
+- One view listener records pending changes and marks every open view of the
+  graph stale. Material save and delete no longer push coherence themselves.
+- An unfiltered Overview splices bounded changes by =ORG_GLANCE_ID=. Filtered
+  caches, structural changes, absent Rows, and Rows with incoming relations use
+  full rendering so membership and relation labels stay correct.
+- Focused TDD covers delivery, graph isolation, removal, listener failure,
+  compaction, sealing, automatic view staleness, exact incremental bytes, and
+  full-render fallbacks. The full suite passes 493/493.
+- The 1,000-Row paired benchmark measured 27.6 ms for full Overview refresh and
+  2.1 ms for one-Row refresh (13.1x faster). The 10,000-Row tier remains the
+  standard =make bench= run; =OG_BENCH_QUICK=1= selects the 1,000-Row gate.
 
 * Problem
 

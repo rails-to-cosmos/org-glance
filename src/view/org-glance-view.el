@@ -20,6 +20,9 @@
 (defvar-local org-glance-view--stale nil
   "Non-nil when this view is behind the store (the `glance:stale' lighter).")
 
+(defvar-local org-glance-view--pending-changes nil
+  "Committed ids awaiting refresh, or `:structural'.")
+
 (defvar-local org-glance-view--stale-fn nil
   "Nullary predicate of the current view: non-nil when it is behind the store.")
 
@@ -74,6 +77,7 @@ and ALREADY-IN-VIEW is nil (non-nil for a filter change or `T' in a view).  A
 re-fills the view.  Refresh on every display or selection (invariant 10)."
   (setq-local org-glance-view--graph graph
               org-glance-view--stale nil
+              org-glance-view--pending-changes nil
               org-glance-view--stale-fn stale-fn
               org-glance-view--reload-fn reload-fn)
   (add-hook 'window-buffer-change-functions #'org-glance-view--refresh-when-stale nil t)
@@ -87,16 +91,32 @@ re-fills the view.  Refresh on every display or selection (invariant 10)."
 
 (cl-defun org-glance-view:mark-fresh ()
   "Clear the current view's stale flag, after a refresh re-filled it."
+  (setq org-glance-view--pending-changes nil)
   (when org-glance-view--stale
     (setq org-glance-view--stale nil)
     (force-mode-line-update)))
 
-(cl-defun org-glance-view:mark-graph-stale (graph)
+(cl-defun org-glance-view:mark-graph-stale (graph &optional changed)
   "Flag every open view buffer of GRAPH stale, touching no disk, rows or point.
-Each view clears the flag on its next refresh (display boundary or `g')."
+CHANGED accumulates bounded commit ids, or `:structural'.  Each view clears the
+flag on its next refresh (display boundary or `g')."
   (dolist (buffer (buffer-list))
     (when (eq (buffer-local-value 'org-glance-view--graph buffer) graph)
-      (with-current-buffer buffer (org-glance-view--mark-stale)))))
+      (with-current-buffer buffer
+        (setq org-glance-view--pending-changes
+              (cond
+               ((or (eq changed :structural)
+                    (eq org-glance-view--pending-changes :structural))
+                :structural)
+               ((listp changed)
+                (delete-dups
+                 (append org-glance-view--pending-changes changed)))
+               (t org-glance-view--pending-changes)))
+        (org-glance-view--mark-stale)))))
+
+(cl-defun org-glance-view--graph-committed (graph _changed)
+  "Flag GRAPH's open views stale after an in-process commit."
+  (org-glance-view:mark-graph-stale graph _changed))
 
 (cl-defun org-glance-view--refresh-when-stale (&optional window)
   "Re-fill WINDOW's (or the current) view iff it is behind the store.
@@ -184,6 +204,9 @@ another view.  STALE-FN and RELOAD-FN register pull refresh, else `g' only."
   (or (let ((metadata (org-glance-cache:headline graph id)))
         (and (org-glance-headline-metadata? metadata) metadata))
       (user-error "%s" org-glance-view--stale-message)))
+
+(add-hook 'org-glance-graph-after-commit-functions
+          #'org-glance-view--graph-committed)
 
 (provide 'org-glance-view)
 ;;; org-glance-view.el ends here

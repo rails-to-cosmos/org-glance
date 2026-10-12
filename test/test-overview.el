@@ -84,6 +84,37 @@
       (should (string= file (org-glance-overview:file graph)))
       (should (s-contains? ":ORG_GLANCE_ID: o1" (f-read-text file 'utf-8))))))
 
+(ert-deftest org-glance-test:overview-incremental-update-matches-full-render ()
+  "Updating one retained Row produces the exact full-render bytes."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-test:headline "a" "* TODO Alpha")
+      (org-glance-test:headline "b" "* TODO Beta"))
+    (let ((file (org-glance-overview:write graph)))
+      (org-glance-test:simulate-material-save
+       graph "a" "* DONE Alpha\n:PROPERTIES:\n:ORG_GLANCE_ID: a\n:END:\n")
+      (should (eq 'incremental
+                  (org-glance-overview:update graph nil '("a"))))
+      (should (string= (org-glance-overview:render graph)
+                       (f-read-text file 'utf-8))))))
+
+(ert-deftest org-glance-test:overview-incremental-membership-flip-renders-full ()
+  "A changed Row entering a filtered Overview takes the full-render path."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "a" "* TODO Alpha"))
+    (let ((filter '(:state "DONE")))
+      (org-glance-overview:write graph filter)
+      (org-glance-test:simulate-material-save
+       graph "a" "* DONE Alpha\n:PROPERTIES:\n:ORG_GLANCE_ID: a\n:END:\n")
+      (should (eq 'full (org-glance-overview:update graph filter '("a")))))))
+
+(ert-deftest org-glance-test:overview-structural-change-renders-full ()
+  "A structural notification always takes the full-render path."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "a" "* Alpha"))
+    (org-glance-overview:write graph)
+    (should (eq 'full (org-glance-overview:update graph nil :structural)))))
+
 (ert-deftest org-glance-test:overview-default-view-dispatch ()
   "`org-glance-overview' opens the `org-glance-overview-default-view' view.
 `org-glance-table'/`table' mean table, `org-glance-overview'/`org' org text."

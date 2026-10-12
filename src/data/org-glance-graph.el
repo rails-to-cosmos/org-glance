@@ -491,6 +491,53 @@ Side indexes update here when they need the graph's new read-cache state.")
 Errors reach the writer after the immutable event and WAL record remain
 durable for retry.  Auxiliary indexes use the error-demoted after-append hook.")
 
+(defvar org-glance-graph-after-commit-functions nil
+  "Abnormal hook run with GRAPH and CHANGED after an observable commit.
+CHANGED is a list of logical ids, or `:structural' when no bounded id list
+describes the change.  Errors are demoted so consumers cannot break writes.")
+
+(defvar org-glance-graph--listeners nil
+  "Registered entries of (GRAPH CALLBACK WRAPPER).")
+
+(cl-defun org-glance-graph:add-listener (graph callback)
+  "Call CALLBACK with GRAPH and CHANGED after GRAPH commits.
+Registering the same CALLBACK for GRAPH more than once has no effect."
+  (cl-check-type graph org-glance-graph)
+  (cl-check-type callback function)
+  (unless (cl-find-if (lambda (entry)
+                        (and (eq graph (nth 0 entry))
+                             (eq callback (nth 1 entry))))
+                      org-glance-graph--listeners)
+    (let ((wrapper (lambda (changed-graph changed)
+                     (when (eq graph changed-graph)
+                       (funcall callback changed-graph changed)))))
+      (push (list graph callback wrapper) org-glance-graph--listeners)
+      (add-hook 'org-glance-graph-after-commit-functions wrapper)))
+  callback)
+
+(cl-defun org-glance-graph:remove-listener (graph callback)
+  "Stop CALLBACK receiving commit notifications for GRAPH."
+  (cl-check-type graph org-glance-graph)
+  (let ((matches (cl-remove-if-not
+                  (lambda (entry)
+                    (and (eq graph (nth 0 entry))
+                         (eq callback (nth 1 entry))))
+                  org-glance-graph--listeners)))
+    (dolist (entry matches)
+      (remove-hook 'org-glance-graph-after-commit-functions (nth 2 entry)))
+    (setq org-glance-graph--listeners
+          (cl-set-difference org-glance-graph--listeners matches :test #'eq)))
+  callback)
+
+(cl-defun org-glance-graph--notify-commit (graph changed)
+  "Notify error-isolated consumers that GRAPH committed CHANGED."
+  (run-hook-wrapped
+   'org-glance-graph-after-commit-functions
+   (lambda (listener)
+     (with-demoted-errors "org-glance: after-commit listener: %S"
+       (funcall listener graph changed))
+     nil)))
+
 (defvar org-glance-graph--publication-hook nil
   "Function called after local projection commit and before live publication.")
 
@@ -522,7 +569,15 @@ SPECS are metadata structs or bare plists; each gets a fresh monotonic `seq'."
     (org-glance-graph--publication-point 'after-sqlite-commit)
     (org-glance-graph--publication-point 'before-live-frame-publication)
     (with-demoted-errors "org-glance: after-append hook: %S"
-      (run-hook-with-args 'org-glance-graph-after-append-functions graph specs))))
+      (run-hook-with-args 'org-glance-graph-after-append-functions graph specs))
+    (org-glance-graph--notify-commit
+     graph
+     (delete-dups
+      (mapcar (lambda (spec)
+                (if (org-glance-headline-metadata? spec)
+                    (org-glance-headline-metadata:id spec)
+                  (plist-get spec :id)))
+              specs)))))
 
 (cl-defun org-glance-graph--maybe-seal (graph)
   (let ((open (org-glance-graph--open-segment-path graph)))
@@ -1594,7 +1649,8 @@ record count."
          (open (org-glance-graph--open-segment-path graph))
          (open-empty (org-glance-graph--open-empty? graph))
          (fold (org-glance-graph--latest-records graph))
-         (total (cdr fold)))
+         (total (cdr fold))
+         (committed nil))
     (let (emit dead-ids)
       (dolist (record (car fold))
         (if (plist-get record :tombstone)
@@ -1612,12 +1668,15 @@ record count."
               (setq new-names (list (file-name-nondirectory newseg)))))
           ;; invariant 2: commit BEFORE truncating the open segment.
           (org-glance-graph--write-manifest graph new-names)
-          (org-glance--atomic-write open "")))
+          (org-glance--atomic-write open "")
+          (setq committed t)))
       (dolist (id dead-ids)
         (let ((dir (ignore-errors (org-glance-graph:headline-data-path graph id))))
           (when (and dir (f-exists? dir)) (ignore-errors (f-delete dir t)))))
       (org-glance-graph--gc-orphans graph)
       (org-glance-graph--invalidate-cache graph)
+      (when committed
+        (org-glance-graph--notify-commit graph :structural))
       (length emit))))
 
 (cl-defun org-glance-graph:capture-buffer (&optional (buffer (current-buffer)))

@@ -175,6 +175,54 @@ A keyed cache directory also gets a SPEC sidecar recording FILTER's identity."
     (f-write-text (org-glance-overview:render graph filter) 'utf-8 file)
     file))
 
+(cl-defun org-glance-overview--heading-region (id)
+  "Return the current buffer region for ID's heading, or nil."
+  (goto-char (point-min))
+  (when (re-search-forward
+         (format "^:ORG_GLANCE_ID:[ \t]+%s[ \t]*$" (regexp-quote id)) nil t)
+    (re-search-backward "^\\* " nil t)
+    (let ((beg (point)))
+      (forward-line 1)
+      (if (re-search-forward "^\\* " nil t)
+          (cons beg (match-beginning 0))
+        (cons beg (point-max))))))
+
+(cl-defun org-glance-overview--splice (graph file ids)
+  "Splice current metadata for IDS into unfiltered overview FILE.
+Return non-nil only when every replacement is structurally safe."
+  (when (and (f-exists? file) ids)
+    (with-temp-buffer
+      (insert-file-contents file)
+      (let ((safe t))
+        (dolist (id ids)
+          (when safe
+            (let ((region (org-glance-overview--heading-region id))
+                  (meta (org-glance-cache:headline graph id)))
+              (if (and region
+                       (org-glance-headline-metadata? meta)
+                       (null (org-glance-cache:incoming-relations graph id)))
+                  (progn
+                    (delete-region (car region) (cdr region))
+                    (goto-char (car region))
+                    (insert (org-glance-overview:render-headline graph meta)))
+                (setq safe nil)))))
+        (when safe
+          (f-write-text (buffer-string) 'utf-8 file)
+          t)))))
+
+(cl-defun org-glance-overview:update (graph filter changed)
+  "Refresh FILTER's cached Overview after CHANGED commits.
+Return `incremental' for a safe bounded splice and `full' after regeneration."
+  (let ((file (org-glance-overview:spec-cache-file graph filter)))
+    (if (and (null (org-glance-filter:normalize-spec filter))
+             (listp changed)
+             (condition-case nil
+                 (org-glance-overview--splice graph file changed)
+               (error nil)))
+        'incremental
+      (org-glance-overview:write graph filter)
+      'full)))
+
 (cl-defun org-glance-overview:cached-file (graph &optional filter)
   "Return FILTER's overview file for GRAPH, rebuilding only when stale.
 A hit -- fresh, current header, and a SPEC sidecar naming FILTER unless the key
@@ -331,9 +379,10 @@ the change commits, refresh and return point to the headline."
     (current-buffer)))
 
 (cl-defun org-glance-overview:refresh ()
-  "Rebuild the current overview from the graph, ignoring the cache."
+  "Refresh the current Overview from its pending graph changes."
   (interactive)
-  (org-glance-overview:write org-glance-graph org-glance-overview--spec)
+  (org-glance-overview:update org-glance-graph org-glance-overview--spec
+                              org-glance-view--pending-changes)
   (let ((inhibit-read-only t))
     (revert-buffer t t t))
   (org-glance-view:mark-fresh))

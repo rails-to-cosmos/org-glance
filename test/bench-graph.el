@@ -9,9 +9,11 @@
 (require 'benchmark)
 
 (defconst org-glance-bench:sizes
-  (append '(1000 10000)
-          (when (getenv "OG_BENCH_LARGE") '(100000)))
-  "Graph sizes to benchmark; the 100k tier is opt-in (OG_BENCH_LARGE=1).")
+  (if (getenv "OG_BENCH_QUICK")
+      '(1000)
+    (append '(1000 10000)
+            (when (getenv "OG_BENCH_LARGE") '(100000))))
+  "Graph sizes; QUICK limits to 1k and LARGE adds an opt-in 100k tier.")
 
 (defconst org-glance-bench:batch 500
   "Headlines per build batch; small enough that insert timings include seals.")
@@ -73,6 +75,14 @@ Return the elapsed seconds."
               (progn (org-glance-property-index:clear graph)
                      (org-glance-property-index:ensure
                       graph (cl-loop for i below n collect (format "bench-%06d" i)))))))
+      (org-glance-overview:write graph)
+      (org-glance-bench--row
+       "overview full refresh"
+       (car (benchmark-run 1 (org-glance-overview:write graph))))
+      (org-glance-bench--row
+       "overview one-row refresh"
+       (car (benchmark-run 1
+              (org-glance-overview:update graph nil '("bench-000000")))))
       (org-glance-bench--row
        "reindex" (car (benchmark-run 1 (org-glance-graph:reindex graph))))
       (org-glance-bench--row

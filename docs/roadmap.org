@@ -8,7 +8,7 @@ Proposal files hold design detail; [[file:../org-glance.org][org-glance.org]] re
 When work lands, mark its item =DONE=, rename its proposal from =.proposed= to
 =.done=, update [[file:../CHANGELOG.org][CHANGELOG.org]], and record the verification in the proposal.
 
-Last reviewed: 2026-10-12.  Proposal inventory: 31 resolved, 17 proposed; the
+Last reviewed: 2026-10-12.  Proposal inventory: 32 resolved, 16 proposed; the
 composable-tag-template proposal has one shipped phase and two proposed phases.
 
 * DONE 0. Reconcile roadmap status
@@ -111,8 +111,14 @@ zero full censuses and zero maintenance transactions. Opening a selected
 Material Row now uses indexed relation and exact Row reads, reducing its p50
 from 16,684.6 ms to 66.0 ms.
 
-** TODO Publish graph changes to incremental consumers
-[[file:proposals/2026-07-09-graph-change-listeners.proposed.org][Proposal: graph change listeners]]
+** DONE Publish graph changes to incremental consumers
+Graph commits now publish bounded Row IDs or structural invalidation through
+error-isolated graph listeners. Open views subscribe once; unfiltered Overview
+refreshes splice safe single-Row changes and fall back to full rendering for
+structure, filters, missing Rows, or incoming relation labels. At 1,000 Rows,
+the paired benchmark measured 27.6 ms for a full refresh and 2.1 ms for a
+one-Row refresh.
+[[file:proposals/2026-07-09-graph-change-listeners.done.org][Proposal: graph change listeners]]
 
 ** TODO Page or window large tables
 [[file:proposals/2026-07-06-table-paging.proposed.org][Proposal: table paging]]

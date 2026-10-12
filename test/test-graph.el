@@ -32,6 +32,79 @@
   (org-glance-test:with-graph graph
     (should (eq graph (org-glance-graph:add graph (org-glance-test:headline "id1" "* foo"))))))
 
+(ert-deftest org-glance-test:graph-listener-receives-committed-ids ()
+  "A graph listener sees its graph's committed ids and no other graph."
+  (org-glance-test:with-graph graph
+    (org-glance-test:with-graph other
+      (let* ((events nil)
+             (listener (lambda (_graph changed) (push changed events))))
+        (unwind-protect
+            (progn
+              (org-glance-graph:add-listener graph listener)
+              (org-glance-graph:add graph
+                (org-glance-test:headline "a" "* Alpha")
+                (org-glance-test:headline "b" "* Beta"))
+              (org-glance-graph:add other
+                (org-glance-test:headline "other" "* Other"))
+              (should (equal '(("a" "b")) events)))
+          (org-glance-graph:remove-listener graph listener))))))
+
+(ert-deftest org-glance-test:graph-listener-removal-stops-delivery ()
+  "Removing a graph listener prevents later commit delivery."
+  (org-glance-test:with-graph graph
+    (let* ((calls 0)
+           (listener (lambda (_graph _changed) (cl-incf calls))))
+      (org-glance-graph:add-listener graph listener)
+      (org-glance-graph:add graph (org-glance-test:headline "a" "* Alpha"))
+      (should (= 1 calls))
+      (org-glance-graph:remove-listener graph listener)
+      (org-glance-graph:add graph (org-glance-test:headline "b" "* Beta"))
+      (should (= 1 calls)))))
+
+(ert-deftest org-glance-test:graph-listener-errors-do-not-break-commit ()
+  "A failing listener cannot break a commit or suppress another listener."
+  (org-glance-test:with-graph graph
+    (let* ((called nil)
+           (healthy (lambda (_graph _changed) (setq called t)))
+           (listener (lambda (_graph _changed) (error "listener failed"))))
+      (unwind-protect
+          (progn
+            (org-glance-graph:add-listener graph healthy)
+            (org-glance-graph:add-listener graph listener)
+            (org-glance-graph:add graph (org-glance-test:headline "a" "* Alpha"))
+            (should called)
+            (should (org-glance-headline-metadata?
+                     (org-glance-graph:get-headline graph "a"))))
+        (org-glance-graph:remove-listener graph listener)
+        (org-glance-graph:remove-listener graph healthy)))))
+
+(ert-deftest org-glance-test:graph-compaction-emits-structural-change ()
+  "A compaction commit reports a structural graph change."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "a" "* Alpha"))
+    (let* ((events nil)
+           (listener (lambda (_graph changed) (push changed events))))
+      (unwind-protect
+          (progn
+            (org-glance-graph:add-listener graph listener)
+            (org-glance-graph:compact graph)
+            (should (equal '(:structural) events)))
+        (org-glance-graph:remove-listener graph listener)))))
+
+(ert-deftest org-glance-test:graph-seal-does-not-double-notify ()
+  "A segment roll inside append emits only the append notification."
+  (org-glance-test:with-graph graph
+    (let* ((events nil)
+           (listener (lambda (_graph changed) (push changed events)))
+          (org-glance-graph-segment-max-bytes 1)
+          (org-glance-graph-compact-segment-count most-positive-fixnum))
+      (unwind-protect
+          (progn
+            (org-glance-graph:add-listener graph listener)
+            (org-glance-graph:add graph (org-glance-test:headline "a" "* Alpha"))
+            (should (equal '(("a")) events)))
+        (org-glance-graph:remove-listener graph listener)))))
+
 (ert-deftest org-glance-test:graph-multiple-headlines ()
   "Several headlines coexist and are independently retrievable."
   (org-glance-test:with-graph graph

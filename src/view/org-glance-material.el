@@ -175,9 +175,7 @@ A file whose id differs from the buffer's is skipped with a message."
                        (org-glance-headline--from-string
                         (f-read-text buffer-file-name 'utf-8)))))
       (if (equal (org-glance-headline:id headline) id)
-          (progn
-            (org-glance-graph:insert graph (list (org-glance-headline:metadata headline)))
-            (org-glance-view:mark-graph-stale graph))
+          (org-glance-graph:insert graph (list (org-glance-headline:metadata headline)))
         (message "org-glance: %s lost its ORG_GLANCE_ID drawer; metadata not updated" id)))))
 
 ;;; Repeated headlines
@@ -1007,7 +1005,6 @@ and views flagged stale."
       ;; invariant 11: tombstone FIRST; a failed append keeps the edits.
       (org-glance-graph:delete graph id)
       (when buf (org-glance--discard-buffer buf))
-      (org-glance-view:mark-graph-stale graph)
       (message "org-glance: headline deleted (disk reclaimed at next compaction)")
       t)))
 

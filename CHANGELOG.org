@@ -5,6 +5,22 @@ Notable user-facing changes.  Versions date-based
 
 * Unreleased
 
+* 1.55.0.0.20261012.14
+
+** Added
+
+- Graph-scoped change listeners publish committed Row IDs or structural
+  changes without allowing a consumer failure to break a write.
+
+** Changed
+
+- Open views become stale from the graph commit channel, so mutation callsites
+  no longer maintain their own coherence pushes.
+- Unfiltered Overview refreshes splice a safe bounded Row change into the
+  cached document. Structural changes, filtered views, missing Rows, and Rows
+  with incoming relations retain the full-render path.
+- =OG_BENCH_QUICK=1 make bench= runs the 1,000-Row benchmark tier alone.
+
 * 1.55.0.0.20261012.13
 
 ** Added
