@@ -212,6 +212,20 @@ a save persists to the graph and survives re-materializing."
   (org-glance-test:with-graph graph
     (should-error (org-glance-material:open graph "nope") :type 'user-error)))
 
+(ert-deftest org-glance-test:material-open-pins-cache-without-history-or-reconciliation ()
+  "Materialize opens the indexed Snapshot without maintenance on its read path."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-test:headline "cached-open" "* TODO Cached open" "body"))
+    (cl-letf (((symbol-function 'org-glance-version:history)
+               (lambda (&rest _) (ert-fail "Materialize inspected History")))
+              ((symbol-function 'org-glance-graph:refresh-external)
+               (lambda (&rest _) (ert-fail "Materialize reconciled"))))
+      (let ((buffer (org-glance-material:open graph "cached-open")))
+        (unwind-protect
+            (should (buffer-live-p buffer))
+          (kill-buffer buffer))))))
+
 (ert-deftest org-glance-test:open-link-single ()
   "A single non-org-glance link is opened without prompting."
   (let ((headline (org-glance-test:headline "o1" "* foo" "[[https://example.com][ex]]"))

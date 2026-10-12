@@ -21,6 +21,9 @@
 (require 'org-glance-material)
 (require 'org-glance-view)
 
+(declare-function org-glance-cache:headlines-for-filter
+                  "org-glance-cache" (graph filter))
+
 (require 'org-glance-core)
 (declare-function org-glance-overview:visit "org-glance-overview")
 (declare-function org-glance-capture "org-glance-capture")
@@ -172,9 +175,11 @@ Cells are display strings: tags `:'-joined, priority its letter, absent \"\"."
 
 (defvar-local org-glance-table--spec nil
   "Normalised filter spec the current table buffer was generated with.")
-(cl-defun org-glance-table--rows (graph keep?)
-  "Return rows for GRAPH's live headlines satisfying KEEP?, in graph order."
-  (cl-loop for meta in (org-glance-cache:headlines graph)
+(cl-defun org-glance-table--rows (graph keep? &optional filter)
+  "Return GRAPH rows satisfying KEEP? and optional FILTER, in graph order."
+  (cl-loop for meta in (if filter
+                           (org-glance-cache:headlines-for-filter graph filter)
+                         (org-glance-cache:headlines graph))
            when (funcall keep? meta)
            collect (org-glance-table--row meta)))
 
@@ -814,7 +819,7 @@ scoped layout (invariant 18) and the `Relation' column."
          (src (org-glance-graph:headline-meta-path graph))
          (fill-fn (lambda (buf)
                     (with-current-buffer buf
-                      (let ((rows (org-glance-table--rows graph keep?)))
+                      (let ((rows (org-glance-table--rows graph keep? spec)))
                         (table-view-set-rows buf rows)
                         (org-glance-property-index--flush-if-dirty graph)
                         (org-glance-view:snapshot-mtime src)))))

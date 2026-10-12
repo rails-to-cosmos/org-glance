@@ -11,6 +11,7 @@
 
 (require 'org-glance-graph)
 (require 'org-glance-headline)
+(require 'org-glance-filter)
 (require 'org-glance-version)
 
 (declare-function org-glance-version:history-from-directories
@@ -868,9 +869,9 @@ Return the number of families folded."
 (defvar org-glance-cache--inventory-timer nil
   "Timer that reconciles immutable inventories for open graphs.")
 
-(defvar org-glance-cache--refresh-threads
+(defvar org-glance-cache--refresh-processes
   (make-hash-table :test #'eq :weakness 'key)
-  "Active cache-refresh thread for each live graph.")
+  "Active cache-refresh subprocess for each live graph.")
 
 (defvar org-glance-cache--refresh-requested-at
   (make-hash-table :test #'eq :weakness 'key)
@@ -884,13 +885,47 @@ Return the number of families folded."
 (defvar org-glance-cache--refresh-synchronously nil
   "Non-nil makes graph-open refresh deterministic for the test harness.")
 
+(cl-defun org-glance-cache--emacs-program ()
+  "Return the current Emacs executable for a batch reconciliation worker."
+  (expand-file-name invocation-name invocation-directory))
+
+(cl-defun org-glance-cache--worker-command (graph)
+  "Return the argv that reconciles GRAPH in an isolated batch Emacs."
+  (let ((paths
+         (delete-dups
+          (cl-loop for path in load-path
+                   when (and path (file-directory-p path))
+                   collect (expand-file-name path)))))
+    (append
+     (list (org-glance-cache--emacs-program) "--quick" "--batch")
+     (cl-loop for path in paths append (list "-L" path))
+     (list "-l" "org-glance-cache" "--eval"
+           (prin1-to-string
+            (list 'org-glance-cache:refresh-batch
+                  (org-glance-graph:directory graph)))))))
+
+(cl-defun org-glance-cache:refresh-batch (directory)
+  "Reconcile DIRECTORY once in the current noninteractive Emacs."
+  (let ((org-glance-graph-after-open-functions nil))
+    (org-glance-cache:refresh (org-glance-graph directory))))
+
+(cl-defun org-glance-cache--refresh-finished (graph process event)
+  "Retire GRAPH's PROCESS and report its terminal EVENT."
+  (when (memq (process-status process) '(exit signal failed))
+    (when (eq process (gethash graph org-glance-cache--refresh-processes))
+      (remhash graph org-glance-cache--refresh-processes))
+    (if (and (eq (process-status process) 'exit)
+             (= 0 (process-exit-status process)))
+        (message "org-glance: cache reconciliation process complete")
+      (message "org-glance: cache reconciliation process failed: %s"
+               (string-trim event)))))
+
 (cl-defun org-glance-cache:refresh-async (graph &optional initial)
-  "Queue GRAPH's cache reconciliation off the caller thread when due.
+  "Queue GRAPH's cache reconciliation in a batch Emacs when due.
 INITIAL queues startup work without consuming the first post-open refresh."
-  (let ((active (gethash graph org-glance-cache--refresh-threads))
+  (let ((active (gethash graph org-glance-cache--refresh-processes))
         (now (float-time)))
-    (unless (or (eq active 'starting)
-                (and (threadp active) (thread-live-p active))
+    (unless (or (and (processp active) (process-live-p active))
                 (and (not initial)
                      (< (- now
                            (gethash graph
@@ -899,26 +934,28 @@ INITIAL queues startup work without consuming the first post-open refresh."
                         org-glance-cache-refresh-interval)))
       (unless initial
         (puthash graph now org-glance-cache--refresh-requested-at))
-      (puthash graph 'starting org-glance-cache--refresh-threads)
       (condition-case err
-          (let ((thread
-                 (make-thread
-                  (lambda ()
-                    (let ((org-glance-cache--cooperative t))
-                      (unwind-protect
-                          (condition-case refresh-error
-                              (org-glance-cache:refresh graph)
-                            (error
-                             (message "org-glance: cache refresh skipped: %S"
-                                      refresh-error)))
-                        (remhash graph org-glance-cache--refresh-threads))))
-                  "org-glance-cache-refresh")))
-            (when (eq 'starting
-                      (gethash graph org-glance-cache--refresh-threads))
-              (puthash graph thread org-glance-cache--refresh-threads)))
+          (let* ((buffer
+                  (get-buffer-create
+                   (format " *org-glance-cache-refresh:%s*"
+                           (sxhash-equal (org-glance-graph:directory graph)))))
+                 (_ (with-current-buffer buffer
+                      (let ((inhibit-read-only t)) (erase-buffer))))
+                 (process
+                  (make-process
+                   :name "org-glance-cache-refresh"
+                   :buffer buffer
+                   :command (org-glance-cache--worker-command graph)
+                   :connection-type 'pipe
+                   :coding 'utf-8-unix
+                   :noquery t
+                   :sentinel
+                   (lambda (process event)
+                     (org-glance-cache--refresh-finished
+                      graph process event)))))
+            (puthash graph process org-glance-cache--refresh-processes))
         (error
-         (remhash graph org-glance-cache--refresh-threads)
-         (message "org-glance: cache refresh could not start: %S" err))))))
+         (message "org-glance: cache reconciliation could not start: %S" err))))))
 
 (cl-defun org-glance-cache--refresh-on-open (graph)
   "Refresh GRAPH according to the current startup execution policy."
@@ -1014,6 +1051,78 @@ INITIAL queues startup work without consuming the first post-open refresh."
   "Return GRAPH's complete last committed searchable metadata projection."
   (org-glance-cache--read-db graph #'org-glance-cache--read-projection))
 
+(cl-defun org-glance-cache--tag-candidates (db tags)
+  "Return committed metadata carrying every member of TAGS from DB."
+  (let* ((tags (mapcar (lambda (tag) (downcase (format "%s" tag))) tags))
+         (ordinary-clause
+          (mapconcat (lambda (_tag) "lower(headline.tags) LIKE ?") tags " AND "))
+         (family-clause
+          (mapconcat
+           (lambda (_tag)
+             "EXISTS (SELECT 1 FROM json_each(headline_projection.record_payload,'$.tags') WHERE lower(json_each.value)=?)")
+           tags " AND "))
+         (ordinary-params
+          (apply #'vector (mapcar (lambda (tag) (format "%%:%s:%%" tag)) tags)))
+         (tag-params (apply #'vector tags))
+         (ordinary
+          (sqlite-select
+           db
+           (concat
+            "SELECT headline.org_id,org_headline.record FROM org_headline JOIN headline USING(id) WHERE "
+            ordinary-clause " ORDER BY headline.rowid")
+           ordinary-params))
+         (projected
+          (sqlite-select
+           db
+           (concat
+            "SELECT headline_projection.logical_id,headline_projection.record_payload FROM headline_projection WHERE headline_projection.role IN ('current','conflict','recovery','rejected') AND "
+            family-clause
+            " ORDER BY headline_projection.logical_id,headline_projection.event_id")
+           tag-params))
+         (states (make-hash-table :test #'equal))
+         (family-rows (make-hash-table :test #'equal))
+         (ordinary-ids (make-hash-table :test #'equal))
+         projected-metadata)
+    (dolist (row (sqlite-select db "SELECT logical_id,state FROM headline_family"))
+      (puthash (car row) (cadr row) states))
+    (dolist (row projected)
+      (unless (gethash (car row) family-rows)
+        (when-let* ((metadata (org-glance-cache--decode-metadata (cadr row))))
+          (puthash (car row) metadata family-rows)
+          (push metadata projected-metadata))))
+    (setq projected-metadata (nreverse projected-metadata))
+    (let ((ordinary-metadata
+           (delq nil
+                 (mapcar
+                  (lambda (row)
+                    (let* ((id (car row))
+                           (state (gethash id states))
+                           (family (gethash id family-rows)))
+                      (puthash id t ordinary-ids)
+                      (cond
+                       ((equal state "deleted") nil)
+                       (family family)
+                       (state nil)
+                       (t (org-glance-cache--decode-metadata (cadr row))))))
+                  ordinary))))
+      (append
+       ordinary-metadata
+       (cl-loop for metadata in projected-metadata
+                unless (gethash (org-glance-headline-metadata:id metadata)
+                                ordinary-ids)
+                collect metadata)))))
+
+(cl-defun org-glance-cache:headlines-for-filter (graph filter)
+  "Return committed GRAPH Rows matching FILTER, preselecting tag candidates."
+  (let* ((spec (org-glance-filter:normalize-spec filter))
+         (tags (org-glance-filter:tags spec))
+         (candidates
+          (if tags
+              (org-glance-cache--read-db
+               graph (lambda (db) (org-glance-cache--tag-candidates db tags)))
+            (org-glance-cache:headlines graph))))
+    (cl-remove-if-not (org-glance-filter:predicate spec) candidates)))
+
 (cl-defun org-glance-cache--ordinary-headline (db id)
   "Return ordinary compatibility-WAL ID from DB, or nil."
   (when-let* ((row (car (sqlite-select
@@ -1049,6 +1158,31 @@ INITIAL queues startup work without consuming the first post-open refresh."
          (org-glance-graph--prefer-family-metadata projected ordinary))
         (family nil)
         (t ordinary))))))
+
+(cl-defun org-glance-cache:material-path (graph id)
+  "Return ID's digest-verified current Snapshot path from GRAPH's committed cache.
+Return nil when the family is absent, conflicted, damaged, or its bytes no
+longer match the digest admitted by the pinned projection."
+  (when-let* ((row
+               (org-glance-cache--read-db
+                graph
+                (lambda (db)
+                  (or
+                   (car
+                    (sqlite-select
+                     db
+                     "SELECT observation.path,event.payload_digest FROM headline_family AS family JOIN headline_event AS event ON event.logical_id=family.logical_id AND event.event_id=family.current_version_id JOIN headline_payload_observation AS observation ON observation.logical_id=event.logical_id AND observation.event_id=event.event_id WHERE family.logical_id=? AND family.state='live' AND family.verified=1 AND observation.payload_state='available'"
+                     (vector id)))
+                   (car
+                    (sqlite-select
+                     db
+                     "SELECT org_headline.path,headline.digest FROM org_headline JOIN headline USING(id) WHERE headline.org_id=? AND NOT EXISTS (SELECT 1 FROM headline_family WHERE logical_id=?) ORDER BY headline.rowid LIMIT 1"
+                     (vector id id)))))))
+              (path (car row))
+              (expected (cadr row))
+              ((and (stringp expected) (file-exists-p path)))
+              ((equal expected (org-glance-cache--file-digest path))))
+    path))
 
 (cl-defun org-glance-cache:incoming-relations (graph id)
   "Return indexed (SOURCE-ID . KIND) relations targeting ID in GRAPH."

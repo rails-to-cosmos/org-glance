@@ -5,6 +5,24 @@ Notable user-facing changes.  Versions date-based
 
 * Unreleased
 
+* 1.55.0.0.20261012.15
+
+** Changed
+
+- Automatic cache reconciliation runs in an isolated batch Emacs process, so
+  its filesystem census, parsing, and SQLite writes cannot occupy the
+  interactive Emacs thread.
+- Tag-filtered Overview reads preselect matching Rows in SQLite before decoding
+  metadata. Materialize, Open link, Jump, and Overview consume the committed
+  cache without requesting reconciliation or scanning immutable History.
+
+** Fixed
+
+- Material opening resolves the current Snapshot from its committed family
+  pointer and verifies the admitted SHA-256 before visiting the file. A cache
+  miss or directly changed payload now fails explicitly instead of reconciling
+  History during the command.
+
 * 1.55.0.0.20261012.14
 
 ** Added

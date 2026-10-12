@@ -51,9 +51,9 @@ CLOSED: [2026-10-12]
 
 - [X] Return from graph open before immutable-family reconciliation.
 - [X] Serve the last verified SQLite/WAL projection while reconciliation runs.
-- [X] Limit each graph to one background worker and one request per minute.
+- [X] Run reconciliation in an isolated batch Emacs process.
+- [X] Limit each graph to one background process and one request per minute.
 - [X] Leave the first post-open request due for an immediate Git update.
-- [X] Yield within family projection and between cache rebuild units.
 - [X] Keep relay-backed external publication immediately visible.
 
 [[file:proposals/2026-10-12-nonblocking-cache-reconciliation.done.org][Proposal: nonblocking cache reconciliation]]
@@ -110,6 +110,17 @@ their p50 model-read times are 513.9, 269.9 and 96.3 ms respectively, with
 zero full censuses and zero maintenance transactions. Opening a selected
 Material Row now uses indexed relation and exact Row reads, reducing its p50
 from 16,684.6 ms to 66.0 ms.
+
+Material opening now resolves and digest-checks its current Snapshot entirely
+from the committed projection. Tag-filtered Overview preselects candidates in
+SQLite; at 2,000 Rows its p50 fell from 201.2 ms to 9.5 ms. The action benchmark
+asserts zero reconciliation requests, full censuses, cache maintenance
+transactions, and History reads for every transient read entrypoint.
+
+** TODO Publish full recovery as a separate committed generation
+The isolated process still refreshes the existing SQLite projection in phases.
+Build complete recovery state separately, validate it, then atomically publish
+one new generation. Reads must remain pinned to the prior complete generation.
 
 ** DONE Publish graph changes to incremental consumers
 Graph commits now publish bounded Row IDs or structural invalidation through

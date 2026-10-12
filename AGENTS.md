@@ -150,10 +150,11 @@ evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
 33. External writers (the `glance` daemon) append moved ids to `meta/EXTERNAL.jsonl`; a
     delete wears the third field `"tombstone":true` and nothing else wears it. The fold
     keeps one entry per id at its first sighting with its LAST sighting's kind, tests it
-    with `(eq t …)`, and treats an unknown key as inert (compatibility, both ways). Every
-    READ folds pending entries in (`--fold-external-maybe` in `--ensure-cache`) —
-    throttled, non-reentrant, `condition-case`'d — as ONE `graph:insert` for records and
-    tombstones alike; the fold's cursor moves always AFTER that append.
+    with `(eq t …)`, and treats an unknown key as inert (compatibility, both ways).
+    Legacy graph reads fold pending entries in (`--fold-external-maybe` in
+    `--ensure-cache`) — throttled, non-reentrant, `condition-case`'d — as ONE
+    `graph:insert` for records and tombstones alike. Cache-backed UI reads never invoke
+    that compatibility path; the fold's cursor moves always AFTER its append.
 34. The fold moves a CURSOR and never rewrites `EXTERNAL.jsonl`. `meta/EXTERNAL.cursor`
     is `OFFSET WINDOW PREFIX` — a decimal BYTE offset plus two sha1s — written
     temp-then-rename after the records land (inv 33's crash rule). Any doubt reads as 0

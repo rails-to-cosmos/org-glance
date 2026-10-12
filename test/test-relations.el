@@ -21,7 +21,7 @@
                    (org-glance-test:field graph "src" relations)))))
 
 (ert-deftest org-glance-test:glance-link-follows-an-external-headline ()
-  "A glance link resolves an id adopted after the graph was initialized."
+  "A glance link resolves an externally delivered id after explicit adoption."
   (org-glance-test:with-graph graph
     (let ((org-glance-graph graph)
           (org-glance-graph-external-poll-seconds 0))
@@ -30,6 +30,10 @@
        (org-glance-graph:content-path graph "fresh")
        (org-glance-test:org-with-id "* Pavel Ivakin :contact:" "fresh"))
       (org-glance-test:external-write graph "fresh")
+      (should-error
+       (funcall (org-link-get-parameter "glance" :follow) "fresh" nil)
+       :type 'user-error)
+      (org-glance-graph:refresh-external graph)
       (let ((buffer (funcall (org-link-get-parameter "glance" :follow) "fresh" nil)))
         (unwind-protect
             (progn

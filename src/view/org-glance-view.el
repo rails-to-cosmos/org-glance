@@ -114,9 +114,9 @@ flag on its next refresh (display boundary or `g')."
                (t org-glance-view--pending-changes)))
         (org-glance-view--mark-stale)))))
 
-(cl-defun org-glance-view--graph-committed (graph _changed)
-  "Flag GRAPH's open views stale after an in-process commit."
-  (org-glance-view:mark-graph-stale graph _changed))
+(cl-defun org-glance-view--graph-committed (graph changed)
+  "Flag GRAPH's open views stale for CHANGED Rows after an in-process commit."
+  (org-glance-view:mark-graph-stale graph changed))
 
 (cl-defun org-glance-view--refresh-when-stale (&optional window)
   "Re-fill WINDOW's (or the current) view iff it is behind the store.

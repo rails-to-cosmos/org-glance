@@ -27,6 +27,8 @@
 
 (declare-function org-glance-cache:incoming-relations
                   "org-glance-cache" (graph id))
+(declare-function org-glance-cache:material-path
+                  "org-glance-cache" (graph id))
 
 ;;; Selection
 
@@ -733,13 +735,10 @@ reused.  Signal a `user-error' when ID is dead or has no stored blob."
   (cl-check-type id string)
   (let ((meta (org-glance-cache:headline graph id)))
     (unless (org-glance-headline-metadata? meta)
-      (org-glance-graph:refresh-external graph)
-      (setq meta (org-glance-cache:headline graph id)))
-    (unless (org-glance-headline-metadata? meta)
-      (user-error "No live headline with id %s" id))
-    (let ((path (org-glance-graph:content-path graph id)))
-      (unless (f-exists? path)
-        (user-error "No stored content for id %s" id))
+      (user-error "No indexed live headline with id %s" id))
+    (let ((path (org-glance-cache:material-path graph id)))
+      (unless path
+        (user-error "No digest-verified current Snapshot for id %s" id))
       (when-let* ((existing (find-buffer-visiting path)))
         (when (equal id (buffer-local-value 'org-glance-material--id existing))
           (with-current-buffer existing

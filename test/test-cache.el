@@ -163,6 +163,36 @@
       (should (equal "legacy\n"
                      (f-read-text (f-join portable "legacy.jsonl") 'utf-8))))))
 
+(ert-deftest org-glance-test:material-path-is-the-digest-verified-current-projection ()
+  "The committed family pointer resolves exact bytes without a History scan."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-test:headline "material-path" "* TODO Material path" "body"))
+    (let ((path (cl-letf (((symbol-function 'org-glance-version:history)
+                           (lambda (&rest _) (ert-fail "cache read inspected History"))))
+                  (org-glance-cache:material-path graph "material-path"))))
+      (should (file-exists-p path))
+      (org-glance-test:write path "* TODO changed behind the cache\n")
+      (should-not (org-glance-cache:material-path graph "material-path")))))
+
+(ert-deftest org-glance-test:tag-filter-decodes-only-candidate-projections ()
+  "A tag query lets SQLite exclude unrelated committed Rows before JSON decode."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-test:headline "wanted" "* TODO Wanted :benchmark:")
+      (org-glance-test:headline "other" "* TODO Other :unrelated:"))
+    (let ((decoded 0)
+          (original (symbol-function 'org-glance-cache--decode-metadata)))
+      (cl-letf (((symbol-function 'org-glance-cache--decode-metadata)
+                 (lambda (payload)
+                   (cl-incf decoded)
+                   (funcall original payload))))
+        (should (equal '("wanted")
+                       (mapcar #'org-glance-headline-metadata:id
+                               (org-glance-cache:headlines-for-filter
+                                graph '(:tags ("benchmark"))))))
+        (should (= 1 decoded))))))
+
 (ert-deftest org-glance-test:family-inventory-is-search-authority-without-wal ()
   "A complete immutable family is searchable without a metadata notification."
   (org-glance-test:with-graph graph
@@ -823,47 +853,107 @@
       (org-glance-cache--start-inventory-timer nil)
       (should (equal '(1 37 org-glance-cache--inventory-tick) scheduled)))))
 
-(ert-deftest org-glance-test:graph-open-queues-cache-refresh-off-caller-thread ()
-  "Opening a graph returns before its cache reconciliation starts."
+(ert-deftest org-glance-test:graph-open-queues-cache-refresh-in-subprocess ()
+  "Opening a graph launches reconciliation outside interactive Emacs."
   (with-temp-directory dir
     (let ((graph (org-glance-graph dir)))
       (org-glance-graph:add graph
         (org-glance-test:headline "observed" "* Observed"))
       (remhash (org-glance-graph:directory graph) org-glance-graph:list))
     (let ((org-glance-cache--refresh-synchronously nil)
-          (org-glance-cache--refresh-threads (make-hash-table :test #'eq))
+          (org-glance-cache--refresh-processes (make-hash-table :test #'eq))
           (org-glance-cache--refresh-requested-at (make-hash-table :test #'eq)))
-      (let ((refreshes 0)
-            queued)
-        (cl-letf (((symbol-function 'make-thread)
-                   (lambda (function &optional _name)
-                     (setq queued function)
-                     'queued-thread))
-                  ((symbol-function 'org-glance-cache:refresh)
-                   (lambda (_graph) (cl-incf refreshes))))
+      (let (process-args)
+        (cl-letf (((symbol-function 'make-process)
+                   (lambda (&rest args)
+                     (setq process-args args)
+                     'queued-process))
+                  ((symbol-function 'make-thread)
+                   (lambda (&rest _) (ert-fail "reconciliation used an Emacs thread"))))
           (let ((graph (org-glance-graph dir)))
-            (should (= 0 refreshes))
-            (should (functionp queued))
+            (should (equal "org-glance-cache-refresh"
+                           (plist-get process-args :name)))
+            (should (member "--batch" (plist-get process-args :command)))
+            (should (member "--quick" (plist-get process-args :command)))
+            (should (cl-find-if
+                     (lambda (arg) (s-contains? (file-truename dir) arg))
+                     (plist-get process-args :command)))
             (should (equal '("observed") (org-glance-test:ids graph)))))))))
 
 (ert-deftest org-glance-test:startup-refresh-leaves-first-read-due ()
   "Startup work does not throttle the first post-open inventory request."
   (org-glance-test:with-graph graph
-    (let ((org-glance-cache--refresh-threads (make-hash-table :test #'eq))
+    (let ((org-glance-cache--refresh-processes (make-hash-table :test #'eq))
           (org-glance-cache--refresh-requested-at (make-hash-table :test #'eq))
-          queued)
-      (cl-letf (((symbol-function 'make-thread)
-                 (lambda (function &optional _name)
-                   (setq queued function)
-                   'queued-thread)))
+          launches)
+      (cl-letf (((symbol-function 'make-process)
+                 (lambda (&rest args)
+                   (push args launches)
+                   'queued-process)))
         (org-glance-cache:refresh-async graph t)
         (should-not (gethash graph org-glance-cache--refresh-requested-at))
-        (funcall queued)
-        (setq queued nil)
+        (remhash graph org-glance-cache--refresh-processes)
         (org-glance-cache:refresh-async graph)
-        (should (functionp queued))
+        (should (= 2 (length launches)))
         (should (numberp
                  (gethash graph org-glance-cache--refresh-requested-at)))))))
+
+(ert-deftest org-glance-test:cache-refresh-process-sentinel-retires-job ()
+  "A completed reconciliation process releases the graph's job slot."
+  (org-glance-test:with-graph graph
+    (let ((org-glance-cache--refresh-processes (make-hash-table :test #'eq))
+          (process 'fake-process))
+      (puthash graph process org-glance-cache--refresh-processes)
+      (cl-letf (((symbol-function 'process-status) (lambda (_process) 'exit))
+                ((symbol-function 'process-exit-status) (lambda (_process) 0)))
+        (org-glance-cache--refresh-finished graph process "finished\n"))
+      (should-not (gethash graph org-glance-cache--refresh-processes)))))
+
+(ert-deftest org-glance-test:cache-refresh-batch-runs-without-recursive-hooks ()
+  "The batch worker opens one graph and reconciles it exactly once."
+  (with-temp-directory dir
+    (let ((refreshes 0))
+      (cl-letf (((symbol-function 'org-glance-cache:refresh)
+                 (lambda (_graph) (cl-incf refreshes))))
+        (org-glance-cache:refresh-batch dir)
+        (should (= 1 refreshes))))))
+
+(ert-deftest org-glance-test:cache-refresh-worker-rebuilds-in-separate-emacs ()
+  "The real batch worker rebuilds a deleted cache and exits successfully."
+  (with-temp-directory dir
+    (let* ((graph (org-glance-graph dir))
+           (id "worker-visible")
+           (data-path (org-glance-graph:headline-data-path graph id)))
+      (org-glance-version:write-snapshot
+       data-path id nil "test"
+       (org-glance-test:org-with-id "* TODO Worker visible" id)
+       0)
+      (let ((cache (org-glance-cache:path graph)))
+        (when (file-exists-p cache) (delete-file cache)))
+      (remhash (org-glance-graph:directory graph) org-glance-graph:list)
+      (let* ((buffer (generate-new-buffer " *org-glance-worker-test*"))
+             (process
+              (make-process
+               :name "org-glance-worker-test"
+               :buffer buffer
+               :command (org-glance-cache--worker-command graph)
+               :connection-type 'pipe
+               :coding 'utf-8-unix
+               :noquery t)))
+        (unwind-protect
+            (progn
+              (while (process-live-p process)
+                (accept-process-output process 0.1))
+              (should (= 0 (process-exit-status process)))
+              (let ((db (sqlite-open (org-glance-cache:path graph))))
+                (unwind-protect
+                    (should (equal (list (list id "current"))
+                                   (sqlite-select
+                                    db
+                                    "SELECT logical_id,role FROM headline_projection WHERE logical_id=?"
+                                    (vector id))))
+                  (sqlite-close db))))
+          (when (buffer-live-p buffer) (kill-buffer buffer)))))))
 
 (ert-deftest org-glance-test:headline-read-queues-stale-inventory-off-caller-thread ()
   "A read queues stale-inventory work without reconciling on its caller."

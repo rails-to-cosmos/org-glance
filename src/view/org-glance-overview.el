@@ -18,6 +18,9 @@
 (require 'org-glance-material)
 (require 'org-glance-view)
 
+(declare-function org-glance-cache:headlines-for-filter
+                  "org-glance-cache" (graph filter))
+
 (require 'org-glance-core)
 (declare-function org-glance-table:visit "org-glance-table")
 (declare-function org-glance-table:visit-relations "org-glance-table" (graph id))
@@ -98,7 +101,7 @@ id."
 FILTER is nil (all), a bare tag, or a plist (`org-glance-filter:predicate').
 Prefix the pragmas FILTER's tags agree on; select by their cycle's done-set."
   (cl-check-type graph org-glance-graph)
-  (let* ((metas (org-glance-cache:headlines graph))
+  (let* ((metas (org-glance-cache:headlines-for-filter graph filter))
          (titles (make-hash-table :test #'equal :size (length metas)))
          (cycle (org-glance-tag-config:cycle-for-filter graph filter metas))
          (org-done-keywords (if cycle
@@ -109,6 +112,15 @@ Prefix the pragmas FILTER's tags agree on; select by their cycle's done-set."
       (let ((id (org-glance-headline-metadata:id meta)))
         (unless (gethash id titles)
           (puthash id (org-glance-headline-metadata:title meta) titles))))
+    (dolist (meta metas)
+      (dolist (relation (org-glance-headline-metadata:relations meta))
+        (let ((target (car relation)))
+          (unless (gethash target titles)
+            (when-let* ((target-meta (org-glance-cache:headline graph target)))
+              (when (org-glance-headline-metadata? target-meta)
+                (puthash target
+                         (org-glance-headline-metadata:title target-meta)
+                         titles)))))))
     ;; Join ONCE: `cl-loop ... concat' re-copies the accumulator -- O(N^2).
     (apply #'concat
            org-glance-overview:header
