@@ -756,6 +756,12 @@ today, up from 50.
     [[https://github.com/rails-to-cosmos/org-glance/commit/4352397][4352397]]
     =src/data/org-glance-cache.el:438= and pinned by
     =test/test-cache.el:499=.
+    Startup compares each observed event-id proof with the verified SQLite
+    checkpoint and projects only missing, damaged, or changed families.
+    Enforced by
+    [[https://github.com/rails-to-cosmos/org-glance/commit/ce1f45f][ce1f45f]]
+    =src/data/org-glance-cache.el:476= and pinned by
+    =test/test-cache.el:525=.
     Pinned by =shared-cache-inventory-finds-a-relay-free-snapshot= and
     =shared-cache-commit-failure-reaches-the-writer=.
 
