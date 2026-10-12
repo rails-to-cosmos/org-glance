@@ -762,6 +762,12 @@ today, up from 50.
     [[https://github.com/rails-to-cosmos/org-glance/commit/ce1f45f][ce1f45f]]
     =src/data/org-glance-cache.el:476= and pinned by
     =test/test-cache.el:525=.
+    The local SQLite projection persists that directory-entry proof; a new
+    process validates unchanged warm state without enumerating event
+    directories, while a peer publication invalidates it. Enforced by
+    [[https://github.com/rails-to-cosmos/org-glance/commit/842c26a][842c26a]]
+    =src/data/org-glance-cache.el:475= and pinned by
+    =test/test-cache.el:545=.
     Pinned by =shared-cache-inventory-finds-a-relay-free-snapshot= and
     =shared-cache-commit-failure-reaches-the-writer=.
 
