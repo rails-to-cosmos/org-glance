@@ -458,6 +458,44 @@
 (defvar org-glance-cache--observed-inventory-directories nil
   "Directory stamps accumulated by the current complete inventory.")
 
+(defconst org-glance-cache--git-proof-name "inventory-git-proof.eld"
+  "Machine-local clean-Git proof for the persisted family inventory.")
+
+(cl-defun org-glance-cache--git-output (directory &rest args)
+  "Return Git stdout for ARGS in DIRECTORY, or nil when the command fails."
+  (when (executable-find "git")
+    (with-temp-buffer
+      (let ((default-directory directory))
+        (when (= 0 (apply #'process-file "git" nil (list (current-buffer) nil)
+                          nil args))
+          (string-trim-right (buffer-string)))))))
+
+(cl-defun org-glance-cache--clean-git-proof (graph)
+  "Return GRAPH's clean repository identity and HEAD, or nil when uncertain."
+  (when-let* ((directory (org-glance-graph:directory graph))
+              (root (org-glance-cache--git-output
+                     directory "rev-parse" "--show-toplevel"))
+              ((not (string-empty-p root)))
+              (head (org-glance-cache--git-output root "rev-parse" "HEAD"))
+              ((not (string-empty-p head)))
+              (relative (file-relative-name directory root))
+              (status (org-glance-cache--git-output
+                       root "status" "--porcelain=v2" "--untracked-files=all"
+                       "--" relative))
+              ((string-empty-p status)))
+    (list :root (file-truename root) :directory relative :head head)))
+
+(cl-defun org-glance-cache--git-proof-path (graph)
+  "Return GRAPH's machine-local clean-Git proof path."
+  (org-glance-graph:cache-file graph org-glance-cache--git-proof-name))
+
+(cl-defun org-glance-cache--persist-git-proof (graph)
+  "Persist GRAPH's clean Git state, removing an inapplicable prior proof."
+  (if-let* ((proof (org-glance-cache--clean-git-proof graph)))
+      (org-glance-graph:cache-write graph org-glance-cache--git-proof-name proof)
+    (let ((path (org-glance-cache--git-proof-path graph)))
+      (when (f-exists? path) (f-delete path)))))
+
 (cl-defun org-glance-cache--directory-stamp (dir)
   "Return DIR's entry-change stamp, or nil when DIR disappeared."
   (when-let* ((attributes (file-attributes dir 'string)))
@@ -481,17 +519,22 @@
 
 (cl-defun org-glance-cache--inventory-proof-current-p (graph)
   "Return non-nil when GRAPH's last directory-entry proof remains current."
-  (when-let* ((proof
-               (or (gethash graph org-glance-cache--inventory-directory-proofs)
-                   (let ((loaded (org-glance-cache--load-inventory-proof graph)))
-                     (when loaded
-                       (puthash graph loaded
-                                org-glance-cache--inventory-directory-proofs)
-                       loaded)))))
-    (cl-every (lambda (entry)
-                (equal (cdr entry)
-                       (org-glance-cache--directory-stamp (car entry))))
-              proof)))
+  (let ((git-path (org-glance-cache--git-proof-path graph)))
+    (if (f-exists? git-path)
+        (when-let* ((held (org-glance-graph:cache-read
+                           graph org-glance-cache--git-proof-name)))
+          (equal held (org-glance-cache--clean-git-proof graph)))
+      (when-let* ((proof
+                   (or (gethash graph org-glance-cache--inventory-directory-proofs)
+                       (let ((loaded (org-glance-cache--load-inventory-proof graph)))
+                         (when loaded
+                           (puthash graph loaded
+                                    org-glance-cache--inventory-directory-proofs)
+                           loaded)))))
+        (cl-every (lambda (entry)
+                    (equal (cdr entry)
+                           (org-glance-cache--directory-stamp (car entry))))
+                  proof)))))
 
 (cl-defun org-glance-cache--load-inventory-proof (graph)
   "Return GRAPH's persisted directory-entry proof."
@@ -524,7 +567,8 @@
     (prog1 (funcall thunk)
       (let ((proof (delete-dups org-glance-cache--observed-inventory-directories)))
         (puthash graph proof org-glance-cache--inventory-directory-proofs)
-        (org-glance-cache--persist-inventory-proof graph proof)))))
+        (org-glance-cache--persist-inventory-proof graph proof)
+        (org-glance-cache--persist-git-proof graph)))))
 
 (cl-defun org-glance-cache--inventory-current-p (held family)
   "Return non-nil when HELD proves observed FAMILY is already projected."

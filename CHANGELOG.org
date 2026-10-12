@@ -5,6 +5,15 @@ Notable user-facing changes.  Versions date-based
 
 * Unreleased
 
+* 1.55.0.0.20261012.7
+
+** Changed
+
+- A complete inventory records a clean Git worktree and accepted HEAD.  An
+  unchanged warm startup validates that bounded proof instead of statting every
+  immutable-family directory; dirty or changed repositories retain the full
+  census fallback.
+
 * 1.55.0.0.20261012.6
 
 ** Changed

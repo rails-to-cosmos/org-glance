@@ -168,6 +168,56 @@
       (should (= count (length (org-glance-graph:headlines graph))))
       (should (< reads (* 8 count))))))
 
+(ert-deftest org-glance-test:clean-git-proof-skips-directory-stamps ()
+  "A clean accepted Git state validates without walking family directories."
+  (skip-unless (executable-find "git"))
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-test:headline "git-proof" "* TODO Git proof"))
+    (let ((default-directory (org-glance-graph:directory graph)))
+      (should (= 0 (process-file "git" nil nil nil "init" "-q")))
+      (should (= 0 (process-file "git" nil nil nil "add" "-A")))
+      (should (= 0 (process-file
+                    "git" nil nil nil "-c" "user.name=Benchmark"
+                    "-c" "user.email=benchmark@example.invalid"
+                    "commit" "-qm" "fixture"))))
+    (org-glance-cache:reconcile-inventory graph)
+    (let ((stamps 0)
+          (original (symbol-function 'org-glance-cache--directory-stamp)))
+      (cl-letf (((symbol-function 'org-glance-cache--directory-stamp)
+                 (lambda (&rest args)
+                   (cl-incf stamps)
+                   (apply original args))))
+        (org-glance-test:reopen graph)
+        (should (= 0 stamps))))))
+
+(ert-deftest org-glance-test:dirty-git-proof-selects-complete-census ()
+  "A worktree change invalidates the Git proof before directory fallback."
+  (skip-unless (executable-find "git"))
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-test:headline "git-dirty" "* TODO Git dirty"))
+    (let ((default-directory (org-glance-graph:directory graph)))
+      (should (= 0 (process-file "git" nil nil nil "init" "-q")))
+      (should (= 0 (process-file "git" nil nil nil "add" "-A")))
+      (should (= 0 (process-file
+                    "git" nil nil nil "-c" "user.name=Benchmark"
+                    "-c" "user.email=benchmark@example.invalid"
+                    "commit" "-qm" "fixture"))))
+    (org-glance-cache:reconcile-inventory graph)
+    (with-temp-buffer
+      (insert "changed")
+      (append-to-file (point-min) (point-max)
+                      (org-glance-graph:content-path graph "git-dirty")))
+    (let ((stamps 0)
+          (original (symbol-function 'org-glance-cache--directory-stamp)))
+      (cl-letf (((symbol-function 'org-glance-cache--directory-stamp)
+                 (lambda (&rest args)
+                   (cl-incf stamps)
+                   (apply original args))))
+        (org-glance-test:reopen graph)
+        (should (> stamps 0))))))
+
 (ert-deftest org-glance-test:family-damage-keeps-precise-logical-recovery-rows ()
   "Damaged Snapshot payloads remain searchable with precise recovery state."
   (org-glance-test:with-graph graph

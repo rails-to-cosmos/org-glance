@@ -36,7 +36,10 @@ OURS and THEIRS are newline-terminated line strings; the sole marker speller."
   (declare (indent 1))
   `(with-temp-directory dir
      (let ((,graph (org-glance-graph dir)))
-       ,@body)))
+       (unwind-protect
+           (progn ,@body)
+         (remhash (org-glance-graph:directory ,graph)
+                  org-glance-graph:list)))))
 
 (cl-defun org-glance-test:headline (id &rest lines)
   "Build an `org-glance-headline' carrying ID from LINES.

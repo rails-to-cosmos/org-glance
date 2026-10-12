@@ -73,6 +73,12 @@ argument in [[file:proposals][docs/proposals/]].
    consumer reuses it while the store snapshot is unchanged.  Re-scanning in
    the first Overview makes startup work proportional twice over.
 
+   A complete inventory may also persist a clean-Git proof containing the
+   repository root, graph-relative directory, and accepted HEAD.  The exact
+   same clean proof bypasses per-directory stamps on restart.  A missing,
+   corrupt, dirty, moved, or changed proof selects the complete directory
+   census; it never falls through to an older stamp proof.
+
 8. *Git conflicts heal by union merge.*  Gated by =org-glance-conflict-resolution=
    (ask/union/nil).  THE RESOLVER IS THE WAL'S AND NAMES IT POSITIVELY:
    =--conflicted-jsonl-files= takes the open segment and the sealed =seg-<gen>.jsonl=
