@@ -125,10 +125,18 @@ loaded package directory was replaced also discovers the newest installed
 package for its worker, and an exit-255 failure names the retained process
 buffer. org-glance 1.55.0.0.20261012.16 carries the fix.
 
-** TODO Publish full recovery as a separate committed generation
-The isolated process still refreshes the existing SQLite projection in phases.
-Build complete recovery state separately, validate it, then atomically publish
-one new generation. Reads must remain pinned to the prior complete generation.
+** DONE Publish full recovery as a separate committed generation
+Full recovery clones the shared cache, replaces only org-glance-owned state,
+replays every authoritative family, validates integrity, foreign keys, format,
+and readable projections, then atomically publishes the staged database. A
+failed build leaves the prior generation readable. Glance-owned Rows and their
+incoming edges survive the org-glance replay. Routine workers keep the existing
+generation and use incremental proof reconciliation; a missing cache selects
+staged recovery. A concurrent local event invalidates the staged inventory and
+forces retry without replacing its newly committed Row. Fourteen
+alternating-order samples over the 257-family fixed
+fixture measure 1,535.5 ms p50 and 1,663.8 ms p95 versus 1,531.7/1,621.2 ms
+for in-place replay; generation publication itself is 0.055 ms p50.
 
 ** DONE Publish graph changes to incremental consumers
 Graph commits now publish bounded Row IDs or structural invalidation through

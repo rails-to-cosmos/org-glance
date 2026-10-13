@@ -469,6 +469,12 @@
   (make-hash-table :test #'eq :weakness 'key)
   "Stable directory stamps for each live graph's last complete inventory.")
 
+(defvar org-glance-cache--recovery-publication-hook nil
+  "Function called after recovery validation and before cache publication.")
+
+(defvar org-glance-cache--recovery-phase-hook nil
+  "Function called with each recovery generation publication phase.")
+
 (defvar org-glance-cache--collect-inventory-proof nil
   "Non-nil while a complete inventory records stable directory stamps.")
 
@@ -548,10 +554,14 @@
                            (puthash graph loaded
                                     org-glance-cache--inventory-directory-proofs)
                            loaded)))))
-        (cl-every (lambda (entry)
-                    (equal (cdr entry)
-                           (org-glance-cache--directory-stamp (car entry))))
-                  proof)))))
+        (org-glance-cache--directory-proof-current-p proof)))))
+
+(cl-defun org-glance-cache--directory-proof-current-p (proof)
+  "Return non-nil when every directory stamp in PROOF remains current."
+  (cl-every (lambda (entry)
+              (equal (cdr entry)
+                     (org-glance-cache--directory-stamp (car entry))))
+            proof))
 
 (cl-defun org-glance-cache--load-inventory-proof (graph)
   "Return GRAPH's persisted directory-entry proof."
@@ -586,6 +596,146 @@
         (puthash graph proof org-glance-cache--inventory-directory-proofs)
         (org-glance-cache--persist-inventory-proof graph proof)
         (org-glance-cache--persist-git-proof graph)))))
+
+(cl-defun org-glance-cache:publish-staged (live stage &optional hook)
+  "Validate STAGE and atomically replace the database at LIVE.
+Call HOOK after validation and before publication when non-nil."
+  (let ((db (sqlite-open stage)))
+    (unwind-protect
+        (progn
+          (unless (equal '(("ok")) (sqlite-select db "PRAGMA integrity_check"))
+            (error "org-glance: staged SQLite integrity failure"))
+          (when (sqlite-select db "PRAGMA foreign_key_check")
+            (error "org-glance: staged SQLite foreign-key failure"))
+          (unless (= org-glance-cache:version
+                     (caar (sqlite-select db "PRAGMA user_version")))
+            (error "org-glance: staged SQLite format mismatch"))
+          (when (sqlite-select
+                 db
+                 "SELECT logical_id FROM headline_projection WHERE role IN ('current','conflict','recovery','rejected') AND (record_payload IS NULL OR NOT json_valid(record_payload)) LIMIT 1")
+            (error "org-glance: staged SQLite projection failure"))
+          (sqlite-select db "PRAGMA wal_checkpoint(TRUNCATE)")
+          (sqlite-select db "PRAGMA journal_mode=DELETE"))
+      (sqlite-close db)))
+  (when hook (funcall hook))
+  (dolist (sidecar (list (concat live "-shm") (concat live "-wal")))
+    (when (file-exists-p sidecar) (delete-file sidecar)))
+  (rename-file stage live t))
+
+(cl-defun org-glance-cache--clone-live-generation (live stage)
+  "Copy LIVE's committed database generation to STAGE when it exists."
+  (when (file-exists-p live)
+    (let ((db (sqlite-open live)))
+      (unwind-protect
+          (progn
+            (sqlite-execute db "PRAGMA busy_timeout=5000")
+            (sqlite-execute db "VACUUM INTO ?" (vector stage)))
+        (sqlite-close db)))))
+
+(cl-defun org-glance-cache--generation-token (path)
+  "Return an O(1) token for the committed SQLite generation at PATH."
+  (mapcar
+   (lambda (candidate)
+     (when-let* ((attributes (file-attributes candidate 'string)))
+       (list (file-attribute-file-identifier attributes)
+             (file-attribute-size attributes)
+             (file-attribute-modification-time attributes)
+             (file-attribute-status-change-time attributes))))
+   (list path (concat path "-wal"))))
+
+(cl-defun org-glance-cache--clear-owned-generation (graph)
+  "Remove org-glance-owned state and return incoming shared edges from GRAPH."
+  (org-glance-cache--with-db
+   graph
+   (lambda (db)
+     (org-glance-cache--transaction
+      db
+      (lambda ()
+        (let ((incoming
+               (sqlite-select
+                db
+                "SELECT edge.src,edge.dst,dst_headline.org_id,edge.kind,edge.via FROM edge JOIN headline AS src_headline ON edge.src=src_headline.id JOIN headline AS dst_headline ON edge.dst=dst_headline.id WHERE src_headline.producer!='org-glance' AND dst_headline.producer='org-glance'")))
+          (sqlite-execute db "DELETE FROM headline_family")
+          (sqlite-execute db "DELETE FROM headline WHERE producer='org-glance'")
+          (sqlite-execute db "DELETE FROM source WHERE producer='org-glance'")
+          (sqlite-execute db "DELETE FROM inventory_directory")
+          incoming))))))
+
+(cl-defun org-glance-cache--restore-shared-edges (graph edges)
+  "Restore non-org-glance producer EDGES into GRAPH's selected cache."
+  (org-glance-cache--with-db
+   graph
+   (lambda (db)
+     (org-glance-cache--transaction
+      db
+      (lambda ()
+        (dolist (edge edges)
+          (when-let* ((source
+                       (caar (sqlite-select
+                              db "SELECT id FROM headline WHERE id=?"
+                              (vector (nth 0 edge)))))
+                      (target
+                       (or (caar (sqlite-select
+                                  db "SELECT id FROM headline WHERE id=?"
+                                  (vector (nth 1 edge))))
+                           (caar (sqlite-select
+                                  db
+                                  "SELECT id FROM headline WHERE org_id=? ORDER BY rowid LIMIT 1"
+                                  (vector (nth 2 edge)))))))
+            (sqlite-execute
+             db "INSERT OR IGNORE INTO edge(src,dst,kind,via) VALUES(?,?,?,?)"
+             (vector source target (nth 3 edge) (nth 4 edge))))))))))
+
+(cl-defun org-glance-cache:recover (graph)
+  "Rebuild GRAPH into a separate generation and publish it atomically."
+  (let* ((live (org-glance-cache:path graph))
+         (parent (file-name-directory live))
+         (_ (make-directory parent t))
+         (stage-dir (make-temp-file
+                     (expand-file-name ".recovery-stage-" parent) t))
+         (stage (expand-file-name "glance.sqlite3" stage-dir))
+         (missing (make-symbol "missing"))
+         (previous-proof
+          (gethash graph org-glance-cache--inventory-directory-proofs missing))
+         live-token
+         retained-edges
+         published)
+    (unwind-protect
+        (progn
+          (org-glance-cache--clone-live-generation live stage)
+          (setq live-token (org-glance-cache--generation-token live))
+          (cl-letf (((symbol-function 'org-glance-cache:path)
+                     (lambda (_graph) stage))
+                    ((symbol-function 'org-glance-cache--inventory-proof-current-p)
+                     (lambda (_graph) nil))
+                    ((symbol-function 'org-glance-cache--persist-git-proof)
+                     (lambda (_graph) nil)))
+            (setq retained-edges
+                  (org-glance-cache--clear-owned-generation graph))
+            (org-glance-cache:refresh graph)
+            (org-glance-cache--restore-shared-edges graph retained-edges))
+          (org-glance-cache:publish-staged
+           live stage
+           (lambda ()
+             (when org-glance-cache--recovery-publication-hook
+               (funcall org-glance-cache--recovery-publication-hook))
+             (let ((current-token (org-glance-cache--generation-token live)))
+               (unless (equal live-token current-token)
+                 (error "org-glance: live generation changed before publication")))
+             (when org-glance-cache--recovery-phase-hook
+               (funcall org-glance-cache--recovery-phase-hook
+                        'before-publication))))
+          (when org-glance-cache--recovery-phase-hook
+            (funcall org-glance-cache--recovery-phase-hook 'after-publication))
+          (setq published t)
+          (org-glance-cache--persist-git-proof graph)
+          (org-glance-graph--invalidate-cache graph))
+      (unless published
+        (if (eq previous-proof missing)
+            (remhash graph org-glance-cache--inventory-directory-proofs)
+          (puthash graph previous-proof
+                   org-glance-cache--inventory-directory-proofs)))
+      (when (file-exists-p stage-dir) (delete-directory stage-dir t)))))
 
 (cl-defun org-glance-cache--inventory-current-p (held family)
   "Return non-nil when HELD proves observed FAMILY is already projected."
@@ -895,8 +1045,11 @@ Return the number of families folded."
 
 (cl-defun org-glance-cache:refresh-batch (directory)
   "Reconcile DIRECTORY once in the current noninteractive Emacs."
-  (let ((org-glance-graph-after-open-functions nil))
-    (org-glance-cache:refresh (org-glance-graph directory))))
+  (let* ((org-glance-graph-after-open-functions nil)
+         (graph (org-glance-graph directory)))
+    (if (file-exists-p (org-glance-cache:path graph))
+        (org-glance-cache:refresh graph)
+      (org-glance-cache:recover graph))))
 
 (cl-defun org-glance-cache--refresh-finished (graph process event)
   "Retire GRAPH's PROCESS and report its terminal EVENT."

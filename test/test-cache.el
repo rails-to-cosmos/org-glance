@@ -946,13 +946,121 @@
       (should-not (gethash graph org-glance-cache--refresh-processes)))))
 
 (ert-deftest org-glance-test:cache-refresh-batch-runs-without-recursive-hooks ()
-  "The batch worker opens one graph and reconciles it exactly once."
+  "The batch worker recovers a missing generation exactly once."
   (with-temp-directory dir
+    (let ((recoveries 0))
+      (cl-letf (((symbol-function 'org-glance-cache:recover)
+                 (lambda (_graph) (cl-incf recoveries))))
+        (org-glance-cache:refresh-batch dir)
+        (should (= 1 recoveries))))))
+
+(ert-deftest org-glance-test:cache-refresh-batch-keeps-an-existing-generation ()
+  "The routine worker incrementally reconciles an existing generation."
+  (org-glance-test:with-graph graph
     (let ((refreshes 0))
       (cl-letf (((symbol-function 'org-glance-cache:refresh)
-                 (lambda (_graph) (cl-incf refreshes))))
-        (org-glance-cache:refresh-batch dir)
+                 (lambda (_graph) (cl-incf refreshes)))
+                ((symbol-function 'org-glance-cache:recover)
+                 (lambda (_graph) (ert-fail "existing cache entered recovery"))))
+        (org-glance-cache:refresh-batch (org-glance-graph:directory graph))
         (should (= 1 refreshes))))))
+
+(ert-deftest org-glance-test:cache-recovery-publishes-one-complete-generation ()
+  "Failed recovery preserves the readable generation; retry replaces it."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-test:headline "generation" "* TODO Authoritative"))
+    (let ((db (sqlite-open (org-glance-cache:path graph))))
+      (unwind-protect
+          (let* ((payload
+                  (caar (sqlite-select
+                         db "SELECT org_headline.record FROM org_headline JOIN headline USING(id) WHERE headline.org_id='generation'")))
+                 (record (json-parse-string payload :object-type 'plist)))
+            (sqlite-execute db "UPDATE headline SET title='Retained' WHERE org_id='generation'")
+            (sqlite-execute
+             db "UPDATE org_headline SET record=? WHERE id=(SELECT id FROM headline WHERE org_id='generation')"
+             (vector (json-serialize (plist-put record :title "Retained"))))
+            (sqlite-execute
+             db "UPDATE headline_projection SET record_payload=? WHERE logical_id='generation'"
+             (vector (json-serialize record)))
+            (sqlite-execute
+             db "UPDATE producer_projection SET record_payload=? WHERE logical_id='generation'"
+             (vector (json-serialize record))))
+        (sqlite-close db)))
+    (should (equal "Retained"
+                   (org-glance-headline-metadata:title
+                    (org-glance-cache:headline graph "generation"))))
+    (let* ((observed (vector nil))
+          (org-glance-cache--recovery-publication-hook
+           (lambda ()
+             (aset observed 0
+                   (org-glance-headline-metadata:title
+                    (org-glance-cache:headline graph "generation")))
+             (error "simulated recovery publication failure"))))
+      (should-error (org-glance-cache:recover graph) :type 'error)
+      (should (equal "Retained" (aref observed 0))))
+    (should (equal "Retained"
+                   (org-glance-headline-metadata:title
+                    (org-glance-cache:headline graph "generation"))))
+    (org-glance-cache:recover graph)
+    (should (equal "Authoritative"
+                   (org-glance-headline-metadata:title
+                    (org-glance-cache:headline graph "generation"))))))
+
+(ert-deftest org-glance-test:cache-recovery-preserves-glance-projections ()
+  "Recovery replaces org-glance state without dropping shared Glance rows."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-test:headline "owned" "* TODO Owned"))
+    (let ((db (sqlite-open (org-glance-cache:path graph))))
+      (unwind-protect
+          (progn
+            (sqlite-execute
+             db
+             "INSERT INTO source(path,digest,producer) VALUES('/glance.org','digest','glance')")
+            (sqlite-execute
+             db
+             "INSERT INTO headline(id,path,digest,title,tags,category,producer) VALUES('glance-row','/glance.org','digest','Glance row','','','glance')")
+            (sqlite-execute
+             db
+             "INSERT INTO edge(src,dst,kind,via) SELECT 'glance-row',id,'mentions','row' FROM headline WHERE org_id='owned' LIMIT 1"))
+        (sqlite-close db)))
+    (org-glance-cache:recover graph)
+    (let ((db (sqlite-open (org-glance-cache:path graph))))
+      (unwind-protect
+          (should
+           (equal '(("Glance row" "glance"))
+                  (sqlite-select
+                   db
+                   "SELECT title,producer FROM headline WHERE id='glance-row'")))
+          (should
+           (equal '(("glance-row" "owned" "mentions" "row"))
+                  (sqlite-select
+                   db
+                   "SELECT edge.src,headline.org_id,edge.kind,edge.via FROM edge JOIN headline ON edge.dst=headline.id WHERE edge.src='glance-row'")))
+        (sqlite-close db)))))
+
+(ert-deftest org-glance-test:cache-recovery-refuses-a-concurrent-publication ()
+  "Recovery cannot replace a local Row committed after its inventory proof."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-test:headline "concurrent" "* TODO Before"))
+    (let ((proof-scans 0)
+          (original (symbol-function
+                     'org-glance-cache--directory-proof-current-p))
+          (org-glance-cache--recovery-publication-hook
+           (lambda ()
+             (org-glance-graph:add graph
+               (org-glance-test:headline "concurrent" "* TODO Concurrent")))))
+      (cl-letf (((symbol-function 'org-glance-cache--directory-proof-current-p)
+                 (lambda (&rest args)
+                   (cl-incf proof-scans)
+                   (apply original args))))
+        (should-error (org-glance-cache:recover graph) :type 'error)
+        (should (= 0 proof-scans))))
+    (should (equal "Concurrent"
+                   (org-glance-headline-metadata:title
+                    (org-glance-cache:headline graph "concurrent"))))))
 
 (ert-deftest org-glance-test:cache-refresh-worker-rebuilds-in-separate-emacs ()
   "The real batch worker rebuilds a deleted cache and exits successfully."

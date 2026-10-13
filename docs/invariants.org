@@ -840,6 +840,21 @@ today, up from 50.
     outside the graph are refused.  Pinned by
     =checkpoint-source-paths-come-from-verified-inventory=.
 
+44. *Full recovery publishes one complete cache generation.*  Replay occurs in
+    a staged SQLite database. Integrity, foreign keys, cache format, and
+    readable projection payloads validate before atomic publication. Failure
+    preserves the prior readable database and its inventory proof. The replay
+    replaces org-glance-owned state while retaining Glance-owned Rows and
+    incoming Glance relations. A local event committed during replay invalidates
+    the stage before rename and remains visible. Routine background
+    reconciliation uses the existing generation and enters full recovery only
+    when no cache exists.
+    Pinned by =cache-recovery-publishes-one-complete-generation=,
+    =cache-recovery-preserves-glance-projections=,
+    =cache-recovery-refuses-a-concurrent-publication=,
+    =cache-refresh-batch-keeps-an-existing-generation=, and
+    =cache-refresh-worker-rebuilds-in-separate-emacs=.
+
 * Known hazards
 
 Costs the code ships WITH, deliberately.  Each was reproduced with a probe and each

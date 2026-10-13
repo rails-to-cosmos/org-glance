@@ -10,6 +10,9 @@
 (require 'org-glance-graph)
 (require 'org-glance-utils)
 
+(declare-function org-glance-cache:publish-staged
+                  "org-glance-cache" (live stage &optional hook))
+
 (defconst org-glance-checkpoint:schema "org-glance.repository-checkpoint/1")
 
 (defconst org-glance-checkpoint:producer "org-glance-logical-projection-1")
@@ -462,22 +465,8 @@ LOCALIZE translates a portable path back into GRAPH."
                      (lambda (_graph) stage)))
             (setq written
                   (org-glance-checkpoint--hydrate-artifact graph artifact)))
-          (let ((db (sqlite-open stage)))
-            (unwind-protect
-                (progn
-                  (unless (equal '(("ok"))
-                                 (sqlite-select db "PRAGMA integrity_check"))
-                    (error "org-glance: checkpoint SQLite integrity failure"))
-                  (when (sqlite-select db "PRAGMA foreign_key_check")
-                    (error "org-glance: checkpoint foreign-key failure"))
-                  (sqlite-select db "PRAGMA wal_checkpoint(TRUNCATE)")
-                  (sqlite-select db "PRAGMA journal_mode=DELETE"))
-              (sqlite-close db)))
-          (when org-glance-checkpoint--publication-hook
-            (funcall org-glance-checkpoint--publication-hook))
-          (dolist (sidecar (list (concat live "-shm") (concat live "-wal")))
-            (when (file-exists-p sidecar) (delete-file sidecar)))
-          (rename-file stage live t)
+          (org-glance-cache:publish-staged
+           live stage org-glance-checkpoint--publication-hook)
           written)
       (when (file-exists-p stage-dir) (delete-directory stage-dir t)))))
 

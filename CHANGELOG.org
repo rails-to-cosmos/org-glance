@@ -5,6 +5,18 @@ Notable user-facing changes.  Versions date-based
 
 * Unreleased
 
+* 1.55.0.0.20261013.0
+
+** Changed
+
+- Full cache recovery builds and validates a separate SQLite generation before
+  one atomic publication. A failed replay leaves the readable generation in
+  place, routine reconciliation retains its incremental path, and recovery
+  preserves Glance-owned Rows and incoming relations in the shared cache. A
+  local event published during replay invalidates the stage and remains live.
+- Checkpoint hydration and full recovery share one staged-database validation
+  and publication boundary.
+
 * 1.55.0.0.20261012.18
 
 ** Changed
