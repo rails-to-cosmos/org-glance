@@ -5,6 +5,8 @@ Notable user-facing changes.  Versions date-based
 
 * Unreleased
 
+* 1.55.0.0.20261013.2
+
 ** Changed
 
 - Graph reads no longer survey or fold the external relay or request cache
