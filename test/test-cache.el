@@ -319,6 +319,46 @@
         (org-glance-test:reopen graph)
         (should (> stamps 0))))))
 
+(ert-deftest org-glance-test:clean-git-transition-folds-only-changed-families ()
+  "A clean commit delta bypasses the complete family census."
+  (skip-unless (executable-find "git"))
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-test:headline "changed-family" "* TODO Before")
+      (org-glance-test:headline "stable-family" "* TODO Stable"))
+    (let ((default-directory (org-glance-graph:directory graph)))
+      (should (= 0 (process-file "git" nil nil nil "init" "-q")))
+      (should (= 0 (process-file "git" nil nil nil "add" "-A")))
+      (should (= 0 (process-file
+                    "git" nil nil nil "-c" "user.name=Benchmark"
+                    "-c" "user.email=benchmark@example.invalid"
+                    "commit" "-qm" "before"))))
+    (org-glance-cache:reconcile-inventory graph)
+    (let* ((dir (org-glance-graph:headline-data-path graph "changed-family"))
+           (leaf (car (org-glance-version:current dir "changed-family"))))
+      (org-glance-version:write-snapshot
+       dir "changed-family" (list (org-glance-version:id leaf)) "peer"
+       (org-glance-test:org-with-id "* DONE After" "changed-family")))
+    (let ((default-directory (org-glance-graph:directory graph)))
+      (should (= 0 (process-file "git" nil nil nil "add" "-A")))
+      (should (= 0 (process-file
+                    "git" nil nil nil "-c" "user.name=Benchmark"
+                    "-c" "user.email=benchmark@example.invalid"
+                    "commit" "-qm" "after"))))
+    (let ((folded nil)
+          (original (symbol-function 'org-glance-cache--project-family)))
+      (cl-letf (((symbol-function 'org-glance-cache--family-ids)
+                 (lambda (_graph) (ert-fail "clean delta entered full census")))
+                ((symbol-function 'org-glance-cache--project-family)
+                 (lambda (db held-graph id &rest inventory)
+                   (push id folded)
+                   (apply original db held-graph id inventory))))
+        (should (= 1 (org-glance-cache:reconcile-inventory graph)))
+        (should (equal '("changed-family") folded))))
+    (should (equal "After"
+                   (org-glance-headline-metadata:title
+                    (org-glance-cache:metadata graph "changed-family"))))))
+
 (ert-deftest org-glance-test:family-damage-keeps-precise-logical-recovery-rows ()
   "Damaged Snapshot payloads remain searchable with precise recovery state."
   (org-glance-test:with-graph graph
@@ -957,13 +997,15 @@
 (ert-deftest org-glance-test:cache-refresh-batch-keeps-an-existing-generation ()
   "The routine worker incrementally reconciles an existing generation."
   (org-glance-test:with-graph graph
-    (let ((refreshes 0))
-      (cl-letf (((symbol-function 'org-glance-cache:refresh)
-                 (lambda (_graph) (cl-incf refreshes)))
+    (let ((reconciliations 0))
+      (cl-letf (((symbol-function 'org-glance-cache:reconcile-inventory)
+                 (lambda (_graph) (cl-incf reconciliations)))
+                ((symbol-function 'org-glance-cache:refresh)
+                 (lambda (_graph) (ert-fail "existing cache entered full refresh")))
                 ((symbol-function 'org-glance-cache:recover)
                  (lambda (_graph) (ert-fail "existing cache entered recovery"))))
         (org-glance-cache:refresh-batch (org-glance-graph:directory graph))
-        (should (= 1 refreshes))))))
+        (should (= 1 reconciliations))))))
 
 (ert-deftest org-glance-test:cache-recovery-publishes-one-complete-generation ()
   "Failed recovery preserves the readable generation; retry replaces it."

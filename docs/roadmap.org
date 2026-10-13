@@ -138,6 +138,14 @@ alternating-order samples over the 257-family fixed
 fixture measure 1,535.5 ms p50 and 1,663.8 ms p95 versus 1,531.7/1,621.2 ms
 for in-place replay; generation publication itself is 0.055 ms p50.
 
+** DONE Reconcile clean Git event transitions incrementally
+The existing-cache batch worker compares the accepted and current clean commits,
+maps changed immutable paths to logical family IDs, and folds only those
+families. Dirty, incompatible, or unclassifiable transitions retain the complete
+census; missing caches retain staged full recovery. On a 1,000-family fixture
+with one changed family, completion falls from 3,062.6 to 663.5 ms p50 and
+maximum foreground probe latency from 142.9 to 81.7 ms.
+
 ** DONE Publish graph changes to incremental consumers
 Graph commits now publish bounded Row IDs or structural invalidation through
 error-isolated graph listeners. Open views subscribe once; unfiltered Overview

@@ -519,6 +519,46 @@
     (let ((path (org-glance-cache--git-proof-path graph)))
       (when (f-exists? path) (f-delete path)))))
 
+(cl-defun org-glance-cache--git-diff-paths (root before after relative)
+  "Return (t . PATHS) changed from BEFORE to AFTER below RELATIVE, or nil."
+  (with-temp-buffer
+    (let ((default-directory root))
+      (when (= 0 (process-file "git" nil (current-buffer) nil
+                               "diff" "--name-only" "-z"
+                               before after "--" relative))
+        (cons t (split-string (buffer-string) "\0" t))))))
+
+(cl-defun org-glance-cache--family-id-from-git-path (data-relative path)
+  "Return the family ID below DATA-RELATIVE named by Git PATH."
+  (when (string-prefix-p (file-name-as-directory data-relative) path)
+    (let* ((tail (string-remove-prefix
+                  (file-name-as-directory data-relative) path))
+           (parts (split-string tail "/" t))
+           (versions (cl-position "versions" parts :test #'equal)))
+      (when (memq versions '(1 2))
+        (mapconcat #'identity (cl-subseq parts 0 versions) "")))))
+
+(cl-defun org-glance-cache--clean-git-family-delta (graph)
+  "Return (:proof PROOF :ids IDS) for a safe clean Git transition, or nil."
+  (when-let* ((held (org-glance-graph:cache-read
+                     graph org-glance-cache--git-proof-name))
+              (current (org-glance-cache--clean-git-proof graph))
+              ((equal (plist-get held :root) (plist-get current :root)))
+              ((equal (plist-get held :directory)
+                      (plist-get current :directory)))
+              (root (plist-get current :root))
+              (data-relative
+               (file-relative-name (org-glance-graph:data-path graph) root))
+              (diff (org-glance-cache--git-diff-paths
+                     root (plist-get held :head) (plist-get current :head)
+                     data-relative)))
+    (let ((ids (mapcar (apply-partially
+                        #'org-glance-cache--family-id-from-git-path
+                        data-relative)
+                       (cdr diff))))
+      (when (cl-every #'identity ids)
+        (list :proof current :ids (sort (delete-dups ids) #'string<))))))
+
 (cl-defun org-glance-cache--directory-stamp (dir)
   "Return DIR's entry-change stamp, or nil when DIR disappeared."
   (when-let* ((attributes (file-attributes dir 'string)))
@@ -982,10 +1022,19 @@ COMPLETED and TOTAL count UNIT values."
 (cl-defun org-glance-cache:reconcile-inventory (graph)
   "Reconcile immutable families whose inventory checkpoint changed in GRAPH.
 Return the number of families folded."
-  (org-glance-cache--record-complete-inventory
-   graph
-   (lambda ()
-     (let ((current (org-glance-cache--family-ids graph)))
+  (if-let* ((delta (org-glance-cache--clean-git-family-delta graph)))
+      (let ((ids (plist-get delta :ids)))
+        (message "org-glance: cache reconcile: clean Git delta (%d families)"
+                 (length ids))
+        (org-glance-cache:reconcile-families graph ids)
+        (org-glance-graph:cache-write
+         graph org-glance-cache--git-proof-name (plist-get delta :proof))
+        (length ids))
+    (message "org-glance: cache reconcile: complete census (no safe clean Git transition)")
+    (org-glance-cache--record-complete-inventory
+     graph
+     (lambda ()
+       (let ((current (org-glance-cache--family-ids graph)))
        (org-glance-cache--with-db
         graph
         (lambda (db)
@@ -1011,7 +1060,7 @@ Return the number of families folded."
             (dolist (family changed)
               (org-glance-cache--project-family
                db graph (car family) (cdr family)))))
-            (length changed))))))))
+            (length changed)))))))))
 
 (cl-defun org-glance-cache:reconcile-inventory-maybe (graph)
   "Reconcile GRAPH's immutable inventory when its directory proof changed."
@@ -1048,7 +1097,7 @@ Return the number of families folded."
   (let* ((org-glance-graph-after-open-functions nil)
          (graph (org-glance-graph directory)))
     (if (file-exists-p (org-glance-cache:path graph))
-        (org-glance-cache:refresh graph)
+        (org-glance-cache:reconcile-inventory graph)
       (org-glance-cache:recover graph))))
 
 (cl-defun org-glance-cache--refresh-finished (graph process event)

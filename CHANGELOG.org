@@ -5,6 +5,14 @@ Notable user-facing changes.  Versions date-based
 
 * Unreleased
 
+* 1.55.0.0.20261013.1
+
+** Changed
+
+- Existing-cache workers derive changed immutable families from clean Git
+  commit transitions and fold only those families. Dirty or ambiguous states
+  retain complete-census recovery.
+
 * 1.55.0.0.20261013.0
 
 ** Changed

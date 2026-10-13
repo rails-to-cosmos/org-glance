@@ -855,6 +855,14 @@ today, up from 50.
     =cache-refresh-batch-keeps-an-existing-generation=, and
     =cache-refresh-worker-rebuilds-in-separate-emacs=.
 
+45. *Clean Git transitions reconcile only changed immutable families.*  The
+    accepted and current clean proofs define an exact path delta. Classifiable
+    event paths map to logical family IDs and only those families fold. Dirty,
+    incompatible, or unclassifiable transitions select the complete census;
+    missing caches select staged recovery. Pinned by
+    =clean-git-transition-folds-only-changed-families= and
+    =cache-refresh-batch-keeps-an-existing-generation=.
+
 * Known hazards
 
 Costs the code ships WITH, deliberately.  Each was reproduced with a probe and each
