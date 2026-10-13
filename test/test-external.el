@@ -294,57 +294,17 @@ edit invalidates a rendered overview the way a WAL append does."
       (org-glance-test:external-write graph "id1")
       (should-not (org-glance-overview:fresh? graph file)))))
 
-(ert-deftest org-glance-test:external-read-folds-without-asking ()
-  "A plain READ folds pending notes in and spends their bytes (invariant 33)."
-  (let ((org-glance-graph-external-poll-seconds 0))
-    (org-glance-test:with-graph graph
-      (org-glance-graph:add graph (org-glance-test:headline "id1" "* TODO foo"))
-      (org-glance-test:edit-blob graph "id1" "* TODO foo" "* DONE foo")
-      (org-glance-test:external-write graph "id1")
-      (should (string= "DONE" (org-glance-test:field graph "id1" state)))
-      (should (string= "" (org-glance-test:external-pending graph))))))
-
-(ert-deftest org-glance-test:external-read-fold-is-throttled ()
-  "The read-path fold is throttled by `org-glance-graph-external-poll-seconds';
-`org-glance-graph:refresh-external' never is."
+(ert-deftest org-glance-test:external-read-does-not-fold-or-spend ()
+  "A plain read leaves external delivery to explicit or scheduled maintenance."
   (org-glance-test:with-graph graph
-    (let ((org-glance-graph-external-poll-seconds 0))
-      (org-glance-graph:add graph (org-glance-test:headline "id1" "* TODO foo"))
-      (org-glance-test:field graph "id1" state))          ; stamps the check
-    (let ((org-glance-graph-external-poll-seconds 3600))
-      (org-glance-test:edit-blob graph "id1" "* TODO foo" "* DONE foo")
-      (org-glance-test:external-write graph "id1")
-      (should (string= "TODO" (org-glance-test:field graph "id1" state)))
-      (should (= 1 (org-glance-graph:refresh-external graph)))   ; never throttled
-      (should (string= "DONE" (org-glance-test:field graph "id1" state))))))
-
-(ert-deftest org-glance-test:external-read-fold-does-not-reenter ()
-  "The fold's OWN reads never fold again: one refresh per read."
-  (let ((org-glance-graph-external-poll-seconds 0))
-    (org-glance-test:with-graph graph
-      (org-glance-graph:add graph (org-glance-test:headline "id1" "* TODO foo"))
-      (org-glance-test:edit-blob graph "id1" "* TODO foo" "* DONE foo")
-      (org-glance-test:external-write graph "id1")
-      (let ((calls 0)
-            (real (symbol-function 'org-glance-graph:refresh-external)))
-        (cl-letf (((symbol-function 'org-glance-graph:refresh-external)
-                   (lambda (&rest args) (cl-incf calls) (apply real args))))
-          (should (string= "DONE" (org-glance-test:field graph "id1" state))))
-        (should (= 1 calls))))))
-
-(ert-deftest org-glance-test:external-read-fold-survives-a-failure ()
-  "A failed relay fold leaves its cursor while inventory serves the event."
-  (let ((org-glance-graph-external-poll-seconds 0)
-        (debug-on-error t))
-    (org-glance-test:with-graph graph
-      (org-glance-graph:add graph (org-glance-test:headline "id1" "* TODO foo"))
-      (org-glance-test:edit-blob graph "id1" "* TODO foo" "* DONE foo")
-      (org-glance-test:external-write graph "id1")
-      (cl-letf (((symbol-function 'org-glance-graph--read-external)
-                 (lambda (&rest _) (error "boom"))))
-        (should (string= "DONE" (org-glance-test:field graph "id1" state))))
-      (should (string-match-p "id1" (org-glance-test:external-pending graph)))
-      (should (string= "DONE" (org-glance-test:field graph "id1" state))))))
+    (org-glance-graph:add graph (org-glance-test:headline "id1" "* TODO foo"))
+    (org-glance-test:edit-blob graph "id1" "* TODO foo" "* DONE foo")
+    (org-glance-test:external-write graph "id1")
+    (should (string= "TODO" (org-glance-test:field graph "id1" state)))
+    (should (string-match-p "id1" (org-glance-test:external-pending graph)))
+    (should (= 1 (org-glance-graph:refresh-external graph)))
+    (should (string= "DONE" (org-glance-test:field graph "id1" state)))
+    (should (string= "" (org-glance-test:external-pending graph)))))
 
 (ert-deftest org-glance-test:external-refresh-folds-a-delete-in ()
   "A tombstone line deletes the entry: `get-headline' answers the symbol and the
@@ -578,26 +538,26 @@ READ time, over the bytes folded; the one case a write-time digest reddens."
 
 (ert-deftest org-glance-test:external-a-same-size-rewrite-of-a-drained-file-is-pending ()
   "A drained file replaced whole at the same size polls pending by its WINDOW,
-and a plain read folds the new tombstone.  Fixed-width lines make this the
-typical re-laying, which a size comparison cannot see."
-  (let ((org-glance-graph-external-poll-seconds 0))
-    (org-glance-test:with-graph graph
-      (org-glance-graph:add graph (org-glance-test:headline "aaa" "* TODO foo"))
-      (org-glance-graph:add graph (org-glance-test:headline "bbb" "* TODO bar"))
-      (org-glance-test:external-delete graph "aaa")
-      (should (= 1 (org-glance-graph:refresh-external graph)))
-      (let* ((path (org-glance-graph:external-path graph))
-             (size (f-size path)))
-        (should (org-glance-graph--external-drained? path))
-        ;; The poll's window equals the fold's: two spellings of one rule.
-        (should (string= (plist-get (org-glance-graph--external-cursor path) :window)
-                         (org-glance-graph--external-window path size)))
-        (org-glance-test:write path (org-glance-test:external-line "bbb" t))
-        (should (= size (f-size path)))
-        (should-not (org-glance-graph--external-drained? path))
-        (should (org-glance-graph--external-pending-p graph)))
-      (should (eq 'tombstone (org-glance-graph:get-headline graph "bbb")))
-      (should (string= "" (org-glance-test:external-pending graph))))))
+and explicit maintenance folds the new tombstone. Fixed-width lines make this
+the typical re-laying, which a size comparison cannot see."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "aaa" "* TODO foo"))
+    (org-glance-graph:add graph (org-glance-test:headline "bbb" "* TODO bar"))
+    (org-glance-test:external-delete graph "aaa")
+    (should (= 1 (org-glance-graph:refresh-external graph)))
+    (let* ((path (org-glance-graph:external-path graph))
+           (size (f-size path)))
+      (should (org-glance-graph--external-drained? path))
+      ;; The poll's window equals the fold's: two spellings of one rule.
+      (should (string= (plist-get (org-glance-graph--external-cursor path) :window)
+                       (org-glance-graph--external-window path size)))
+      (org-glance-test:write path (org-glance-test:external-line "bbb" t))
+      (should (= size (f-size path)))
+      (should-not (org-glance-graph--external-drained? path))
+      (should (org-glance-graph--external-pending-p graph)))
+    (should (= 1 (org-glance-graph:refresh-external graph)))
+    (should (eq 'tombstone (org-glance-graph:get-headline graph "bbb")))
+    (should (string= "" (org-glance-test:external-pending graph)))))
 
 (ert-deftest org-glance-test:external-a-torn-final-line-leaves-the-file-pending ()
   "A writer's torn final line leaves the cursor mid-line: the poll alone reads

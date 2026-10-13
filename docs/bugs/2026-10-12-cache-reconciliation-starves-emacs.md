@@ -19,16 +19,23 @@ The UI stalls even though reconciliation was launched by
 
 ## Evidence
 
-- `src/data/org-glance-cache.el:905` uses `make-thread`, so reconciliation still
-  executes Lisp in Emacs's cooperative interpreter scheduler.
-- `src/data/org-glance-cache.el:675` only calls `thread-yield` at explicit
-  boundaries. Filesystem, JSON, SQLite, and projection work between those
-  boundaries continues to consume the interactive process.
-- `src/data/org-glance-cache.el:910` runs the complete reconciliation inside
-  that Emacs thread.
+- The original implementation used `make-thread`, so reconciliation still ran
+  in Emacs's cooperative interpreter scheduler.
+- Its `thread-yield` calls covered only selected projection boundaries.
 
 ## Required behavior
 
 Large reconciliation must not execute on the interactive Emacs Lisp scheduler.
 Run it in an isolated process and publish a completed cache generation, while
 Main and point reads continue from the last committed projection.
+
+## Resolution
+
+Reconciliation now runs in an isolated batch Emacs process and full recovery
+publishes a separately validated generation. Graph reads never survey the
+external relay or request reconciliation. A bounded coordinator poll wakes the
+isolated worker, which drains the relay. Recovery has no cooperative-yield
+branch. The contracts are pinned by
+`headline-read-never-enters-reconciliation`,
+`cache-refresh-never-yields-on-the-caller-thread`, and
+`cache-refresh-worker-rebuilds-in-separate-emacs`.

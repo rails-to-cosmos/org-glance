@@ -5,6 +5,13 @@ Notable user-facing changes.  Versions date-based
 
 * Unreleased
 
+** Changed
+
+- Graph reads no longer survey or fold the external relay or request cache
+  reconciliation. A bounded one-second relay poll wakes the isolated worker,
+  which drains the relay. Recovery no longer carries cooperative
+  =thread-yield= branches.
+
 * 1.55.0.0.20261013.1
 
 ** Changed
@@ -105,14 +112,17 @@ Notable user-facing changes.  Versions date-based
 - Materialize, Open link, and Overview read the last committed SQLite
   projection without scanning the compatibility WAL or entering a cache write
   transaction. Background reconciliation can continue without blocking them.
+- Warm proofs are accepted only when every logical physical Row has a family
+  projection and every live family has an =org-glance:1= parser projection.
+  Stale shared caches are repaired by the worker before passive reads.
 
 ** Fixed
 
 - Opening Material during a large background cache rebuild no longer waits for
   the rebuild's write transaction. Its live relation decoration uses indexed
   incoming edges and exact cache reads instead of enumerating every headline.
-  An exact cache miss still folds a targeted external notification so newly
-  published links remain immediately usable.
+  An exact cache miss remains a miss in the committed generation; it performs
+  no relay survey or reconciliation work.
 
 * 1.55.0.0.20261012.12
 

@@ -23,8 +23,7 @@
 (ert-deftest org-glance-test:glance-link-follows-an-external-headline ()
   "A glance link resolves an externally delivered id after explicit adoption."
   (org-glance-test:with-graph graph
-    (let ((org-glance-graph graph)
-          (org-glance-graph-external-poll-seconds 0))
+    (let ((org-glance-graph graph))
       (should-not (org-glance-graph:live-meta graph "fresh"))
       (org-glance-test:write
        (org-glance-graph:content-path graph "fresh")

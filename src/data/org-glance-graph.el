@@ -23,8 +23,7 @@
   ;; invariant 1: storage ordinal only -- never ordering, never in metadata.
   (seq 0 :type integer)
   (-paths nil)
-  (-meta-cache nil)
-  (-external-checked 0 :type number))
+  (-meta-cache nil))
 
 (defcustom org-glance-graph-segment-max-bytes (* 256 1024)
   "Soft cap, in bytes, on the open metadata segment before it is sealed.
@@ -449,9 +448,7 @@ invalidates the cache instead."
   "Return GRAPH's read cache, rebuilding it iff the store snapshot changed.
 The cache is (:snapshot S :by-id HASH :live LIVE): BY-ID maps each id to its
 latest record, tombstones included; LIVE is the deserialized live metadata,
-newest first.  Pending external writes fold in first (`--fold-external-maybe'),
-an external write moving a blob and never the WAL (invariant 33)."
-  (org-glance-graph--fold-external-maybe graph)
+newest first. External event reconciliation is owned by the isolated worker."
   (let ((snap (org-glance-graph--store-snapshot graph))
         (cache (org-glance-graph:-meta-cache graph)))
     (unless (and cache (equal (plist-get cache :snapshot) snap))
@@ -1362,56 +1359,17 @@ Mirrors `org-glance-material:sync'; else a custom state folds into the title."
            org-todo-keywords)))
     (org-glance-headline--from-string contents)))
 
-(defcustom org-glance-graph-external-poll-seconds 1.0
-  "Seconds between two checks for pending external writes on the read path.
-One check per graph per interval, whatever the read volume; 0 checks each read."
-  :group 'org-glance
-  :type 'number)
-
-(defvar org-glance-graph--folding-external nil
-  "Non-nil while a fold runs, so its own reads start no other.
-Bound by `org-glance-graph:refresh-external' itself.")
-
-(cl-defun org-glance-graph--fold-external-maybe (graph)
-  "Reconcile GRAPH's external relay and immutable inventory when due.
-Every read calls this (`--ensure-cache'); the interval is
-`org-glance-graph-external-poll-seconds'.  Failures are messaged and retried on
-a later read."
-  (unless org-glance-graph--folding-external
-    (let ((now (float-time)))
-      (when (>= (- now (org-glance-graph:-external-checked graph))
-                org-glance-graph-external-poll-seconds)
-        ;; stamped BEFORE the fold: the reads it makes must not re-check either
-        (setf (org-glance-graph:-external-checked graph) now)
-        (let* ((survey (org-glance-graph--external-survey graph))
-               (pending (org-glance-graph--external-pending-p graph survey)))
-          (when pending
-            (condition-case err
-                (org-glance-graph:refresh-external graph survey)
-              (error (message "org-glance: refresh-external skipped: %S" err))))
-          (condition-case err
-              (cond
-               ((and pending
-                     (fboundp 'org-glance-cache:reconcile-inventory-maybe))
-                (org-glance-cache:reconcile-inventory-maybe graph))
-               ((fboundp 'org-glance-cache:refresh-async)
-                (org-glance-cache:refresh-async graph)))
-            (error (message "org-glance: inventory reconciliation skipped: %S"
-                            err))))))))
-
 (cl-defun org-glance-graph:refresh-external (&optional (graph (org-glance-ensure-init))
                                                        survey)
   "Fold the entries an external writer moved back into GRAPH's metadata.
-GRAPH defaults to the session's; `--fold-external-maybe' runs this throttled on
-reads.  SURVEY is the poll's reading, made here when nil.  A WRITE re-derives
-its id from the blob on disk, ingesting an unknown id and never resurrecting a
-tombstoned one (invariant 30); a DELETE appends the tombstone
+GRAPH defaults to the session's. SURVEY is made here when nil. A WRITE
+re-derives its id from the blob on disk, ingesting an unknown id and never
+resurrecting a tombstoned one (invariant 30); a DELETE appends the tombstone
 `org-glance-graph:delete' would.  Unusable notes are skipped with a message and
 still spent.  Records land in one append, cursors move after (invariant 33),
 then the file may rotate.  Return the number of entries refreshed."
   (interactive)
-  (let* ((org-glance-graph--folding-external t)   ; its own reads: no nested fold
-         (survey (or survey (org-glance-graph--external-survey graph)))
+  (let* ((survey (or survey (org-glance-graph--external-survey graph)))
          (read (org-glance-graph--read-external graph survey))
          (entries (plist-get read :entries))
          (specs nil)

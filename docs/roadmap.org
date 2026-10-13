@@ -8,7 +8,7 @@ Proposal files hold design detail; [[file:../org-glance.org][org-glance.org]] re
 When work lands, mark its item =DONE=, rename its proposal from =.proposed= to
 =.done=, update [[file:../CHANGELOG.org][CHANGELOG.org]], and record the verification in the proposal.
 
-Last reviewed: 2026-10-12.  Proposal inventory: 32 resolved, 16 proposed; the
+Last reviewed: 2026-10-13.  Proposal inventory: 33 resolved, 16 proposed; the
 composable-tag-template proposal has one shipped phase and two proposed phases.
 
 * DONE 0. Reconcile roadmap status
@@ -54,7 +54,7 @@ CLOSED: [2026-10-12]
 - [X] Run reconciliation in an isolated batch Emacs process.
 - [X] Limit each graph to one background process and one request per minute.
 - [X] Leave the first post-open request due for an immediate Git update.
-- [X] Keep relay-backed external publication immediately visible.
+- [X] Keep external publication visible through background reconciliation.
 
 [[file:proposals/2026-10-12-nonblocking-cache-reconciliation.done.org][Proposal: nonblocking cache reconciliation]]
 
@@ -145,6 +145,13 @@ families. Dirty, incompatible, or unclassifiable transitions retain the complete
 census; missing caches retain staged full recovery. On a 1,000-family fixture
 with one changed family, completion falls from 3,062.6 to 663.5 ms p50 and
 maximum foreground probe latency from 142.9 to 81.7 ms.
+
+** DONE Remove read-path reconciliation and cooperative recovery
+Compatibility-WAL reads no longer survey the external relay, fold it, or queue
+cache work. A bounded one-second coordinator poll wakes the isolated worker,
+which drains the relay; explicit relay refresh remains available. Recovery runs
+only in that worker and contains no =thread-yield= policy branch. Focused
+regressions and the interop gate prove prompt delivery without read maintenance.
 
 ** DONE Publish graph changes to incremental consumers
 Graph commits now publish bounded Row IDs or structural invalidation through

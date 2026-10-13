@@ -241,6 +241,21 @@
                      "SELECT record_payload FROM headline_projection WHERE logical_id='family-only'")))
           (sqlite-close db))))))
 
+(ert-deftest org-glance-test:family-inventory-overrides-stale-wal-metadata ()
+  "A reconciled current Snapshot wins over an older compatibility-WAL Row."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "family" "* Version one"))
+    (let* ((dir (org-glance-graph:headline-data-path graph "family"))
+           (leaf (car (org-glance-version:current dir "family"))))
+      (org-glance-version:write-snapshot
+       dir "family" (list (org-glance-version:id leaf)) "glance"
+       "* Version two\n:PROPERTIES:\n:ORG_GLANCE_ID: family\n:END:\n"))
+    (org-glance-cache:reconcile-inventory graph)
+    (should
+     (equal "Version two"
+            (org-glance-headline-metadata:title
+             (org-glance-graph:get-headline graph "family"))))))
+
 (ert-deftest org-glance-test:family-authority-join-scales-linearly ()
   "Joining WAL and family Rows performs bounded metadata identity reads."
   (let* ((count 64)
@@ -702,8 +717,8 @@
                   text))
                messages)))))
 
-(ert-deftest org-glance-test:cache-refresh-yields-between-projection-units ()
-  "A background rebuild returns to Emacs between independent units."
+(ert-deftest org-glance-test:cache-refresh-never-yields-on-the-caller-thread ()
+  "An isolated rebuild has no cooperative interactive-Emacs branch."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
       (org-glance-test:headline "one" "* One"))
@@ -712,14 +727,14 @@
           (sqlite-execute
            db "UPDATE headline_family SET verified=0 WHERE logical_id='one'")
         (sqlite-close db)))
-    (let ((org-glance-cache--cooperative t)
-          (yields 0))
+    (should-not (boundp 'org-glance-cache--cooperative))
+    (let ((yields 0))
       (cl-letf (((symbol-function 'org-glance-cache--inventory-proof-current-p)
                  (lambda (_graph) nil))
                 ((symbol-function 'thread-yield)
                  (lambda () (cl-incf yields))))
         (org-glance-cache:refresh graph)
-        (should (>= yields 5))))))
+        (should (= 0 yields))))))
 
 (ert-deftest org-glance-test:checkpoint-source-paths-come-from-verified-inventory ()
   "Checkpoint admission receives the exact portable authority path set."
@@ -819,7 +834,6 @@
     (org-glance-graph:add graph (org-glance-test:headline "observed" "* Observed"))
     (let ((censuses 0)
           (original (symbol-function 'org-glance-cache--inventory-event-ids)))
-      (setf (org-glance-graph:-external-checked graph) 0)
       (cl-letf (((symbol-function 'float-time) (lambda (&optional _) 100.0))
                 ((symbol-function 'org-glance-cache--inventory-event-ids)
                  (lambda (&rest args)
@@ -835,7 +849,6 @@
             (org-glance-version:write-snapshot
              dir "observed" (list (org-glance-version:id leaf)) "peer"
              "* Changed\n"))
-          (setf (org-glance-graph:-external-checked graph) 0)
           (org-glance-graph:headlines graph)
           (should (= startup-censuses censuses))
           (org-glance-cache:refresh graph)
@@ -885,6 +898,44 @@
         (org-glance-graph dir)
         (should (> censuses 0))))))
 
+(ert-deftest org-glance-test:warm-proof-requires-a-coherent-cache-generation ()
+  "A current directory proof cannot hide a missing foreign-owned family."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "observed" "* Observed"))
+    (org-glance-cache:refresh graph)
+    (let ((db (sqlite-open (org-glance-cache:path graph))))
+      (unwind-protect
+          (progn
+            (sqlite-execute db "PRAGMA foreign_keys=ON")
+            (sqlite-execute
+             db "UPDATE headline SET producer='glance' WHERE org_id='observed'")
+            (sqlite-execute
+             db "DELETE FROM headline_family WHERE logical_id='observed'"))
+        (sqlite-close db)))
+    (should (org-glance-cache--inventory-proof-current-p graph))
+    (should-not (org-glance-cache--projection-coherent-p graph))
+    (org-glance-cache--reconcile-now graph)
+    (should (org-glance-cache--projection-coherent-p graph))))
+
+(ert-deftest org-glance-test:warm-proof-requires-an-org-glance-family-projection ()
+  "A live family with another parser's projection is not current locally."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "observed" "* Observed"))
+    (org-glance-cache:refresh graph)
+    (let ((db (sqlite-open (org-glance-cache:path graph))))
+      (unwind-protect
+          (sqlite-execute
+           db
+           "UPDATE headline_projection SET parser_contract='glance:1',record_payload='{}' WHERE logical_id='observed'")
+        (sqlite-close db)))
+    (should (org-glance-cache--inventory-proof-current-p graph))
+    (should-not (org-glance-cache--projection-coherent-p graph))
+    (org-glance-cache--reconcile-now graph)
+    (should (org-glance-cache--projection-coherent-p graph))
+    (should (equal "Observed"
+                   (org-glance-headline-metadata:title
+                    (org-glance-cache:headline graph "observed"))))))
+
 (ert-deftest org-glance-test:inventory-tick-skips-a-proven-current-store ()
   "The session timer does not census a store whose warm proof is current."
   (let ((org-glance-graph:list (make-hash-table :test #'equal)))
@@ -902,17 +953,34 @@
           (org-glance-cache--inventory-tick)
           (should (= 0 censuses)))))))
 
-(ert-deftest org-glance-test:inventory-timer-uses-the-refresh-interval ()
-  "The session timer wakes at the configured cache refresh cadence."
+(ert-deftest org-glance-test:inventory-timer-uses-the-notification-interval ()
+  "The coordinator checks bounded relay hints independently of family refresh."
   (let ((org-glance-cache--inventory-timer nil)
-        (org-glance-cache-refresh-interval 37)
+        (org-glance-cache-notification-interval 2.5)
         scheduled)
     (cl-letf (((symbol-function 'run-with-timer)
                (lambda (&rest args)
                  (setq scheduled args)
                  'inventory-timer)))
       (org-glance-cache--start-inventory-timer nil)
-      (should (equal '(1 37 org-glance-cache--inventory-tick) scheduled)))))
+      (should (equal '(1 2.5 org-glance-cache--inventory-tick) scheduled)))))
+
+(ert-deftest org-glance-test:inventory-tick-prioritizes-an-external-hint ()
+  "A pending relay wakes the isolated worker without waiting for its throttle."
+  (let ((org-glance-graph:list (make-hash-table :test #'equal))
+        requests)
+    (with-temp-directory dir
+      (let ((graph (make-org-glance-graph :directory dir)))
+        (puthash dir graph org-glance-graph:list)
+        (cl-letf (((symbol-function 'org-glance-graph--external-pending-p)
+                   (lambda (_graph) t))
+                  ((symbol-function 'org-glance-cache:refresh-async)
+                   (lambda (requested &optional urgent)
+                     (push (list requested urgent) requests)))
+                  ((symbol-function 'org-glance-graph:refresh-external)
+                   (lambda (&rest _) (ert-fail "timer folded on its caller"))))
+          (org-glance-cache--inventory-tick)
+          (should (equal (list (list graph t)) requests)))))))
 
 (ert-deftest org-glance-test:graph-open-queues-cache-refresh-in-subprocess ()
   "Opening a graph launches reconciliation outside interactive Emacs."
@@ -994,17 +1062,39 @@
         (org-glance-cache:refresh-batch dir)
         (should (= 1 recoveries))))))
 
+(ert-deftest org-glance-test:synchronous-open-reconciles-before-reads ()
+  "Deterministic startup reconciles an existing generation before reads."
+  (org-glance-test:with-graph graph
+    (let ((org-glance-cache--refresh-synchronously t)
+          (reconciliations 0))
+      (cl-letf (((symbol-function 'org-glance-cache:reconcile-inventory)
+                 (lambda (_graph) (cl-incf reconciliations)))
+                ((symbol-function 'org-glance-cache--inventory-proof-current-p)
+                 (lambda (_graph) nil))
+                ((symbol-function 'org-glance-cache:refresh)
+                 (lambda (&rest _) (ert-fail "startup used legacy refresh")))
+                ((symbol-function 'org-glance-cache:recover)
+                 (lambda (&rest _) (ert-fail "existing cache entered recovery"))))
+        (org-glance-cache--refresh-on-open graph)
+        (should (= 1 reconciliations))))))
+
 (ert-deftest org-glance-test:cache-refresh-batch-keeps-an-existing-generation ()
   "The routine worker incrementally reconciles an existing generation."
   (org-glance-test:with-graph graph
-    (let ((reconciliations 0))
+    (let ((relay-folds 0)
+          (reconciliations 0))
       (cl-letf (((symbol-function 'org-glance-cache:reconcile-inventory)
                  (lambda (_graph) (cl-incf reconciliations)))
+                ((symbol-function 'org-glance-cache--inventory-proof-current-p)
+                 (lambda (_graph) nil))
+                ((symbol-function 'org-glance-graph:refresh-external)
+                 (lambda (_graph) (cl-incf relay-folds)))
                 ((symbol-function 'org-glance-cache:refresh)
                  (lambda (_graph) (ert-fail "existing cache entered full refresh")))
                 ((symbol-function 'org-glance-cache:recover)
                  (lambda (_graph) (ert-fail "existing cache entered recovery"))))
         (org-glance-cache:refresh-batch (org-glance-graph:directory graph))
+        (should (= 1 relay-folds))
         (should (= 1 reconciliations))))))
 
 (ert-deftest org-glance-test:cache-recovery-publishes-one-complete-generation ()
@@ -1141,22 +1231,19 @@
                   (sqlite-close db))))
           (when (buffer-live-p buffer) (kill-buffer buffer)))))))
 
-(ert-deftest org-glance-test:headline-read-queues-stale-inventory-off-caller-thread ()
-  "A read queues stale-inventory work without reconciling on its caller."
+(ert-deftest org-glance-test:headline-read-never-enters-reconciliation ()
+  "A graph read neither polls external state nor requests maintenance."
   (with-temp-directory dir
-    (let ((queued 0)
-          (synchronous 0))
-      (cl-letf (((symbol-function 'org-glance-cache:refresh-async)
-                 (lambda (_graph) (cl-incf queued)))
-                ((symbol-function 'org-glance-cache:reconcile-inventory)
-                 (lambda (_graph) (cl-incf synchronous))))
-        (let ((graph (org-glance-graph dir)))
-          (setq queued 0)
-          (make-directory (f-join (org-glance-graph:data-path graph) "changed"))
-          (setf (org-glance-graph:-external-checked graph) 0)
-          (org-glance-graph:headlines graph)
-          (should (= 0 synchronous))
-          (should (= 1 queued)))))))
+    (cl-letf (((symbol-function 'org-glance-graph--external-survey)
+               (lambda (&rest _) (ert-fail "read surveyed external state")))
+              ((symbol-function 'org-glance-graph:refresh-external)
+               (lambda (&rest _) (ert-fail "read folded external state")))
+              ((symbol-function 'org-glance-cache:refresh-async)
+               (lambda (&rest _) (ert-fail "read requested reconciliation")))
+              ((symbol-function 'org-glance-cache:reconcile-inventory)
+               (lambda (&rest _) (ert-fail "read reconciled inventory"))))
+      (let ((graph (org-glance-graph dir)))
+        (org-glance-graph:headlines graph)))))
 
 (ert-deftest org-glance-test:shared-cache-inventory-finds-a-relay-free-snapshot ()
   "A live inventory fold discovers an immutable Snapshot without a relay line."

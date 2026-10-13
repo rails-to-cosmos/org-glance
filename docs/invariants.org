@@ -354,7 +354,7 @@ argument in [[file:proposals][docs/proposals/]].
     open segment and re-signals everywhere else.  Violation: tolerating a torn line
     mid-file silently masks real store corruption.
 
-33. *An external writer announces moved and deleted blobs; READS fold them in.*  The
+33. *An external writer announces moved and deleted blobs; maintenance folds them in.*  The
     =glance= daemon appends =\{"id":…,"at":…\}= lines to =meta/EXTERNAL.jsonl=
     (=O_APPEND=, whole lines) and touches nothing else under =meta=; a DELETE is those
     two fields plus ="tombstone":true=, the only third field and the only value it
@@ -364,19 +364,16 @@ argument in [[file:proposals][docs/proposals/]].
     as the delete; the kind test is =(eq t …)=, =json-parse-string= mapping JSON false
     and null to the non-nil =:false= and =:null=.  An unknown key is inert both ways: a
     new =glance= against an old org-glance degrades to a skipped ="no stored blob"=, an
-    old =glance= writes no third field at all.  Every read folds pending entries through
-    =org-glance-graph--fold-external-maybe= (=--ensure-cache=), so an outside edit needs
-    no command; the fold is throttled (=org-glance-graph-external-poll-seconds=, one
-    =--external-pending-p= per graph per interval — a stat and a cursor read per SOURCE,
-    no hash), non-reentrant (=--folding-external=, bound by =refresh-external= itself)
-    and =condition-case='d, so it can neither loop nor break a read under
-    =debug-on-error=.  The whole batch — records and tombstones alike — is ONE
+    old =glance= writes no third field at all. The isolated reconciliation worker
+    discovers immutable events without entering a graph read. A bounded timer
+    survey wakes that worker promptly; the worker drains the compatibility
+    relay. Explicit =org-glance-graph:refresh-external= remains available.
+    The whole batch — records and tombstones alike — is ONE
     =graph:insert=; the fold's cursor moves only AFTER that append (crash rule: a
     repeated write costs an equal record the latest-per-id fold cannot distinguish, a
     repeated delete finds the id tombstoned and appends nothing).  Violation: reversing
     the two steps loses an edit outright; per-id inserts break the one-append rule the
-    crash argument rests on; folding inside a fold recurses; an unguarded signal takes a
-    plain read down with it.  What this fold gives up is [[*Known hazards][H2]].
+    crash argument rests on. What this fold gives up is [[*Known hazards][H2]].
 
 * Added 2026-08-12
 
@@ -449,15 +446,12 @@ exact; ROTATION's move is exact (=--external-folded-whole?=).  Two changes the b
 forbids: anything DESTRUCTIVE asking the poll's question, and the fold dropping its
 prefix check because the poll "already checked".
 
-ONE QUESTION PER SOURCE PER CYCLE.  =--external-survey= reads each source's cursor once
+ONE QUESTION PER SOURCE PER EXPLICIT FOLD. =--external-survey= reads each source's cursor once
 and asks =--external-drained?= — THREE conditions: the offset is the file's SIZE, the
 byte before it is a NEWLINE, the window still hashes.  Only where that bound says bytes
 MAY be owed does it read the file whole through =--external-tail=.  The poll
 (=--external-pending-p=) and the fold (=--read-external=, =--rotate-external-maybe=)
-read that one survey.  =--fold-external-maybe= runs before EVERY graph read at a 1 s
-throttle; two generations at the cap is the steady state.  Measured per poll with
-nothing owed, size alone / whole prefix / window + prefix: 4 KiB 0.28/0.49/0.43 ms,
-1 MiB 0.28/8.50/0.64, 4 × 1 MiB 0.74/36.10/1.61.
+read that one survey. Graph reads never survey relay files.
 
 A SIZE COMPARISON IS NEITHER SOUND NOR NECESSARY: =Data.Org.External.noteLine= spells
 FIXED-WIDTH lines, so a same-size whole-file replacement is this file's TYPICAL
@@ -785,10 +779,10 @@ today, up from 50.
 40. *Immutable history is append-only.*  Physical events remain retained while
     the configured history depth limits the visible ancestry projection.
 
-41. *Immutable family inventory is live search authority.*  Read-path polling
-    and a one-second session timer compare event-directory proofs with the
-    shared SQLite checkpoint and fold changed or unverified families. Relay
-    records accelerate compatibility ingestion but do not gate discovery. A
+41. *Immutable family inventory is live search authority.*  The isolated
+    reconciliation worker compares event-directory proofs with the shared
+    SQLite checkpoint and folds changed or unverified families. Relay records
+    accelerate compatibility ingestion but do not gate discovery. A
     local mutation runs the family cache hook outside error demotion; failure
     reaches the caller after the immutable event remains available for retry.
     Startup retains stable directory-entry stamps from its completed census;
@@ -812,12 +806,13 @@ today, up from 50.
     Pinned by =shared-cache-inventory-finds-a-relay-free-snapshot= and
     =shared-cache-commit-failure-reaches-the-writer=.
 
-42. *Automatic family reconciliation does not block interactive reads.*  Graph
-    open and the inventory timer queue one batch Emacs process per graph.
+42. *Automatic family reconciliation does not enter interactive reads.*  Graph
+    open and the coordinator timer queue one batch Emacs process per graph.
     Startup does not consume the first post-open request; steady-state requests
-    are limited to one per minute. Cache-backed UI reads serve the last
-    committed SQLite projection while the process runs and never request a
-    census, History fold, or cache transaction. Local publication remains a
+    are limited to one per minute. Cache-backed UI and compatibility-WAL reads
+    serve their committed generations without surveying relay files,
+    requesting maintenance, or entering a census, History fold, cache
+    transaction, or cooperative-yield mode. Local publication remains a
     synchronous commit boundary. Explicit cache refresh and inventory
     reconciliation remain synchronous maintenance operations. Pinned by
     =graph-open-queues-cache-refresh-off-caller-thread=,
@@ -827,7 +822,13 @@ today, up from 50.
     =cache-worker-finds-a-package-upgraded-in-place=,
     =table-visit-builds-its-palette-from-cache-rows=,
     =table-property-column-uses-the-row-cache-only=,
-    =inventory-tick-skips-a-proven-current-store= and
+    =inventory-tick-skips-a-proven-current-store=,
+    =inventory-tick-prioritizes-an-external-hint=,
+    =inventory-timer-uses-the-notification-interval=,
+    =warm-proof-requires-a-coherent-cache-generation=,
+    =warm-proof-requires-an-org-glance-family-projection=,
+    =headline-read-never-enters-reconciliation=,
+    =cache-refresh-never-yields-on-the-caller-thread= and
     =explicit-refresh-detects-after-nonblocking-read=.
     Enforced by
     [[https://github.com/rails-to-cosmos/org-glance/commit/eff816c][eff816c]].
