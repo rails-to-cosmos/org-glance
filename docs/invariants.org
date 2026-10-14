@@ -172,7 +172,8 @@ argument in [[file:proposals][docs/proposals/]].
     fragment filters and caches, or a stored tag becomes untouchable.
 
 14. *Crypt: plaintext never touches disk; secrecy is per-block.*  An encrypted headline
-    materializes SEALED (ciphertext, no prompt, no hardening); decryption is explicit
+    materializes SEALED (ciphertext, no prompt, no hardening); decryption follows the
+    buffer's sealed bytes, independent of cached metadata, and is explicit
     (=C-c #= on a sealed buffer, =org-glance-material:decrypt=, =:open ... :decrypt t=)
     and hardens the buffer BEFORE any plaintext lands, the unwrap path included
     (=org-glance-material:crypt-unwrap= wires first).  =C-c #= on a decrypted buffer

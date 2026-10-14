@@ -5,6 +5,12 @@ Notable user-facing changes.  Versions date-based
 
 * Unreleased
 
+* 1.55.0.0.20261014.1
+
+** Fixed
+
+- Material decrypt recognizes sealed buffer content when cached metadata is stale.
+
 * 1.55.0.0.20261014.0
 
 ** Fixed

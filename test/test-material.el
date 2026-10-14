@@ -1270,6 +1270,21 @@ ranges never project; `C-c i' never edits them, inserting a fresh body line."
         (should (= 1 (length (org-glance--crypt-block-regions))))
         (should (s-contains? "plainbody" (buffer-string)))))))
 
+(ert-deftest org-glance-test:material-decrypt-trusts-sealed-buffer ()
+  "Decrypt sealed content when the committed metadata flag is stale."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-headline:encrypt
+       (org-glance-test:headline "sealed" "* TODO Secret" "plainbody") "pw"))
+    (org-glance-test:with-material (buffer graph "sealed")
+      (cl-letf (((symbol-function 'org-glance-graph:live-meta)
+                 (lambda (&rest _)
+                   (ert-fail "decrypt consulted the metadata projection"))))
+        (org-glance-test:answering ((read-passwd "pw"))
+          (org-glance-material:decrypt)))
+      (should (s-contains? "plainbody" (buffer-string)))
+      (should org-glance-material--encrypted))))
+
 (ert-deftest org-glance-test:link-label-from-item-prefix ()
   "A description-less link is labelled by the `KEY:' text introducing it in its
 item; a description wins, and a link outside a list keeps the raw link."

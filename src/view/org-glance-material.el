@@ -400,13 +400,12 @@ Both encrypt paths call it (invariant 14); idempotent."
   (add-hook 'after-save-hook #'org-glance-material--decrypt-buffer t t)
   (add-hook 'kill-buffer-hook #'org-glance-material--clear-password nil t))
 
-(cl-defun org-glance-material--maybe-decrypt (meta buffer)
-  "Prompt and decrypt BUFFER when META is encrypted and BUFFER still sealed.
+(cl-defun org-glance-material--maybe-decrypt (_meta buffer)
+  "Prompt and decrypt BUFFER when its content is sealed.
 Return non-nil when it decrypted; wire and harden the buffer first.  A wrong
 password forgets it, kills BUFFER and re-signals."
   (with-current-buffer buffer
-    (when (and (org-glance-headline-metadata:encrypted? meta)
-               (org-glance-headline--buffer-encrypted?))
+    (when (org-glance-headline--buffer-encrypted?)
       (org-glance-material--wire-crypto)
       (org-glance-material--set-password (read-passwd "Headline password: "))
       (condition-case err
@@ -438,10 +437,7 @@ The first block prompts for a confirmed password and wires the round-trip."
   "Decrypt this headline's sealed crypt blocks in place, wiring the round-trip."
   (interactive)
   (org-glance-material--ensure)
-  (unless (org-glance-material--maybe-decrypt
-           (org-glance-graph:live-meta org-glance-material--graph
-                                       org-glance-material--id)
-           (current-buffer))
+  (unless (org-glance-material--maybe-decrypt nil (current-buffer))
     (message "org-glance: nothing sealed here")))
 
 (cl-defun org-glance-material:seal ()
