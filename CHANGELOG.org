@@ -5,6 +5,14 @@ Notable user-facing changes.  Versions date-based
 
 * Unreleased
 
+* 1.55.0.0.20261014.0
+
+** Fixed
+
+- Material save validates a password re-entered after the cache TTL and refuses
+  to publish unless every encrypted block is sealed. A typo can no longer
+  silently re-key a headline or write plaintext into immutable History.
+
 * 1.55.0.0.20261013.2
 
 ** Changed

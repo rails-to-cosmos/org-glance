@@ -875,6 +875,35 @@ one crypt block wrapping it, sealed ciphertext on disk after save."
       (should-not (s-contains? "line one" blob)))
     (should (org-glance-test:field graph "wb" encrypted?))))
 
+(ert-deftest org-glance-test:material-crypt-reprompt-refuses-a-different-password ()
+  "A password re-prompt cannot silently re-key an encrypted headline."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-headline:encrypt
+       (org-glance-test:headline "stable-key" "* TODO Secret" "plainbody") "right"))
+    (org-glance-test:answering ((read-passwd "right"))
+      (org-glance-test:with-material (buffer graph "stable-key")
+        (org-glance-material:decrypt)
+        (goto-char (point-max))
+        (search-backward "#+end_crypt")
+        (beginning-of-line)
+        (insert "edited\n")
+        (org-glance-material--clear-password)
+        (let ((before (org-glance-graph:get-content graph "stable-key")))
+          (org-glance-test:answering ((read-passwd "typo"))
+            (should-error (org-glance-test:save) :type 'user-error))
+          (should (equal before (org-glance-graph:get-content graph "stable-key")))
+          (should (buffer-modified-p))
+          (should (s-contains? "plainbody" (buffer-string)))
+          (org-glance-test:answering ((read-passwd "right"))
+            (org-glance-test:save))
+          (should-not (buffer-modified-p))
+          (should (s-contains?
+                   "edited"
+                   (org-glance-headline:contents
+                    (org-glance-headline:decrypt
+                     (org-glance-graph:headline graph "stable-key") "right")))))))))
+
 (ert-deftest org-glance-test:material-delete-referrer-aware ()
   "Delete tombstones after confirmation; the prompt names referrers; declining
 keeps the headline; the referrer's edge dangles harmlessly afterwards."

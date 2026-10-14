@@ -131,6 +131,13 @@ Plugins use it instead of the buffer-local internals."
 (cl-defun org-glance-material--write-version ()
   "Publish this material buffer as an immutable child snapshot."
   (when (and org-glance-material--graph org-glance-material--id)
+    (when (and org-glance-material--encrypted
+               (let ((blocks (org-glance--crypt-block-regions)))
+                 (or (null blocks)
+                     (cl-some (lambda (block)
+                                (not (org-glance--crypt-sealed? block)))
+                              blocks))))
+      (user-error "Encrypted headline is not sealed; headline was not saved"))
     (when (org-glance-version:file-p buffer-file-name)
       (let* ((dir (org-glance-graph:headline-data-path
                    org-glance-material--graph org-glance-material--id))
@@ -292,6 +299,8 @@ Expiry makes the next save re-prompt; `org-glance-material:lock' forgets early."
   "Cached password of an encrypted materialized buffer, or nil when forgotten.")
 (defvar-local org-glance-material--password-timer nil
   "Timer that forgets `org-glance-material--password' after the TTL.")
+(defvar-local org-glance-material--password-proof nil
+  "Sealed crypt-block body used to validate a re-entered password.")
 
 (cl-defun org-glance-material--clear-password ()
   "Forget the cached password and cancel its expiry timer."
@@ -314,10 +323,25 @@ Expiry makes the next save re-prompt; `org-glance-material:lock' forgets early."
                                      (org-glance-material--clear-password)))))))))
 
 (cl-defun org-glance-material--require-password ()
-  "Return the cached password, prompting (and re-arming the TTL) when forgotten."
+  "Return the cached password, validating a prompted replacement when forgotten."
   (or org-glance-material--password
-      (progn (org-glance-material--set-password (read-passwd "Headline password: "))
-             org-glance-material--password)))
+      (let ((password (read-passwd "Headline password: ")))
+        (when (and org-glance-material--password-proof
+                   (not (let ((inhibit-message t))
+                          (condition-case nil
+                              (aes-decrypt-buffer-or-string
+                               org-glance-material--password-proof password)
+                            (error nil)))))
+          (user-error "Wrong password; headline was not saved"))
+        (org-glance-material--set-password password)
+        password)))
+
+(cl-defun org-glance-material--sealed-proof ()
+  "Return one sealed crypt-block body in the current buffer, or nil."
+  (when-let* ((block (cl-find-if #'org-glance--crypt-sealed?
+                                 (org-glance--crypt-block-regions))))
+    (buffer-substring-no-properties (plist-get block :body-beg)
+                                    (plist-get block :body-end))))
 
 (cl-defun org-glance-material--harden-buffer ()
   "Keep an encrypted buffer's plaintext off disk: no auto-save/backup/lockfile."
@@ -333,7 +357,9 @@ Expiry makes the next save re-prompt; `org-glance-material:lock' forgets early."
 Buffer-local `before-save-hook'; prompts for the password if the TTL expired."
   (when org-glance-material--encrypted
     (let ((inhibit-read-only t))
-      (org-glance--crypt-seal-blocks (org-glance-material--require-password)))))
+      (org-glance--crypt-seal-blocks (org-glance-material--require-password))
+      (setq-local org-glance-material--password-proof
+                  (org-glance-material--sealed-proof)))))
 
 (cl-defun org-glance-material--decrypt-buffer ()
   "Unseal the buffer's crypt blocks in place and clear the modified flag.
@@ -343,6 +369,8 @@ A legacy whole-body cipher is first wrapped in one block.  Buffer-local
     (let ((inhibit-read-only t))
       (when (org-glance-headline--crypt-upgrade-legacy)
         (message "org-glance: upgraded to the crypt-block format"))
+      (setq-local org-glance-material--password-proof
+                  (org-glance-material--sealed-proof))
       (org-glance--crypt-unseal-blocks (org-glance-material--require-password))
       (set-buffer-modified-p nil))))
 
@@ -445,6 +473,7 @@ A sealed body decrypts first; the last unwrap drops encryption entirely."
     (when (and org-glance-material--encrypted
                (null (org-glance--crypt-block-regions)))
       (setq-local org-glance-material--encrypted nil)
+      (setq-local org-glance-material--password-proof nil)
       (org-glance-material--clear-password)
       (message "org-glance: last crypt block unwrapped -- headline public on save"))))
 

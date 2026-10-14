@@ -182,7 +182,9 @@ argument in [[file:proposals][docs/proposals/]].
     secrecy annotation; the legacy upgrade cannot re-wrap plaintext (aes-header guard in
     =org-glance-headline--crypt-upgrade-legacy=).  Only block bodies are secret: text
     OUTSIDE the blocks stays plaintext on disk and IS indexed even for an =encrypted?=
-    headline.  Snapshots are plaintext, so an encrypted material buffer never snapshots
+    headline.  A password re-entered after its TTL must open the retained sealed proof,
+    and the immutable-version writer refuses any encrypted buffer with an unsealed block.
+    Snapshots are plaintext, so an encrypted material buffer never snapshots
     (=org-glance-material:snapshot-on-repeat=) and BOTH encrypt paths purge existing
     snapshots (=org-glance-material--purge-occurrences=).  The =links=/=relations=
     projections compute from SEALED bytes, so a link inside a crypt block is never
