@@ -774,7 +774,9 @@
            (versions (f-join dir "versions"))
            (directory-censuses 0)
            (payload-observations 0)
+           (payload-reads 0)
            (original-directories (symbol-function 'f-directories))
+           (original-read-text (symbol-function 'f-read-text))
            (original-payload
             (symbol-function 'org-glance-cache--payload-observation))
            (leaf (car (org-glance-version:candidates
@@ -790,6 +792,11 @@
                        (when (equal path versions)
                          (cl-incf directory-censuses))
                        (apply original-directories path args)))
+                    ((symbol-function 'f-read-text)
+                     (lambda (path &rest args)
+                       (when (equal path payload)
+                         (cl-incf payload-reads))
+                       (apply original-read-text path args)))
                     ((symbol-function 'org-glance-cache--payload-observation)
                      (lambda (&rest args)
                        (cl-incf payload-observations)
@@ -797,12 +804,15 @@
               (org-glance-cache--project-family db graph "observed")
               (should (= 1 directory-censuses))
               (should (= 1 payload-observations))
+              (should (= 1 payload-reads))
               (setq directory-censuses 0
-                    payload-observations 0)
+                    payload-observations 0
+                    payload-reads 0)
               (delete-file payload)
               (org-glance-cache--project-family db graph "observed")
               (should (= 1 directory-censuses))
-              (should (= 1 payload-observations))))
+              (should (= 1 payload-observations))
+              (should (= 0 payload-reads))))
         (sqlite-close db)))))
 
 (ert-deftest org-glance-test:empty-family-projection-censuses-once ()

@@ -242,6 +242,23 @@
       (should-not (cl-find-if (lambda (f) (s-contains? "data.org.tmp." f))
                               (directory-files dir))))))
 
+(ert-deftest org-glance-test:versioned-write-observes-family-once ()
+  "A graph write shares one immutable-family observation across its decisions."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:put-content
+     graph (org-glance-test:headline "once" "* Once" "first"))
+    (let* ((dir (org-glance-graph:headline-data-path graph "once"))
+           (versions (f-join dir "versions"))
+           (censuses 0)
+           (original (symbol-function 'f-directories)))
+      (cl-letf (((symbol-function 'f-directories)
+                 (lambda (path &rest args)
+                   (when (equal path versions) (cl-incf censuses))
+                   (apply original path args))))
+        (org-glance-graph:put-content
+         graph (org-glance-test:headline "once" "* Once" "second")))
+      (should (= 1 censuses)))))
+
 (ert-deftest org-glance-test:graph-unsafe-id-rejected ()
   "Path-unsafe ids are rejected before touching the filesystem."
   (org-glance-test:with-graph graph

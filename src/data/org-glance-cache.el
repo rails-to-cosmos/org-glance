@@ -211,14 +211,17 @@
                      :producer (org-glance-version:producer version))))
     (concat (json-serialize (append identity shape tail)) "\n")))
 
-(cl-defun org-glance-cache--version-metadata (graph id dir version)
+(cl-defun org-glance-cache--version-metadata
+    (graph id dir version &optional contents (contents-supplied-p nil))
   "Parse VERSION's available Snapshot bytes in DIR as family ID metadata."
   (when (eq 'snapshot (org-glance-version:kind version))
     (condition-case nil
-        (let* ((contents (f-read-text
-                          (org-glance-version:data-file
-                           dir (org-glance-version:id version))
-                          'utf-8))
+        (let* ((contents (if contents-supplied-p
+                             contents
+                           (f-read-text
+                            (org-glance-version:data-file
+                             dir (org-glance-version:id version))
+                            'utf-8)))
                (seed (org-glance-graph--reparse-blob
                       graph (make-org-glance-headline-metadata :tags []) contents))
                (basis (org-glance-headline:metadata* seed))
@@ -228,12 +231,16 @@
           (org-glance-headline-metadata:deserialize (plist-put record :id id)))
       (error nil))))
 
-(cl-defun org-glance-cache--payload-observation (graph id dir version)
+(cl-defun org-glance-cache--payload-observation
+    (graph id dir version &optional payload (payload-supplied-p nil))
   "Return VERSION's payload state in GRAPH and any parsed metadata."
-  (let ((path (org-glance-version:data-file dir (org-glance-version:id version))))
-    (if (not (file-exists-p path))
+  (let* ((path (org-glance-version:data-file dir (org-glance-version:id version)))
+         (present (if payload-supplied-p (car payload) (file-exists-p path)))
+         (contents (and payload-supplied-p (cdr payload))))
+    (if (not present)
         (cons "missing" nil)
-      (let ((metadata (org-glance-cache--version-metadata graph id dir version)))
+      (let ((metadata (org-glance-cache--version-metadata
+                       graph id dir version contents payload-supplied-p)))
         (cond
          ((not metadata) (cons "unparseable" nil))
          ((org-glance-version:valid version) (cons "available" metadata))
@@ -279,15 +286,13 @@
     (db graph id &optional (inventory nil inventory-supplied-p))
   "Replace logical family ID's folded cache projection in DB."
   (let* ((dir (org-glance-graph:headline-data-path graph id))
-         (inventory (if inventory-supplied-p
-                        inventory
-                      (org-glance-cache--inventory-event-ids dir)))
+         (observation (if inventory-supplied-p
+                          (org-glance-version:observe dir id inventory)
+                        (org-glance-version:observe dir id)))
+         (inventory (org-glance-version-observation:inventory observation))
          (history (and (file-directory-p (f-join dir "versions"))
-                       (org-glance-version:history-from-directories
-                        dir id
-                        (mapcar (lambda (event)
-                                  (f-join dir "versions" event))
-                                inventory))))
+                       (org-glance-version-observation:history observation)))
+         (payloads (org-glance-version-observation:payloads observation))
          (candidates (org-glance-version:candidates history))
          (leaf-ids (mapcar #'org-glance-version:id candidates))
          (sole (and (= 1 (length candidates)) (car candidates)))
@@ -366,7 +371,8 @@
                    (org-glance-version:created version) envelope))
           (when (eq 'snapshot (org-glance-version:kind version))
             (let ((observation
-                   (org-glance-cache--payload-observation graph id dir version)))
+                   (org-glance-cache--payload-observation
+                    graph id dir version (gethash event payloads) t)))
               (when (member event leaf-ids)
                 (puthash event observation payload-observations))
               (sqlite-execute

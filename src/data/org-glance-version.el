@@ -12,6 +12,10 @@
   schema headline id kind parents targets observed-leaves content-sha256
   created producer directory valid)
 
+(cl-defstruct (org-glance-version-observation
+               (:conc-name org-glance-version-observation:))
+  inventory history payloads)
+
 (cl-defun org-glance-version:path (headline-dir version-id)
   "Return VERSION-ID's immutable directory below HEADLINE-DIR."
   (f-join headline-dir "versions" version-id))
@@ -74,18 +78,23 @@
           :created (org-glance-version:created version)
           :producer (org-glance-version:producer version))))
 
-(cl-defun org-glance-version--valid-content-p (version)
+(cl-defun org-glance-version--valid-content-p
+    (version &optional payload (payload-supplied-p nil))
   "Return non-nil when VERSION's payload agrees with its envelope."
   (condition-case nil
-      (let ((data (f-join (org-glance-version:directory version) "data.org"))
+      (let* ((data (f-join (org-glance-version:directory version) "data.org"))
             (kind (org-glance-version:kind version))
-            (digest (org-glance-version:content-sha256 version)))
+            (digest (org-glance-version:content-sha256 version))
+            (present (if payload-supplied-p (car payload) (f-file? data)))
+            (contents (if payload-supplied-p
+                          (cdr payload)
+                        (and (f-file? data) (f-read-text data 'utf-8)))))
         (cond
-         ((eq kind 'tombstone) (and (null digest) (not (f-exists? data))))
-         ((eq kind 'rejection) (and (null digest) (not (f-exists? data))))
+         ((eq kind 'tombstone) (and (null digest) (not present)))
+         ((eq kind 'rejection) (and (null digest) (not present)))
          ((eq kind 'snapshot)
-          (and digest (f-file? data)
-               (equal digest (secure-hash 'sha256 (f-read-text data 'utf-8)))))
+          (and digest present contents
+               (equal digest (secure-hash 'sha256 contents))))
          (t nil)))
     (error nil)))
 
@@ -98,7 +107,8 @@
 (cl-defun org-glance-version--version-event-p (version)
   (memq (org-glance-version:kind version) '(snapshot tombstone)))
 
-(cl-defun org-glance-version--candidate (dir headline raw)
+(cl-defun org-glance-version--candidate
+    (dir headline raw &optional payload (payload-supplied-p nil))
   "Decode structurally local RAW metadata at DIR for HEADLINE."
   (condition-case nil
       (let* ((schema (plist-get raw :version))
@@ -141,7 +151,8 @@
                            (cl-some (lambda (leaf) (not (member leaf targets)))
                                     observed)))))
           (setf (org-glance-version:valid version)
-                (org-glance-version--valid-content-p version))
+                (org-glance-version--valid-content-p
+                 version payload payload-supplied-p))
           version))
     (error nil)))
 
@@ -211,20 +222,56 @@
 (cl-defun org-glance-version:history (headline-dir headline)
   "Read HEADLINE's identifiable version history below HEADLINE-DIR.
 Each returned node carries payload integrity in its `valid' slot."
-  (let ((root (f-join headline-dir "versions")))
-    (org-glance-version:history-from-directories
-     headline-dir headline
-     (and (f-directory? root) (f-directories root)))))
+  (org-glance-version-observation:history
+   (org-glance-version:observe headline-dir headline)))
+
+(cl-defun org-glance-version:observe
+    (headline-dir headline &optional (inventory nil inventory-supplied-p))
+  "Observe HEADLINE's family once and return its inventory, payloads, and history."
+  (let* ((root (f-join headline-dir "versions"))
+         (inventory
+          (if inventory-supplied-p
+              inventory
+            (when (f-directory? root)
+              (sort
+               (mapcar #'file-name-nondirectory
+                       (cl-remove-if
+                        (lambda (path)
+                          (let ((name (file-name-nondirectory path)))
+                            (or (file-symlink-p path)
+                                (string-prefix-p ".version-" name)
+                                (string-suffix-p ".tmp" name))))
+                        (f-directories root)))
+               #'string<))))
+         (directories (mapcar (lambda (event) (f-join root event)) inventory)))
+    (org-glance-version--observe-directories
+     headline-dir headline inventory directories)))
 
 (cl-defun org-glance-version:history-from-directories
     (headline-dir headline directories)
   "Read HEADLINE history from already observed DIRECTORIES below HEADLINE-DIR.
 DIRECTORIES may be empty."
+  (org-glance-version-observation:history
+   (org-glance-version--observe-directories
+    headline-dir headline
+    (mapcar #'file-name-nondirectory directories)
+    directories)))
+
+(cl-defun org-glance-version--observe-directories
+    (headline-dir headline inventory directories)
   (let* ((root (f-join headline-dir "versions"))
+         (payloads (make-hash-table :test #'equal))
          (candidates
           (when (f-directory? root)
             (cl-loop for dir in (sort directories #'string<)
                for meta = (f-join dir "meta.json")
+               for data = (f-join dir "data.org")
+               for payload = (condition-case nil
+                                 (if (f-file? data)
+                                     (cons t (f-read-text data 'utf-8))
+                                   (cons nil nil))
+                               (error (cons t nil)))
+               do (puthash (file-name-nondirectory dir) payload payloads)
                when (f-exists? meta)
                for raw = (condition-case nil
                              (json-parse-string (f-read-text meta 'utf-8)
@@ -232,7 +279,8 @@ DIRECTORIES may be empty."
                                                 :null-object nil :false-object nil)
                            (error nil))
                for candidate = (and raw
-                                    (org-glance-version--candidate dir headline raw))
+                                    (org-glance-version--candidate
+                                     dir headline raw payload t))
                when candidate collect candidate)))
          (versions (cl-remove-if-not #'org-glance-version--version-event-p
                                      candidates))
@@ -265,11 +313,15 @@ DIRECTORIES may be empty."
              (and (org-glance-version--version-event-p event)
                   (not (member (org-glance-version:id event) known))))
            stored))
-    (if (and legacy
-             (not (cl-find (org-glance-version:id legacy) stored
-                           :key #'org-glance-version:id :test #'equal)))
-        (cons legacy stored)
-      stored)))
+    (make-org-glance-version-observation
+     :inventory inventory
+     :payloads payloads
+     :history
+     (if (and legacy
+              (not (cl-find (org-glance-version:id legacy) stored
+                            :key #'org-glance-version:id :test #'equal)))
+         (cons legacy stored)
+       stored))))
 
 (cl-defun org-glance-version--legacy (headline-dir headline)
   "Return HEADLINE's implicit legacy root below HEADLINE-DIR."

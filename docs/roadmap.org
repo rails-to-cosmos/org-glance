@@ -8,7 +8,7 @@ Proposal files hold design detail; [[file:../org-glance.org][org-glance.org]] re
 When work lands, mark its item =DONE=, rename its proposal from =.proposed= to
 =.done=, update [[file:../CHANGELOG.org][CHANGELOG.org]], and record the verification in the proposal.
 
-Last reviewed: 2026-10-13.  Proposal inventory: 33 resolved, 16 proposed; the
+Last reviewed: 2026-10-15.  Proposal inventory: 33 resolved, 16 proposed; the
 composable-tag-template proposal has one shipped phase and two proposed phases.
 
 * DONE 0. Reconcile roadmap status
@@ -152,6 +152,15 @@ cache work. A bounded one-second coordinator poll wakes the isolated worker,
 which drains the relay; explicit relay refresh remains available. Recovery runs
 only in that worker and contains no =thread-yield= policy branch. Focused
 regressions and the interop gate prove prompt delivery without read maintenance.
+
+** DONE Observe each immutable family once
+The version owner now returns one observation containing the published
+inventory, History, and already-read payload bytes. Cache integrity, parsing,
+projection, and recovery reuse those bytes. Ordinary versioned graph writes
+share the same observation and refresh it only after legacy migration mutates
+the family. Focused counters require one census and one payload read per
+Snapshot during projection, and one census for a versioned graph write. The
+ten-Snapshot benchmark retains its fingerprint and exact one-census work count.
 
 ** DONE Publish graph changes to incremental consumers
 Graph commits now publish bounded Row IDs or structural invalidation through
