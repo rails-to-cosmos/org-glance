@@ -16,9 +16,6 @@
 (require 'org-glance-filter)
 (require 'org-glance-version)
 
-(declare-function org-glance-version:history-from-directories
-                  "org-glance-version" (headline-dir headline directories))
-
 (defconst org-glance-cache:version 6
   "Shared Glance cache schema version.")
 
@@ -211,18 +208,11 @@
                      :producer (org-glance-version:producer version))))
     (concat (json-serialize (append identity shape tail)) "\n")))
 
-(cl-defun org-glance-cache--version-metadata
-    (graph id dir version &optional contents (contents-supplied-p nil))
+(cl-defun org-glance-cache--version-metadata (graph id version contents)
   "Parse VERSION's available Snapshot bytes in DIR as family ID metadata."
   (when (eq 'snapshot (org-glance-version:kind version))
     (condition-case nil
-        (let* ((contents (if contents-supplied-p
-                             contents
-                           (f-read-text
-                            (org-glance-version:data-file
-                             dir (org-glance-version:id version))
-                            'utf-8)))
-               (seed (org-glance-graph--reparse-blob
+        (let* ((seed (org-glance-graph--reparse-blob
                       graph (make-org-glance-headline-metadata :tags []) contents))
                (basis (org-glance-headline:metadata* seed))
                (metadata (org-glance-headline:metadata*
@@ -231,16 +221,14 @@
           (org-glance-headline-metadata:deserialize (plist-put record :id id)))
       (error nil))))
 
-(cl-defun org-glance-cache--payload-observation
-    (graph id dir version &optional payload (payload-supplied-p nil))
+(cl-defun org-glance-cache--payload-observation (graph id version payload)
   "Return VERSION's payload state in GRAPH and any parsed metadata."
-  (let* ((path (org-glance-version:data-file dir (org-glance-version:id version)))
-         (present (if payload-supplied-p (car payload) (file-exists-p path)))
-         (contents (and payload-supplied-p (cdr payload))))
+  (let ((present (car payload))
+        (contents (cdr payload)))
     (if (not present)
         (cons "missing" nil)
       (let ((metadata (org-glance-cache--version-metadata
-                       graph id dir version contents payload-supplied-p)))
+                       graph id version contents)))
         (cond
          ((not metadata) (cons "unparseable" nil))
          ((org-glance-version:valid version) (cons "available" metadata))
@@ -252,17 +240,7 @@
     (when (file-directory-p versions)
       (org-glance-cache--observe-inventory-directory
        versions
-       (lambda ()
-         (sort
-          (mapcar #'file-name-nondirectory
-                  (cl-remove-if
-                   (lambda (path)
-                     (let ((name (file-name-nondirectory path)))
-                       (or (file-symlink-p path)
-                           (string-prefix-p ".version-" name)
-                           (string-suffix-p ".tmp" name))))
-                   (f-directories versions)))
-          #'string<))))))
+       (lambda () (org-glance-version:inventory dir))))))
 
 (cl-defun org-glance-cache--inventory-proof (event-ids)
   "Return a stable local inventory proof for EVENT-IDS."
@@ -372,7 +350,7 @@
           (when (eq 'snapshot (org-glance-version:kind version))
             (let ((observation
                    (org-glance-cache--payload-observation
-                    graph id dir version (gethash event payloads) t)))
+                    graph id version (gethash event payloads))))
               (when (member event leaf-ids)
                 (puthash event observation payload-observations))
               (sqlite-execute

@@ -703,6 +703,23 @@ Signal a `user-error' when ID has concurrent leaves of either kind."
                     org-glance-graph--default-headline-history-depth))))))
     depth))
 
+(cl-defun org-glance-graph--version-history-for-write (dir id)
+  "Observe ID in DIR, migrating its legacy root before returning History."
+  (let* ((observation (org-glance-version:observe dir id))
+         (history (org-glance-version-observation:history observation))
+         (readable (cl-remove-if-not
+                    (lambda (version)
+                      (and (memq (org-glance-version:kind version)
+                                 '(snapshot tombstone))
+                           (org-glance-version:valid version)))
+                    history)))
+    (when (cl-find "legacy" readable
+                   :key #'org-glance-version:producer :test #'equal)
+      (org-glance-version:migrate-legacy dir id)
+      (setq history (org-glance-version-observation:history
+                     (org-glance-version:observe dir id))))
+    history))
+
 (cl-defun org-glance-graph:put-content (graph headline)
   "Persist HEADLINE's contents atomically under GRAPH's store, keyed by its id.
 Return the file path, or nil if HEADLINE has no id."
@@ -710,19 +727,8 @@ Return the file path, or nil if HEADLINE has no id."
   (cl-check-type headline org-glance-headline)
   (when-let* ((id (org-glance-headline:id headline)))
     (let* ((dir (org-glance-graph:headline-data-path graph id))
-           (observation (org-glance-version:observe dir id))
-           (history (org-glance-version-observation:history observation))
-           (versions (cl-remove-if-not
-                      (lambda (version)
-                        (and (memq (org-glance-version:kind version)
-                                   '(snapshot tombstone))
-                             (org-glance-version:valid version)))
-                      history)))
+           (history (org-glance-graph--version-history-for-write dir id)))
       (f-mkdir-full-path dir)
-      (when (cl-find "legacy" versions :key #'org-glance-version:producer :test #'equal)
-        (org-glance-version:migrate-legacy dir id)
-        (setq history (org-glance-version-observation:history
-                       (org-glance-version:observe dir id))))
       (let* ((candidates (org-glance-version:candidates history))
              (_ (when (> (length candidates) 1)
                   (user-error "Headline %s has %d current variants"
@@ -859,18 +865,7 @@ The guard `org-glance-graph:delete' shares with the fold (invariant 30)."
   (cl-check-type id string)
   (when-let* ((spec (org-glance-graph--tombstone-spec graph id)))
     (let* ((dir (org-glance-graph:headline-data-path graph id))
-           (observation (org-glance-version:observe dir id))
-           (history (org-glance-version-observation:history observation))
-           (versions (cl-remove-if-not
-                      (lambda (version)
-                        (and (memq (org-glance-version:kind version)
-                                   '(snapshot tombstone))
-                             (org-glance-version:valid version)))
-                      history)))
-      (when (cl-find "legacy" versions :key #'org-glance-version:producer :test #'equal)
-        (org-glance-version:migrate-legacy dir id)
-        (setq history (org-glance-version-observation:history
-                       (org-glance-version:observe dir id))))
+           (history (org-glance-graph--version-history-for-write dir id)))
       (let ((candidates (org-glance-version:candidates history)))
         (when (> (length candidates) 1)
           (user-error "Headline %s has %d current variants" id

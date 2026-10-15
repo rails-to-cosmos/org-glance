@@ -786,7 +786,14 @@ today, up from 50.
     reconciliation worker compares event-directory proofs with the shared
     SQLite checkpoint and folds changed or unverified families. Relay records
     accelerate compatibility ingestion but do not gate discovery. A
-    local mutation runs the family cache hook outside error demotion; failure
+    family operation obtains one inventory, History, and payload-byte
+    observation; integrity, parsing, projection, and recovery derive from that
+    value. A mutation or freshness request obtains a new observation. Reopening
+    the family per projection multiplies filesystem work and can mix facts from
+    opposite sides of concurrent delivery. Pinned by
+    =family-projection-observes-filesystem-once= and
+    =versioned-write-observes-family-once=. A local mutation runs the family
+    cache hook outside error demotion; failure
     reaches the caller after the immutable event remains available for retry.
     Startup retains stable directory-entry stamps from its completed census;
     an unchanged proof skips the immediate duplicate census, while publication

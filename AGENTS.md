@@ -199,7 +199,9 @@ evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
     zero exposes the complete event family.
 41. Immutable family directories are search authority. Reads and the session
     timer compare event-name inventories with SQLite checkpoints; relay lines
-    are wake-up hints. A writer commits its family projection before success.
+    are wake-up hints. One operation derives History, payload integrity, parsing,
+    and projection from one observation and re-observes only after mutation. A
+    writer commits its family projection before success.
 
 ## Known hazards
 
