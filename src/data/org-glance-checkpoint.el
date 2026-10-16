@@ -28,10 +28,6 @@
 (defvar org-glance-checkpoint--publication-hook nil
   "Function called after staged validation and before cache publication.")
 
-(cl-defun org-glance-checkpoint--quote (identifier)
-  "Quote SQLite IDENTIFIER."
-  (concat "\"" (replace-regexp-in-string "\"" "\"\"" identifier) "\""))
-
 (cl-defun org-glance-checkpoint--tables (db)
   "Return DB's portable projection tables in canonical order."
   (mapcar
@@ -45,13 +41,13 @@
   (mapcar #'cadr
           (sqlite-select
            db (format "PRAGMA table_info(%s)"
-                      (org-glance-checkpoint--quote table)))))
+                      (org-glance-cache--quote-identifier table)))))
 
 (cl-defun org-glance-checkpoint--keys (db table)
   "Return TABLE's primary-key columns in key order."
   (let* ((info (sqlite-select
                 db (format "PRAGMA table_info(%s)"
-                           (org-glance-checkpoint--quote table))))
+                           (org-glance-cache--quote-identifier table))))
          (keys (sort (cl-remove-if-not (lambda (row) (> (nth 5 row) 0)) info)
                      (lambda (left right) (< (nth 5 left) (nth 5 right))))))
     (unless keys (error "org-glance: checkpoint table has no key: %s" table))
@@ -93,8 +89,8 @@ LOCALIZE translates a portable path back into GRAPH."
                   (keys (org-glance-checkpoint--keys db name))
                   (query
                    (format "SELECT * FROM %s ORDER BY %s"
-                           (org-glance-checkpoint--quote name)
-                           (mapconcat #'org-glance-checkpoint--quote keys ","))))
+                           (org-glance-cache--quote-identifier name)
+                           (mapconcat #'org-glance-cache--quote-identifier keys ","))))
              `((name . ,name)
                (columns . ,(vconcat columns))
                (rows . ,(vconcat
@@ -416,12 +412,12 @@ LOCALIZE translates a portable path back into GRAPH."
 (cl-defun org-glance-checkpoint--insert-query (table columns)
   "Return TABLE insertion SQL for COLUMNS."
   (format "INSERT INTO %s(%s) VALUES(%s) ON CONFLICT DO UPDATE SET %s"
-          (org-glance-checkpoint--quote table)
-          (mapconcat #'org-glance-checkpoint--quote columns ",")
+          (org-glance-cache--quote-identifier table)
+          (mapconcat #'org-glance-cache--quote-identifier columns ",")
           (mapconcat (lambda (_) "?") columns ",")
           (mapconcat
            (lambda (column)
-             (let ((quoted (org-glance-checkpoint--quote column)))
+             (let ((quoted (org-glance-cache--quote-identifier column)))
                (concat quoted "=excluded." quoted)))
            columns ",")))
 

@@ -45,10 +45,6 @@
 
 (defvar org-glance-cache--staging-path nil
   "Database selected while constructing a staged generation.")
-(defvar org-glance-cache--publication-db nil
-  "Live connection retained from the stage snapshot through publication.")
-(defvar org-glance-cache--publication-version nil
-  "Live connection's data version before constructing the staged generation.")
 (defvar org-glance-cache--publication-check nil
   "Function rechecking staged source evidence before publication.")
 
@@ -74,8 +70,8 @@
                       db
                       "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY CASE name WHEN 'producer_projection' THEN 0 WHEN 'headline_projection' THEN 1 WHEN 'headline_payload_observation' THEN 2 WHEN 'headline_event' THEN 3 WHEN 'headline_family' THEN 4 WHEN 'edge' THEN 5 WHEN 'org_headline' THEN 6 WHEN 'glance_payload' THEN 7 WHEN 'headline' THEN 8 WHEN 'source' THEN 9 ELSE 10 END"))
         (sqlite-execute db
-                        (format "DROP TABLE IF EXISTS \"%s\""
-                                (replace-regexp-in-string "\"" "\"\"" (car table))))))
+                        (format "DROP TABLE IF EXISTS %s"
+                                (org-glance-cache--quote-identifier (car table))))))
     (dolist (statement org-glance-cache--schema)
       (sqlite-execute db statement))
     (when reset?
@@ -756,17 +752,13 @@
 (cl-defun org-glance-cache:publish-staged (live stage &optional hook)
   "Validate STAGE and publish its complete state transactionally into LIVE.
 Call HOOK after validation and before publication when non-nil."
-  (if org-glance-cache--publication-db
-      (org-glance-cache--publish-on-connection
-       org-glance-cache--publication-db stage
-       org-glance-cache--publication-version hook)
-    (let ((db (sqlite-open live)))
-      (unwind-protect
-          (progn
-            (org-glance-cache--prepare db)
-            (org-glance-cache--publish-on-connection
-             db stage (caar (sqlite-select db "PRAGMA data_version")) hook))
-        (sqlite-close db)))))
+  (let ((db (sqlite-open live)))
+    (unwind-protect
+        (progn
+          (org-glance-cache--prepare db)
+          (org-glance-cache--publish-on-connection
+           db stage (caar (sqlite-select db "PRAGMA data_version")) hook))
+      (sqlite-close db))))
 
 (cl-defun org-glance-cache--with-staged-generation (graph thunk)
   "Build GRAPH's next generation with THUNK, then publish it."
@@ -787,15 +779,14 @@ Call HOOK after validation and before publication when non-nil."
           (progn
             (setq db (sqlite-open live))
             (org-glance-cache--prepare db)
-            (let ((org-glance-cache--publication-db db)
-                  (org-glance-cache--publication-check nil)
-                  (org-glance-cache--publication-version
+            (let ((org-glance-cache--publication-check nil)
+                  (version
                    (caar (sqlite-select db "PRAGMA data_version"))))
               (sqlite-execute db "VACUUM INTO ?" (vector stage))
               (let ((result (let ((org-glance-cache--staging-path stage))
                               (funcall thunk))))
-                (org-glance-cache:publish-staged
-                 live stage org-glance-cache--recovery-publication-hook)
+                (org-glance-cache--publish-on-connection
+                 db stage version org-glance-cache--recovery-publication-hook)
                 (setq published t)
                 (org-glance-cache--persist-git-proof graph)
                 result)))

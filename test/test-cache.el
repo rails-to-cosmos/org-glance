@@ -1526,6 +1526,35 @@
         (org-glance-cache:reconcile-inventory graph))
       (should (= 1 observed)))))
 
+(ert-deftest org-glance-test:public-stage-publisher-retains-concurrent-commits ()
+  "The standalone publication API keeps its commit guard and live handle."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+                          (org-glance-test:headline "standalone" "* Original"))
+    (with-temp-directory stage-directory
+      (let* ((path (org-glance-cache:path graph))
+             (stage (expand-file-name "stage.sqlite3" stage-directory))
+             (live (sqlite-open path)))
+        (unwind-protect
+            (progn
+              (sqlite-execute live "VACUUM INTO ?" (vector stage))
+              (let ((db (sqlite-open stage)))
+                (unwind-protect
+                    (sqlite-execute db "UPDATE headline SET title='Stage'")
+                  (sqlite-close db)))
+              (should-error
+               (org-glance-cache:publish-staged
+                path stage
+                (lambda ()
+                  (sqlite-execute live "UPDATE headline SET title='Peer'"))))
+              (should (equal '(("Peer"))
+                             (sqlite-select live "SELECT title FROM headline")))
+              (org-glance-cache:publish-staged path stage)
+              (should (equal '(("Stage"))
+                             (sqlite-select live "SELECT title FROM headline")))
+              (should (file-exists-p stage)))
+          (sqlite-close live))))))
+
 (ert-deftest org-glance-test:warm-refresh-never-clones-a-generation ()
   "A current warm inventory performs no staging work."
   (org-glance-test:with-graph graph
