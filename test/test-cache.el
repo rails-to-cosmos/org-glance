@@ -990,6 +990,27 @@
                    (org-glance-headline-metadata:title
                     (org-glance-cache:headline graph "observed"))))))
 
+(ert-deftest org-glance-test:stale-proof-repairs-a-missing-family-projection ()
+  "Verified event inventory cannot hide an absent local family projection."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+                          (org-glance-test:headline "observed" "* Observed"))
+    (org-glance-cache:refresh graph)
+    (let ((db (sqlite-open (org-glance-cache:path graph))))
+      (unwind-protect
+          (progn
+            (sqlite-execute db "DELETE FROM headline_projection")
+            (sqlite-execute db "DELETE FROM producer_projection")
+            (sqlite-execute db "DELETE FROM inventory_directory"))
+        (sqlite-close db)))
+    (remhash graph org-glance-cache--inventory-directory-proofs)
+    (should-not (org-glance-cache--inventory-proof-current-p graph))
+    (should-not (org-glance-cache--projection-coherent-p graph))
+    (org-glance-cache--reconcile-now graph)
+    (should (equal "Observed"
+                   (org-glance-headline-metadata:title
+                    (org-glance-cache:headline graph "observed"))))))
+
 (ert-deftest org-glance-test:inventory-tick-skips-a-proven-current-store ()
   "The session timer does not census a store whose warm proof is current."
   (let ((org-glance-graph:list (make-hash-table :test #'equal)))

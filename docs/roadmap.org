@@ -161,6 +161,11 @@ Passive reads also tolerate the unpublished first schema. Full validation:
 out of 12,603.5 ms total. See
 [[file:proposals/2026-10-16-passive-cache-publication.done.org][passive cache publication]].
 
+The S16 follow-up repairs missing family projections independently of
+directory-proof freshness. Coherent stale inventories retain incremental
+reconciliation; unchanged warm startup creates no stage. Final validation
+passes 535 task-only ERT cases and 536 with the existing user regression.
+
 ** DONE Reconcile clean Git event transitions incrementally
 The existing-cache batch worker compares the accepted and current clean commits,
 maps changed immutable paths to logical family IDs, and folds only those

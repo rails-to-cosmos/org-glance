@@ -49,6 +49,14 @@ holds the live publication transaction for 42.1 ms. An unchanged directory-proof
 refresh takes 680.3 ms and creates no clone. These are observations, separate
 from Glance's foreground-read latency contract.
 
+The S16 follow-up checks projection coherence independently of directory-proof
+freshness. Missing family Rows trigger complete reconciliation; coherent stale
+inventories keep incremental reconciliation. The focused regression reproduces
+the [[file:../bugs/2026-10-16-stale-proof-skips-missing-family-projection.md][missing projection]] before the guard change.
+Final validation passes 535 task-only ERT cases and 536 with the user's existing
+regression. At 1,000 families, full reconciliation takes 13,108.9 ms, live
+publication 49.7 ms, and warm reconciliation 702.6 ms with zero clones.
+
 * Consequences
 
 The live file and its WAL are never renamed or removed during publication.

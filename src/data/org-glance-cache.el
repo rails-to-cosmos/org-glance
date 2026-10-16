@@ -1271,12 +1271,12 @@ Return the number of families folded."
   "Bring GRAPH's cache generation current from authoritative families."
   (if (file-exists-p (org-glance-cache:path graph))
       (let ((proof-current
-             (org-glance-cache--inventory-proof-current-p graph)))
-        (unless (and proof-current
-                     (org-glance-cache--projection-coherent-p graph))
-          (if proof-current
-              (org-glance-cache:reconcile-inventory graph t)
-            (org-glance-cache:reconcile-inventory graph))))
+             (org-glance-cache--inventory-proof-current-p graph))
+            (coherent (org-glance-cache--projection-coherent-p graph)))
+        (unless (and proof-current coherent)
+          (if coherent
+              (org-glance-cache:reconcile-inventory graph)
+            (org-glance-cache:reconcile-inventory graph t))))
     (org-glance-cache:recover graph)))
 
 (cl-defun org-glance-cache:refresh-batch (directory)
