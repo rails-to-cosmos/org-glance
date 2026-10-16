@@ -149,6 +149,18 @@ alternating-order samples over the 257-family fixed
 fixture measure 1,535.5 ms p50 and 1,663.8 ms p95 versus 1,531.7/1,621.2 ms
 for in-place replay; generation publication itself is 0.055 ms p50.
 
+The 2026-10-16 coordinated repair extends staging to bulk refresh and
+reconciliation. Publication now copies validated state through one WAL
+transaction and retains the live database inode. A retained-connection
+=data_version= check rejects stale work; source proofs are rechecked before
+publication. Checkpoint hydration overlays org-glance-owned rows onto a clone
+of the current live generation, preserving current Glance rows and metadata.
+Passive reads also tolerate the unpublished first schema. Full validation:
+533 task-only package tests, 534 with the pre-existing user regression, and
+39 Glance interop cases. A 1,000-family build spends 42.1 ms in live publication
+out of 12,603.5 ms total. See
+[[file:proposals/2026-10-16-passive-cache-publication.done.org][passive cache publication]].
+
 ** DONE Reconcile clean Git event transitions incrementally
 The existing-cache batch worker compares the accepted and current clean commits,
 maps changed immutable paths to logical family IDs, and folds only those

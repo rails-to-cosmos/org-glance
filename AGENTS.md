@@ -178,7 +178,9 @@ evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
 35. `cache/glance.sqlite3` is the local multi-writer projection.
     `headline.digest` and `org_headline.digest` are raw file
     SHA-256 values; `org_headline.content_hash` is org-glance's normalized
-    content SHA-1. SQLite serializes its writers. The graph WAL remains the
+    content SHA-1. Reads pin compatible committed snapshots. Publishers prepare
+    work off-lock and serialize atomic commits without replacing the live file.
+    The graph WAL remains the
     compatibility reader until the coordinated stage-5 cutover.
 36. Graph identity is the canonical full directory truename; path aliases share one
     instance and one open pass.

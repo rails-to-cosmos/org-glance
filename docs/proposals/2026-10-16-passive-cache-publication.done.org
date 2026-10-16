@@ -1,0 +1,59 @@
+#+TITLE: Passive reads and atomic cache publication
+#+DATE: 2026-10-16
+
+* Decision
+
+Keep one local shared SQLite projection with two connection roles. Readers pin
+a compatible committed snapshot. Publishers compute expensive work before
+acquiring the live writer, then commit a complete generation atomically.
+SQLite serializes publication across both runtimes; no coordinator daemon or
+second producer database is required.
+
+* Implementation
+
+- =org-glance-cache--read-db= is query-only and snapshot-pinned. A newly created
+  live file with no published compatible schema returns empty recovery reads.
+- Incremental headline and family projection prepare SQL values before the
+  live transaction. Retained-event guards remain inside publication.
+- Bulk refresh and reconciliation use a clone. Integrity, foreign keys,
+  schema and readable payloads validate before publication. Source-directory
+  and Git proofs are rechecked before commit.
+- The same live connection retains its observed =PRAGMA data_version= through
+  staging and checks it after =BEGIN IMMEDIATE=. A competing publication
+  rejects the stage. Publication copies validated tables in one WAL transaction;
+  open handles keep their snapshots and continue addressing the same inode.
+- Checkpoint hydration overlays the producer-owned slice onto a clone of the
+  current live cache. Old checkpoint copies of Glance Rows, source identities,
+  fingerprints and incoming edges cannot replace newer live peer state.
+
+Production owners are =src/data/org-glance-cache.el:112=, =:158=, =:713= and
+=src/data/org-glance-checkpoint.el:433= in
+[[https://github.com/rails-to-cosmos/org-glance/commit/45d86998f0fa7116fcc9a02e5b0c4f6e7246908a][commit 45d8699]].
+
+* Verification
+
+The task-only candidate passes 533 ERT cases; the working tree, including the
+user's existing rejected-Snapshot regression, passes 534. Compilation is
+warning-free. Glance's real process/browser interop gate passes 39 scenarios;
+the benchmark adapter gate passes 51 contracts after explicitly identifying its
+scratch database as a stage.
+
+Concurrency regressions retain an old reader snapshot during publication,
+keep an already-open writer on the live inode, reject concurrent live commits
+and source changes, preserve peer checkpoint state, and roll back failed builds.
+The cold-reader case reproduces the schema-less first-publication race caught
+by interop scenario S01.
+
+On a 1,000-family fixture, the complete isolated build takes 12,603.5 ms and
+holds the live publication transaction for 42.1 ms. An unchanged directory-proof
+refresh takes 680.3 ms and creates no clone. These are observations, separate
+from Glance's foreground-read latency contract.
+
+* Consequences
+
+The live file and its WAL are never renamed or removed during publication.
+Staging retains a full local clone temporarily and validates it before a short
+live copy. Cache CPU work remains proportional to changed content or a required
+complete census; startup readers are independent of that work. Immutable
+sources and events remain authority. User source bytes, gestures and defaults
+are unchanged.

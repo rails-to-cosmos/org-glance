@@ -713,7 +713,7 @@ today, up from 50.
     =cache/glance.sqlite3= stores the raw file SHA-256 in =source.digest=,
     =headline.digest= and =org_headline.digest=.  The org-glance projection
     keeps its normalized content SHA-1 in =org_headline.content_hash=.
-    =org-glance-cache--project= writes both inside SQLite's immediate
+    =org-glance-cache--prepare-headline= computes both before the immediate
     transaction; =org-glance-cache:metadata= accepts a local row only while both
     hashes match their respective bytes and serialized metadata.  The graph's
     post-append hook updates or deletes the projection after the WAL lands.
@@ -857,14 +857,18 @@ today, up from 50.
     preserves the prior readable database and its inventory proof. The replay
     replaces org-glance-owned state while retaining Glance-owned Rows and
     incoming Glance relations. A local event committed during replay invalidates
-    the stage before rename and remains visible. Routine background
-    reconciliation uses the existing generation and enters full recovery only
-    when no cache exists.
+    the stage and remains visible. Bulk refresh and reconciliation build from
+    a cloned generation. Publication checks =data_version= on the retained live
+    connection and copies validated tables in one WAL transaction, preserving
+    the live inode and open readers. Passive reads pin a compatible schema and
+    run no maintenance; first-generation recovery reads remain empty until commit.
     Pinned by =cache-recovery-publishes-one-complete-generation=,
     =cache-recovery-preserves-glance-projections=,
     =cache-recovery-refuses-a-concurrent-publication=,
     =cache-refresh-batch-keeps-an-existing-generation=, and
     =cache-refresh-worker-rebuilds-in-separate-emacs=.
+    The coordinated design and verification are recorded in
+    [[file:proposals/2026-10-16-passive-cache-publication.done.org][passive cache publication]].
 
 45. *Clean Git transitions reconcile only changed immutable families.*  The
     accepted and current clean proofs define an exact path delta. Classifiable

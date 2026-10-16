@@ -10,6 +10,11 @@ Notable user-facing changes.  Versions date-based
 - Immutable-family inventory and Material access include Glance's ignored
   =.org-glance/local/data/= authority; later writes retain that authority.
 
+** Fixed
+
+- Cache refresh and checkpoint hydration preserve open readers and Glance's
+  committed projection while preparing the next generation off-lock.
+
 * 1.55.0.0.20261014.1
 
 ** Fixed
