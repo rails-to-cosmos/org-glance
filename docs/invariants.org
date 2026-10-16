@@ -874,6 +874,13 @@ today, up from 50.
     =clean-git-transition-folds-only-changed-families= and
     =cache-refresh-batch-keeps-an-existing-generation=.
 
+46. *Immutable-family authority spans portable and local roots.*  Inventory
+    reads =.org-glance/data/= and =.org-glance/local/data/=. One identity in
+    both roots is a storage conflict. Reads and later writes retain the
+    established root; portable checkpoints omit local authority paths. Pinned
+    by =local-family-is-searchable-and-keeps-its-authority= and
+    =duplicate-storage-authority-is-refused=.
+
 * Known hazards
 
 Costs the code ships WITH, deliberately.  Each was reproduced with a probe and each

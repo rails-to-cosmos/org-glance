@@ -156,11 +156,12 @@ moved line; the poll refuses it by WINDOW, which a size check passes."
              (org-glance-test:external-cursor graph))))
 
 (cl-defun org-glance-test:git-ignores (graph &rest paths)
-  "Ask git which of PATHS the store's `.gitignore' covers; a t/nil per path.
+  "Ask git which of PATHS the store's ignore rules cover; a t/nil per path.
 Runs `git check-ignore' in a fresh repository over GRAPH's directory, which
 tracks nothing, so the patterns are the whole answer; a tracked path says nil."
   (let ((default-directory (org-glance-graph:directory graph)))
     (call-process "git" nil nil nil "init" "--quiet" ".")
+    (org-glance-graph--ensure-gitignore graph)
     (mapcar (lambda (path)
               (eq 0 (call-process "git" nil nil nil "check-ignore" "-q" path)))
             paths)))
@@ -1059,7 +1060,13 @@ spelled here would only agree with itself."
                      graph (org-glance-test:generation-name graph 1))
                     (f-join (org-glance-graph:meta-path graph)
                             "COMPLETIONS.jsonl")
-                    (org-glance-graph:headline-meta-path graph))))))
+                    (org-glance-graph:headline-meta-path graph))))
+    (should
+     (equal '(t t)
+            (org-glance-test:git-ignores
+             graph
+             (f-join (org-glance-graph:store-path graph) ".gitignore")
+             (f-join (org-glance-graph:local-data-path graph) "probe"))))))
 
 (ert-deftest org-glance-test:external-the-gitignore-retrofits-an-old-store ()
   "Opening a store appends each missing `.gitignore' line, keeping hand-written

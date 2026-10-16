@@ -428,11 +428,10 @@
   (org-glance-graph--wal-headlines graph))
 
 (cl-defun org-glance-cache--family-ids (graph)
-  "Return every immutable family ID discovered below GRAPH's data root."
-  (let ((data (org-glance-graph:data-path graph)))
+  "Return every immutable family ID in GRAPH's portable and local roots."
+  (let ((seen (make-hash-table :test #'equal)) ids)
     (cl-labels
-        ((walk
-          (dir)
+        ((walk (data dir)
           (org-glance-cache--observe-inventory-directory
            dir
            (lambda ()
@@ -443,8 +442,15 @@
               collect (mapconcat #'identity
                                  (split-string (file-relative-name path data) "/" t)
                                  "")
-              else append (walk path))))))
-      (if (file-directory-p data) (sort (delete-dups (walk data)) #'string<) nil))))
+              else append (walk data path))))))
+      (dolist (data (org-glance-graph:data-paths graph))
+        (when (file-directory-p data)
+          (dolist (id (walk data data))
+            (when (gethash id seen)
+              (error "org-glance: family %s exists in portable and local storage" id))
+            (puthash id t seen)
+            (push id ids))))
+      (sort ids #'string<))))
 
 (defvar org-glance-cache--inventory-directory-proofs
   (make-hash-table :test #'eq :weakness 'key)
@@ -521,7 +527,8 @@
 
 (cl-defun org-glance-cache--clean-git-family-delta (graph)
   "Return (:proof PROOF :ids IDS) for a safe clean Git transition, or nil."
-  (when-let* ((held (org-glance-graph:cache-read
+  (unless (file-directory-p (org-glance-graph:local-data-path graph))
+    (when-let* ((held (org-glance-graph:cache-read
                      graph org-glance-cache--git-proof-name))
               (current (org-glance-cache--clean-git-proof graph))
               ((equal (plist-get held :root) (plist-get current :root)))
@@ -538,7 +545,7 @@
                         data-relative)
                        (cdr diff))))
       (when (cl-every #'identity ids)
-        (list :proof current :ids (sort (delete-dups ids) #'string<))))))
+        (list :proof current :ids (sort (delete-dups ids) #'string<)))))))
 
 (cl-defun org-glance-cache--directory-stamp (dir)
   "Return DIR's entry-change stamp, or nil when DIR disappeared."
@@ -825,13 +832,19 @@ Paths are sorted, distinct, relative to GRAPH, and exclude local cache state."
                   (cadr row))
                  "meta.json"))
               (sqlite-select
-               db "SELECT logical_id,event_id FROM headline_event")))))
+               db "SELECT logical_id,event_id FROM headline_event"))))
+           (local (file-name-as-directory
+                   (org-glance-graph:local-data-path graph))))
        (sort
         (delete-dups
          (mapcar
           (lambda (path)
             (org-glance-cache--checkpoint-relative-path graph path))
-          paths))
+          (cl-remove-if
+           (lambda (path)
+             (string-prefix-p local (file-name-as-directory
+                                     (expand-file-name path))))
+           paths)))
         #'string<)))))
 
 (cl-defun org-glance-cache--elapsed (started)

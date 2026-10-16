@@ -615,6 +615,20 @@ The MANIFEST swap commits; a crash before it leaves an unlisted seg-<gen> that
    graph :data
    (lambda () (-> (f-join (org-glance-graph:store-path graph) "data") (file-truename)))))
 
+(cl-defun org-glance-graph:local-data-path (graph)
+  "Return GRAPH's machine-local immutable-family data root."
+  (cl-check-type graph org-glance-graph)
+  (org-glance-graph--path
+   graph :local-data
+   (lambda ()
+     (-> (f-join (org-glance-graph:store-path graph) "local" "data")
+         (file-truename)))))
+
+(cl-defun org-glance-graph:data-paths (graph)
+  "Return GRAPH's portable and machine-local family data roots."
+  (list (org-glance-graph:data-path graph)
+        (org-glance-graph:local-data-path graph)))
+
 (cl-defun org-glance-graph:meta-path (graph)
   (cl-check-type graph org-glance-graph)
   (org-glance-graph--path
@@ -663,11 +677,19 @@ Ids longer than two characters shard by their first two."
   ;; invariant 6: path-check with `error' -- `cl-assert' can be compiled out.
   (when (or (string-empty-p id) (string-match-p "/" id) (string-match-p "\\.\\." id))
     (error "Unsafe ORG_GLANCE_ID for content-addressable path: %S" id))
-  (let ((data (org-glance-graph:data-path graph)))
-    (file-truename
-     (if (> (length id) 2)
-         (f-join data (substring id 0 2) (substring id 2))
-       (f-join data id)))))
+  (let* ((paths
+          (mapcar
+           (lambda (data)
+             (file-truename
+              (if (> (length id) 2)
+                  (f-join data (substring id 0 2) (substring id 2))
+                (f-join data id))))
+           (org-glance-graph:data-paths graph)))
+         (existing (cl-remove-if-not #'f-directory? paths)))
+    (pcase existing
+      ('() (car paths))
+      (`(,path) path)
+      (_ (error "Headline %s exists in portable and local storage" id)))))
 
 (cl-defun org-glance-graph:content-path (graph id)
   "Return ID's sole current snapshot path in GRAPH, or its legacy creation path.
@@ -766,16 +788,17 @@ Return the file path, or nil if HEADLINE has no id."
 
 (cl-defun org-glance-graph:migrate-versions (graph)
   "Migrate every legacy headline blob in GRAPH; return the migrated count."
-  (let ((data (org-glance-graph:data-path graph))
-        (count 0))
-    (dolist (path (directory-files-recursively data "data\\.org\\'"))
-      (unless (org-glance-version:file-p path)
-        (let* ((dir (f-parent path))
-               (parts (split-string (f-relative dir data) "/" t))
-               (id (apply #'concat parts)))
-          (when (and (memq (length parts) '(1 2))
-                     (org-glance-version:migrate-legacy dir id))
-            (cl-incf count)))))
+  (let ((count 0))
+    (dolist (data (org-glance-graph:data-paths graph))
+      (when (file-directory-p data)
+        (dolist (path (directory-files-recursively data "data\\.org\\'"))
+          (unless (org-glance-version:file-p path)
+            (let* ((dir (f-parent path))
+                   (parts (split-string (f-relative dir data) "/" t))
+                   (id (apply #'concat parts)))
+              (when (and (memq (length parts) '(1 2))
+                         (org-glance-version:migrate-legacy dir id))
+                (cl-incf count)))))))
     count))
 
 (cl-defun org-glance-graph:add (graph &rest headlines)
@@ -1471,7 +1494,7 @@ missing built-in WAL rule (invariant 8)."
       (org-glance--atomic-write path next))))
 
 (defconst org-glance-graph--gitignore-lines
-  '("cache/" "meta/EXTERNAL*.jsonl" "meta/EXTERNAL*.cursor" "meta/spent/"
+  '("local/" "cache/" "meta/EXTERNAL*.jsonl" "meta/EXTERNAL*.cursor" "meta/spent/"
     "meta/COMPLETIONS.jsonl" "meta/projections/")
   "Store-relative paths `--ensure-gitignore' keeps out of git.
 `cache/' and `meta/projections/' are derived; the notification family includes
@@ -1491,7 +1514,30 @@ family needs `git rm --cached' by hand (invariant 34, hazard H3)."
        path
        (concat text
                (if (or (string-empty-p text) (s-ends-with? "\n" text)) "" "\n")
-               (mapconcat #'identity missing "\n") "\n")))))
+               (mapconcat #'identity missing "\n") "\n")))
+    (org-glance-graph--ensure-private-git-exclude graph)))
+
+(cl-defun org-glance-graph--ensure-private-git-exclude (graph)
+  "Keep the generated store ignore file outside ordinary Git adds."
+  (let ((default-directory (org-glance-graph:directory graph)))
+    (when-let* ((git (executable-find "git"))
+                (paths (condition-case nil
+                           (process-lines git "rev-parse" "--show-toplevel"
+                                          "--git-path" "info/exclude")
+                         (error nil)))
+                (repository (car paths))
+                (path (cadr paths)))
+      (let* ((absolute (expand-file-name path default-directory))
+             (text (if (f-exists? absolute) (f-read-text absolute 'utf-8) ""))
+             (control (f-join (org-glance-graph:store-path graph) ".gitignore"))
+             (rule (concat "/" (file-relative-name control repository)))
+             (have (split-string text "\n" t "[ \t\r]+")))
+        (unless (member rule have)
+          (org-glance--atomic-write
+           absolute
+           (concat text
+                   (if (or (string-empty-p text) (s-ends-with? "\n" text)) "" "\n")
+                   rule "\n")))))))
 
 (cl-defun org-glance-graph--manifest-broken? (text)
   "Non-nil when MANIFEST TEXT cannot be trusted as the live segment set.

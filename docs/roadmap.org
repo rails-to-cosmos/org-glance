@@ -8,7 +8,7 @@ Proposal files hold design detail; [[file:../org-glance.org][org-glance.org]] re
 When work lands, mark its item =DONE=, rename its proposal from =.proposed= to
 =.done=, update [[file:../CHANGELOG.org][CHANGELOG.org]], and record the verification in the proposal.
 
-Last reviewed: 2026-10-15.  Proposal inventory: 33 resolved, 16 proposed; the
+Last reviewed: 2026-10-16.  Proposal inventory: 33 resolved, 16 proposed; the
 composable-tag-template proposal has one shipped phase and two proposed phases.
 
 * DONE 0. Reconcile roadmap status
@@ -57,6 +57,17 @@ CLOSED: [2026-10-12]
 - [X] Keep external publication visible through background reconciliation.
 
 [[file:proposals/2026-10-12-nonblocking-cache-reconciliation.done.org][Proposal: nonblocking cache reconciliation]]
+
+* DONE 0.76 Read Glance's machine-local immutable families
+CLOSED: [2026-10-16]
+
+- [X] Inventory portable and ignored local family roots into the shared cache.
+- [X] Keep Material reads and subsequent writes on the established authority.
+- [X] Refuse one family identity present under both authorities.
+- [X] Exclude local authority paths from portable checkpoints.
+
+The cross-application decision is recorded in
+[[file:../../glance/docs/proposals/partial/2026-10-16-tag-storage-can-be-machine-local.md][Glance's local tag-storage proposal]].
 
 * TODO 0.8 Restore version-aware materialization, then resolve variants
 

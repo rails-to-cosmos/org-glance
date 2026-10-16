@@ -5,6 +5,11 @@ Notable user-facing changes.  Versions date-based
 
 * Unreleased
 
+** Changed
+
+- Immutable-family inventory and Material access include Glance's ignored
+  =.org-glance/local/data/= authority; later writes retain that authority.
+
 * 1.55.0.0.20261014.1
 
 ** Fixed

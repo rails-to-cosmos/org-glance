@@ -241,6 +241,48 @@
                      "SELECT record_payload FROM headline_projection WHERE logical_id='family-only'")))
           (sqlite-close db))))))
 
+(ert-deftest org-glance-test:local-family-is-searchable-and-keeps-its-authority ()
+  "A local family participates in cache reads and subsequent writes."
+  (org-glance-test:with-graph graph
+    (let* ((id "local-family")
+           (local (org-glance-graph:local-data-path graph))
+           (dir (f-join local "lo" "cal-family"))
+           (contents (org-glance-test:org-with-id
+                      "* Local family :notification:" id)))
+      (org-glance-version:write-snapshot dir id nil "glance" contents 10)
+      (org-glance-cache:reconcile-inventory graph t)
+      (should (equal dir (org-glance-graph:headline-data-path graph id)))
+      (should (equal "Local family"
+                     (org-glance-headline-metadata:title
+                      (org-glance-graph:live-meta graph id))))
+      (should-not
+       (cl-find-if
+        (lambda (path) (string-prefix-p ".org-glance/local/" path))
+        (org-glance-cache:checkpoint-source-paths graph)))
+      (let ((path (org-glance-graph:put-content
+                   graph (org-glance-test:headline
+                          id "* Updated local :notification:"))))
+        (should (string-prefix-p (file-name-as-directory local) path)))
+      (should-not
+       (file-directory-p
+        (f-join (org-glance-graph:data-path graph) "lo" "cal-family"))))))
+
+(ert-deftest org-glance-test:duplicate-storage-authority-is-refused ()
+  "A family present in both storage roots has no implicit winner."
+  (org-glance-test:with-graph graph
+    (let* ((id "duplicate-family")
+           (contents (org-glance-test:org-with-id "* Duplicate" id))
+           (portable (f-join (org-glance-graph:data-path graph)
+                             "du" "plicate-family"))
+           (local (f-join (org-glance-graph:local-data-path graph)
+                          "du" "plicate-family")))
+      (org-glance-version:write-snapshot portable id nil "glance" contents 10)
+      (org-glance-version:write-snapshot local id nil "glance" contents 10)
+      (should-error (org-glance-graph:headline-data-path graph id)
+                    :type 'error)
+      (should-error (org-glance-cache:reconcile-inventory graph t)
+                    :type 'error))))
+
 (ert-deftest org-glance-test:family-inventory-overrides-stale-wal-metadata ()
   "A reconciled current Snapshot wins over an older compatibility-WAL Row."
   (org-glance-test:with-graph graph
