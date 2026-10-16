@@ -10,8 +10,11 @@
 (require 'org-glance-graph)
 (require 'org-glance-utils)
 
-(declare-function org-glance-cache:publish-staged
-                  "org-glance-cache" (live stage &optional hook))
+(declare-function org-glance-cache--with-staged-generation
+                  "org-glance-cache" (graph thunk))
+(declare-function org-glance-cache--restore-shared-edges
+                  "org-glance-cache" (graph edges))
+(defvar org-glance-cache--recovery-publication-hook)
 
 (defconst org-glance-checkpoint:schema "org-glance.repository-checkpoint/1")
 
@@ -79,7 +82,7 @@ LOCALIZE translates a portable path back into GRAPH."
 (cl-defun org-glance-checkpoint--artifact (graph)
   "Return GRAPH's canonical logical projection artifact and row count."
   (let (tables)
-    (org-glance-cache--with-db
+    (org-glance-cache--read-db
      graph
      (lambda (db)
        (setq
@@ -95,12 +98,12 @@ LOCALIZE translates a portable path back into GRAPH."
              `((name . ,name)
                (columns . ,(vconcat columns))
                (rows . ,(vconcat
-                          (mapcar
-                           (lambda (row)
-                             (vconcat
-                              (org-glance-checkpoint--portable-row
-                               graph columns row)))
-                           (sqlite-select db query)))))))
+                         (mapcar
+                          (lambda (row)
+                            (vconcat
+                             (org-glance-checkpoint--portable-row
+                              graph columns row)))
+                          (sqlite-select db query)))))))
          (org-glance-checkpoint--tables db)))))
     (let* ((artifact
             `((schema . ,org-glance-checkpoint:schema)
@@ -412,68 +415,161 @@ LOCALIZE translates a portable path back into GRAPH."
 
 (cl-defun org-glance-checkpoint--insert-query (table columns)
   "Return TABLE insertion SQL for COLUMNS."
-  (format "INSERT INTO %s(%s) VALUES(%s)"
+  (format "INSERT INTO %s(%s) VALUES(%s) ON CONFLICT DO UPDATE SET %s"
           (org-glance-checkpoint--quote table)
           (mapconcat #'org-glance-checkpoint--quote columns ",")
-          (mapconcat (lambda (_) "?") columns ",")))
+          (mapconcat (lambda (_) "?") columns ",")
+          (mapconcat
+           (lambda (column)
+             (let ((quoted (org-glance-checkpoint--quote column)))
+               (concat quoted "=excluded." quoted)))
+           columns ",")))
+
+(cl-defun org-glance-checkpoint--row-value (table row column)
+  "Return COLUMN's value in artifact TABLE's ROW."
+  (when-let* ((index (cl-position column (plist-get table :columns) :test #'equal)))
+    (elt row index)))
+
+(cl-defun org-glance-checkpoint--prepare-overlay (db graph tables)
+  "Clear DB's org-glance-owned slice and localize GRAPH's ownership from TABLES."
+  (let ((families (make-hash-table :test #'equal))
+        (preserved (make-hash-table :test #'equal))
+        (headlines (make-hash-table :test #'equal))
+        (paths (make-hash-table :test #'equal))
+        (edges (sqlite-select db "SELECT edge.src,edge.dst,dst_headline.org_id,edge.kind,edge.via FROM edge JOIN headline AS src_headline ON edge.src=src_headline.id JOIN headline AS dst_headline ON edge.dst=dst_headline.id WHERE src_headline.producer!='org-glance' AND dst_headline.producer='org-glance'")))
+    (dolist (row (sqlite-select db "SELECT logical_id FROM producer_projection WHERE producer!='org-glance' UNION SELECT logical_id FROM headline_projection WHERE parser_contract NOT LIKE 'org-glance:%' UNION SELECT org_id FROM headline WHERE producer!='org-glance' AND org_id IS NOT NULL"))
+      (puthash (car row) t preserved))
+    (dolist (table tables)
+      (when (member (plist-get table :name) '("producer_projection" "headline_projection"))
+        (dolist (row (plist-get table :rows))
+          (when (or (equal "org-glance"
+                           (org-glance-checkpoint--row-value table row "producer"))
+                    (string-prefix-p
+                     "org-glance:"
+                     (or (org-glance-checkpoint--row-value table row "parser_contract") "")))
+            (puthash (org-glance-checkpoint--row-value table row "logical_id")
+                     t families)))))
+    (dolist (id (delete-dups
+                 (append (hash-table-keys families)
+                         (mapcar #'car (sqlite-select db "SELECT logical_id FROM producer_projection WHERE producer='org-glance' UNION SELECT logical_id FROM headline_projection WHERE parser_contract LIKE 'org-glance:%'")))))
+      (unless (gethash id preserved)
+        (sqlite-execute db "DELETE FROM headline_projection WHERE logical_id=? AND parser_contract LIKE 'org-glance:%'" (vector id))
+        (sqlite-execute db "DELETE FROM producer_projection WHERE logical_id=? AND producer='org-glance'" (vector id))
+        (sqlite-execute db "DELETE FROM headline_event WHERE logical_id=?" (vector id))
+        (unless (gethash id families)
+          (sqlite-execute db "DELETE FROM headline_family WHERE logical_id=?" (vector id)))))
+    (dolist (row (sqlite-select db "SELECT id,org_id FROM headline WHERE producer='org-glance'"))
+      (unless (gethash (cadr row) preserved)
+        (sqlite-execute db "DELETE FROM headline WHERE id=?" (vector (car row)))))
+    (sqlite-execute db "DELETE FROM source WHERE producer='org-glance' AND NOT EXISTS(SELECT 1 FROM headline WHERE headline.path=source.path)")
+    (dolist (table tables)
+      (when (equal "headline" (plist-get table :name))
+        (dolist (row (plist-get table :rows))
+          (setq row (org-glance-checkpoint--portable-row
+                     graph (plist-get table :columns) row t))
+          (let ((id (org-glance-checkpoint--row-value table row "id"))
+                (logical (org-glance-checkpoint--row-value table row "org_id")))
+            (when (and (equal "org-glance"
+                              (org-glance-checkpoint--row-value table row "producer"))
+                       (not (gethash logical preserved))
+                       (not (sqlite-select db "SELECT id FROM headline WHERE id=? AND producer!='org-glance'" (vector id))))
+              (puthash id t headlines)
+              (puthash (org-glance-checkpoint--row-value table row "path") t paths))))))
+    (list :families families :preserved preserved :headlines headlines
+          :paths paths :edges edges)))
+
+(cl-defun org-glance-checkpoint--owned-row-p (db table row ownership)
+  "Return non-nil when TABLE's ROW belongs to the imported OWNERSHIP on DB."
+  (let ((name (plist-get table :name))
+        (logical (org-glance-checkpoint--row-value table row "logical_id"))
+        (producer (org-glance-checkpoint--row-value table row "producer")))
+    (cond
+     ((string-prefix-p "glance_" name) nil)
+     (logical
+      (and (gethash logical (plist-get ownership :families))
+           (not (gethash logical (plist-get ownership :preserved)))
+           (or (not (equal name "producer_projection"))
+               (equal producer "org-glance"))
+           (or (not (equal name "headline_projection"))
+               (string-prefix-p "org-glance:"
+                                (or (org-glance-checkpoint--row-value
+                                     table row "parser_contract") "")))))
+     ((equal name "source")
+      (and (equal producer "org-glance")
+           (gethash (org-glance-checkpoint--row-value table row "path")
+                    (plist-get ownership :paths))
+           (not (sqlite-select db "SELECT path FROM source WHERE path=? AND producer!='org-glance'"
+                               (vector (org-glance-checkpoint--row-value table row "path"))))))
+     ((member name '("headline" "org_headline"))
+      (and (equal producer "org-glance")
+           (gethash (org-glance-checkpoint--row-value table row "id")
+                    (plist-get ownership :headlines))))
+     ((equal name "edge")
+      (and (gethash (org-glance-checkpoint--row-value table row "src")
+                    (plist-get ownership :headlines))
+           (or (gethash (org-glance-checkpoint--row-value table row "dst")
+                        (plist-get ownership :headlines))
+               (sqlite-select db "SELECT id FROM headline WHERE id=?"
+                              (vector (org-glance-checkpoint--row-value table row "dst"))))))
+     (t (equal producer "org-glance")))))
 
 (cl-defun org-glance-checkpoint--hydrate-artifact (graph artifact)
-  "Insert decoded ARTIFACT into GRAPH's fresh cache and return its row count."
+  "Insert decoded ARTIFACT into GRAPH's selected cache and return its row count."
   (unless (and (equal org-glance-checkpoint:schema (plist-get artifact :schema))
                (= org-glance-cache:version (plist-get artifact :cacheSchema)))
     (error "org-glance: incompatible checkpoint artifact"))
   (let ((tables (plist-get artifact :tables))
-        (written 0))
+        (written 0)
+        edges)
     (org-glance-cache--with-db
      graph
      (lambda (db)
-       (unless (equal (org-glance-checkpoint--tables db)
-                      (mapcar (lambda (table) (plist-get table :name)) tables))
+       (unless (cl-subsetp
+                (cl-remove-if
+                 (lambda (name) (string-prefix-p "glance_" name))
+                 (mapcar (lambda (table) (plist-get table :name)) tables))
+                (org-glance-checkpoint--tables db) :test #'equal)
          (error "org-glance: checkpoint table set differs from schema"))
        (org-glance-cache--transaction
         db
         (lambda ()
           (sqlite-execute db "PRAGMA defer_foreign_keys=ON")
-          (dolist (table tables)
-            (let* ((name (plist-get table :name))
-                   (columns (plist-get table :columns))
-                   (rows (plist-get table :rows)))
-              (unless (equal columns (org-glance-checkpoint--columns db name))
-                (error "org-glance: checkpoint columns differ for %s" name))
-              (let ((query (org-glance-checkpoint--insert-query name columns)))
-                (dolist (row rows)
-                  (sqlite-execute
-                   db query
-                   (vconcat
-                    (org-glance-checkpoint--portable-row
-                     graph columns row t)))
-                  (cl-incf written)))))))))
+          (let ((ownership (org-glance-checkpoint--prepare-overlay db graph tables)))
+            (setq edges (plist-get ownership :edges))
+            (dolist (table tables)
+              (let* ((name (plist-get table :name))
+                     (columns (plist-get table :columns))
+                     (rows (plist-get table :rows)))
+                (unless (or (string-prefix-p "glance_" name)
+                            (equal columns (org-glance-checkpoint--columns db name)))
+                  (error "org-glance: checkpoint columns differ for %s" name))
+                (let ((query (org-glance-checkpoint--insert-query name columns)))
+                  (dolist (row rows)
+                    (let ((localized (org-glance-checkpoint--portable-row
+                                      graph columns row t)))
+                      (when (org-glance-checkpoint--owned-row-p
+                             db table localized ownership)
+                        (sqlite-execute db query (vconcat localized))))
+                    (cl-incf written))))))))))
+    (org-glance-cache--restore-shared-edges graph edges)
     written))
 
-(cl-defun org-glance-checkpoint--hydrate-staged (graph artifact)
-  "Hydrate ARTIFACT beside GRAPH's live cache, validate, then publish it."
-  (let* ((live (org-glance-cache:path graph))
-         (parent (file-name-directory live))
-         (_ (make-directory parent t))
-         (stage-dir (make-temp-file
-                     (expand-file-name ".checkpoint-stage-" parent) t))
-         (stage (expand-file-name "glance.sqlite3" stage-dir))
-         written)
-    (unwind-protect
-        (progn
-          (cl-letf (((symbol-function 'org-glance-cache:path)
-                     (lambda (_graph) stage)))
-            (setq written
-                  (org-glance-checkpoint--hydrate-artifact graph artifact)))
-          (org-glance-cache:publish-staged
-           live stage org-glance-checkpoint--publication-hook)
-          written)
-      (when (file-exists-p stage-dir) (delete-directory stage-dir t)))))
+(cl-defun org-glance-checkpoint--hydrate-staged (graph artifact expected-rows)
+  "Hydrate ARTIFACT beside GRAPH, checking EXPECTED-ROWS before publication."
+  (let ((org-glance-cache--recovery-publication-hook
+         org-glance-checkpoint--publication-hook))
+    (org-glance-cache--with-staged-generation
+     graph
+     (lambda ()
+       (let ((written (org-glance-checkpoint--hydrate-artifact graph artifact)))
+         (unless (= written expected-rows)
+           (error "org-glance: checkpoint row count mismatch"))
+         written)))))
 
 ;;;###autoload
 (cl-defun org-glance-checkpoint:hydrate
     (&optional (graph (org-glance-ensure-init))
-     &key ((:reconcile-tail reconcile-tail) t))
+               &key ((:reconcile-tail reconcile-tail) t))
   "Hydrate GRAPH from its unique compatible portable checkpoint.
 Signal when neither an exact nor an append-only-tail checkpoint exists."
   (interactive)
@@ -496,10 +592,20 @@ Signal when neither an exact nor an append-only-tail checkpoint exists."
                        (equal (secure-hash 'sha256 bytes)
                               (plist-get artifact-spec :logicalSha256)))
                 (error "org-glance: checkpoint logical artifact mismatch")))
-           (rows (org-glance-checkpoint--hydrate-staged
-                  graph (org-glance-checkpoint--decode bytes))))
-      (unless (= rows (plist-get artifact-spec :rows))
-        (error "org-glance: checkpoint row count mismatch"))
+           (rows
+            (let ((org-glance-checkpoint--publication-hook
+                   (let ((hook org-glance-checkpoint--publication-hook))
+                     (lambda ()
+                       (when hook (funcall hook))
+                       (unless (if (eq kind 'exact)
+                                   (org-glance-checkpoint--current-source-p
+                                    graph descriptor)
+                                 (org-glance-checkpoint--tail-source-p
+                                  graph descriptor))
+                         (error "org-glance: checkpoint sources changed before publication"))))))
+              (org-glance-checkpoint--hydrate-staged
+               graph (org-glance-checkpoint--decode bytes)
+               (plist-get artifact-spec :rows)))))
       (org-glance-graph--invalidate-cache graph)
       (when (and (eq kind 'tail) reconcile-tail)
         (org-glance-cache:refresh graph))

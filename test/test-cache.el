@@ -381,8 +381,8 @@
   (skip-unless (executable-find "git"))
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
-      (org-glance-test:headline "changed-family" "* TODO Before")
-      (org-glance-test:headline "stable-family" "* TODO Stable"))
+                          (org-glance-test:headline "changed-family" "* TODO Before")
+                          (org-glance-test:headline "stable-family" "* TODO Stable"))
     (let ((default-directory (org-glance-graph:directory graph)))
       (should (= 0 (process-file "git" nil nil nil "init" "-q")))
       (should (= 0 (process-file "git" nil nil nil "add" "-A")))
@@ -403,13 +403,13 @@
                     "-c" "user.email=benchmark@example.invalid"
                     "commit" "-qm" "after"))))
     (let ((folded nil)
-          (original (symbol-function 'org-glance-cache--project-family)))
+          (original (symbol-function 'org-glance-cache--prepare-family)))
       (cl-letf (((symbol-function 'org-glance-cache--family-ids)
                  (lambda (_graph) (ert-fail "clean delta entered full census")))
-                ((symbol-function 'org-glance-cache--project-family)
-                 (lambda (db held-graph id &rest inventory)
+                ((symbol-function 'org-glance-cache--prepare-family)
+                 (lambda (held-graph id &rest inventory)
                    (push id folded)
-                   (apply original db held-graph id inventory))))
+                   (apply original held-graph id inventory))))
         (should (= 1 (org-glance-cache:reconcile-inventory graph)))
         (should (equal '("changed-family") folded))))
     (should (equal "After"
@@ -623,6 +623,8 @@
                               db
                               "SELECT event_id,role FROM headline_projection WHERE logical_id='a'"))))
           (sqlite-close db))))))
+
+
 
 (ert-deftest org-glance-test:shared-cache-follows-delete ()
   "Deleting a graph headline removes its shared source and incoming edges."
@@ -1327,6 +1329,242 @@
        :type 'error))
     (should (= 1 (length (org-glance-version:history
                           (org-glance-graph:headline-data-path graph "a") "a"))))))
+
+(ert-deftest org-glance-test:publication-keeps-pinned-readers-and-open-writers ()
+  "Pinned reads retain old Rows; existing handles write the published inode."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+                          (org-glance-test:headline "pinned" "* Before"))
+    (let* ((path (org-glance-cache:path graph))
+           (inode (file-attribute-file-identifier (file-attributes path)))
+           (reader (sqlite-open path))
+           (writer (sqlite-open path)))
+      (unwind-protect
+          (progn
+            (sqlite-execute reader "BEGIN")
+            (should (equal '(("Before"))
+                           (sqlite-select reader "SELECT title FROM headline")))
+            (org-glance-cache--with-staged-generation
+             graph
+             (lambda ()
+               (org-glance-cache--with-db
+                graph (lambda (db)
+                        (sqlite-execute db "UPDATE headline SET title='Published'")))))
+            (should (equal inode
+                           (file-attribute-file-identifier (file-attributes path))))
+            (should (equal '(("Before"))
+                           (sqlite-select reader "SELECT title FROM headline")))
+            (sqlite-commit reader)
+            (should (equal '(("Published"))
+                           (sqlite-select reader "SELECT title FROM headline")))
+            (sqlite-execute writer "UPDATE headline SET title='Later writer'")
+            (should (equal '(("Later writer"))
+                           (sqlite-select reader "SELECT title FROM headline"))))
+        (sqlite-close reader)
+        (sqlite-close writer)))))
+
+(ert-deftest org-glance-test:readers-wait-for-the-first-complete-generation ()
+  "An opened live file remains unavailable until its first generation commits."
+  (with-temp-directory dir
+    (let* ((org-glance-graph-after-open-functions nil)
+           (graph (org-glance-graph dir))
+           (path (org-glance-cache:path graph)))
+      (make-directory (file-name-directory path) t)
+      (let ((db (sqlite-open path)))
+        (unwind-protect
+            (progn
+              (should-not (plist-get (org-glance-cache:authority graph) :families))
+              (should-not (org-glance-cache:headlines graph))
+              (should-not (org-glance-cache:headline graph "first")))
+          (sqlite-close db)))
+      (org-glance-graph:add graph
+        (org-glance-test:headline "first" "* First"))
+      (should (equal "First"
+                     (org-glance-headline-metadata:title
+                      (org-glance-cache:headline graph "first")))))))
+
+(ert-deftest org-glance-test:publication-refuses-a-commit-during-staging ()
+  "A concurrent committed change makes the staged snapshot stale."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+                          (org-glance-test:headline "race" "* Before"))
+    (let ((writer (sqlite-open (org-glance-cache:path graph))))
+      (unwind-protect
+          (progn
+            (should-error
+             (org-glance-cache--with-staged-generation
+              graph
+              (lambda ()
+                (sqlite-execute writer "UPDATE headline SET title='Concurrent'")
+                (org-glance-cache--with-db
+                 graph (lambda (db)
+                         (sqlite-execute db "UPDATE headline SET title='Stale'")))))
+             :type 'error)
+            (should (equal '(("Concurrent"))
+                           (sqlite-select writer "SELECT title FROM headline"))))
+        (sqlite-close writer)))))
+
+(ert-deftest org-glance-test:incompatible-schema-migrates-as-a-complete-generation ()
+  "Migration preserves pinned old Rows and publishes rebuilt Rows together."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+                          (org-glance-test:headline "migrate" "* Authoritative"))
+    (let ((reader (sqlite-open (org-glance-cache:path graph))))
+      (unwind-protect
+          (progn
+            (sqlite-execute reader "UPDATE headline SET title='Retained'")
+            (sqlite-execute
+             reader (format "PRAGMA user_version=%d" (1- org-glance-cache:version)))
+            (sqlite-execute reader "BEGIN")
+            (should (equal '(("Retained"))
+                           (sqlite-select reader "SELECT title FROM headline")))
+            (org-glance-cache:reconcile-families graph '("migrate"))
+            (should (equal '(("Retained"))
+                           (sqlite-select reader "SELECT title FROM headline")))
+            (should (= (1- org-glance-cache:version)
+                       (caar (sqlite-select reader "PRAGMA user_version"))))
+            (sqlite-commit reader)
+            (should (equal '(("Authoritative"))
+                           (sqlite-select reader "SELECT title FROM headline")))
+            (should (= org-glance-cache:version
+                       (caar (sqlite-select reader "PRAGMA user_version")))))
+        (sqlite-close reader)))))
+
+(ert-deftest org-glance-test:publication-respects-an-active-live-writer ()
+  "A staged publication preserves an already active live writer transaction."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+                          (org-glance-test:headline "writer" "* Before"))
+    (let ((writer (sqlite-open (org-glance-cache:path graph)))
+          (prepare (symbol-function 'org-glance-cache--prepare)))
+      (unwind-protect
+          (let ((org-glance-cache--recovery-publication-hook
+                 (lambda ()
+                   (sqlite-execute writer "BEGIN IMMEDIATE")
+                   (sqlite-execute writer "UPDATE headline SET title='Writer'"))))
+            (cl-letf (((symbol-function 'org-glance-cache--prepare)
+                       (lambda (db)
+                         (funcall prepare db)
+                         (sqlite-execute db "PRAGMA busy_timeout=0"))))
+              (should-error
+               (org-glance-cache--with-staged-generation
+                graph (lambda () nil))
+               :type 'sqlite-error))
+            (sqlite-commit writer)
+            (org-glance-cache--read-db
+             graph
+             (lambda (db)
+               (should (equal '(("Writer"))
+                              (sqlite-select db "SELECT title FROM headline"))))))
+        (sqlite-close writer)))))
+
+(ert-deftest org-glance-test:publication-refuses-a-source-change-after-census ()
+  "An unannounced immutable event invalidates the staged directory proof."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+                          (org-glance-test:headline "source-race" "* Before"))
+    (let* ((dir (org-glance-graph:headline-data-path graph "source-race"))
+           (leaf (car (org-glance-version:current dir "source-race")))
+           (before (org-glance-cache:authority graph))
+           (org-glance-cache--recovery-publication-hook
+            (lambda ()
+              (org-glance-version:write-snapshot
+               dir "source-race" (list (org-glance-version:id leaf))
+               "peer" "* Concurrent source\n"))))
+      (should-error (org-glance-cache:recover graph) :type 'error)
+      (should (equal before (org-glance-cache:authority graph))))))
+
+(ert-deftest org-glance-test:publication-failure-rolls-back-schema-and-rows ()
+  "A failure after copying one table restores the complete live generation."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+                          (org-glance-test:headline "rollback" "* Before"))
+    (let ((before (org-glance-cache:authority graph))
+          (original (symbol-function 'sqlite-execute))
+          (copied 0))
+      (cl-letf (((symbol-function 'sqlite-execute)
+                 (lambda (db sql &rest args)
+                   (when (string-prefix-p "INSERT INTO main." sql)
+                     (cl-incf copied)
+                     (when (= copied 2) (error "injected publication failure")))
+                   (apply original db sql args))))
+        (should-error
+         (org-glance-cache--with-staged-generation
+          graph
+          (lambda ()
+            (org-glance-cache--with-db
+             graph (lambda (db)
+                     (sqlite-execute db "UPDATE headline SET title='Aborted'")))))
+         :type 'error))
+      (should (= copied 2))
+      (should (equal before (org-glance-cache:authority graph))))))
+
+(ert-deftest org-glance-test:bulk-family-work-releases-the-live-writer ()
+  "Family parsing runs on the stage while a live writer can acquire its lock."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+                          (org-glance-test:headline "outside" "* Before"))
+    (let* ((path (org-glance-cache:path graph))
+           (dir (org-glance-graph:headline-data-path graph "outside"))
+           (leaf (car (org-glance-version:current dir "outside")))
+           (original (symbol-function 'org-glance-cache--project-family))
+           (observed 0))
+      (org-glance-version:write-snapshot
+       dir "outside" (list (org-glance-version:id leaf)) "peer" "* After\n")
+      (cl-letf (((symbol-function 'org-glance-cache--project-family)
+                 (lambda (&rest args)
+                   (should-not (equal path (org-glance-cache:path graph)))
+                   (let ((writer (sqlite-open path)))
+                     (unwind-protect
+                         (progn
+                           (sqlite-execute writer "PRAGMA busy_timeout=0")
+                           (sqlite-execute writer "BEGIN IMMEDIATE")
+                           (cl-incf observed)
+                           (sqlite-rollback writer))
+                       (sqlite-close writer)))
+                   (apply original args))))
+        (org-glance-cache:reconcile-inventory graph))
+      (should (= 1 observed)))))
+
+(ert-deftest org-glance-test:warm-refresh-never-clones-a-generation ()
+  "A current warm inventory performs no staging work."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+                          (org-glance-test:headline "warm" "* Warm"))
+    (org-glance-cache:refresh graph)
+    (cl-letf (((symbol-function 'org-glance-cache--with-staged-generation)
+               (lambda (&rest _) (ert-fail "warm refresh cloned database"))))
+      (org-glance-cache:refresh graph))))
+
+(ert-deftest org-glance-test:local-write-prepares-before-taking-the-live-writer ()
+  "Local CRUD parses outside its transaction and avoids database cloning."
+  (org-glance-test:with-graph graph
+    (let ((path (org-glance-cache:path graph))
+          (family (symbol-function 'org-glance-cache--prepare-family))
+          (headline (symbol-function 'org-glance-cache--prepare-headline))
+          (prepared 0))
+      (cl-labels
+          ((check-free ()
+             (let ((writer (sqlite-open path)))
+               (unwind-protect
+                   (progn
+                     (sqlite-execute writer "PRAGMA busy_timeout=0")
+                     (sqlite-execute writer "BEGIN IMMEDIATE")
+                     (cl-incf prepared)
+                     (sqlite-rollback writer))
+                 (sqlite-close writer)))))
+        (cl-letf (((symbol-function 'org-glance-cache--prepare-family)
+                   (lambda (&rest args) (check-free) (apply family args)))
+                  ((symbol-function 'org-glance-cache--prepare-headline)
+                   (lambda (&rest args) (check-free) (apply headline args)))
+                  ((symbol-function 'org-glance-cache--with-staged-generation)
+                   (lambda (&rest _) (ert-fail "CRUD cloned the database"))))
+          (org-glance-graph:add graph
+                                (org-glance-test:headline "incremental" "* Incremental"))))
+      (should (= prepared 2))
+      (should (equal "Incremental"
+                     (org-glance-headline-metadata:title
+                      (org-glance-cache:headline graph "incremental")))))))
 
 (provide 'test-cache)
 ;;; test-cache.el ends here

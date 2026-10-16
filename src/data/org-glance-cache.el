@@ -43,9 +43,19 @@
     "CREATE TABLE IF NOT EXISTS inventory_directory (path TEXT PRIMARY KEY, stamp TEXT NOT NULL)")
   "DDL shared with `Glance.Cache'.")
 
+(defvar org-glance-cache--staging-path nil
+  "Database selected while constructing a staged generation.")
+(defvar org-glance-cache--publication-db nil
+  "Live connection retained from the stage snapshot through publication.")
+(defvar org-glance-cache--publication-version nil
+  "Live connection's data version before constructing the staged generation.")
+(defvar org-glance-cache--publication-check nil
+  "Function rechecking staged source evidence before publication.")
+
 (cl-defun org-glance-cache:path (graph)
   "Return GRAPH's shared SQLite cache path."
-  (org-glance-graph:cache-file graph "glance.sqlite3"))
+  (or org-glance-cache--staging-path
+      (org-glance-graph:cache-file graph "glance.sqlite3")))
 
 (cl-defun org-glance-cache--transaction (db thunk)
   "Call THUNK in an immediate transaction on DB."
@@ -86,10 +96,18 @@
       (unwind-protect
           (progn
             (org-glance-cache--prepare db)
-            (org-glance-cache--transaction
-             db (lambda () (org-glance-cache--initialise db)))
-            (funcall fn db))
-        (sqlite-close db)))))
+            (if (and (not org-glance-cache--staging-path)
+                     (/= org-glance-cache:version
+                         (caar (sqlite-select db "PRAGMA user_version"))))
+                (progn
+                  (sqlite-close db)
+                  (setq db nil)
+                  (org-glance-cache:recover graph)
+                  (org-glance-cache--with-db graph fn))
+              (org-glance-cache--transaction
+               db (lambda () (org-glance-cache--initialise db)))
+              (funcall fn db)))
+        (when db (sqlite-close db))))))
 
 (cl-defun org-glance-cache--read-db (graph fn)
   "Call FN against GRAPH's last committed cache without taking a write lock."
@@ -99,7 +117,13 @@
         (unwind-protect
             (progn
               (sqlite-execute db "PRAGMA busy_timeout=50")
-              (funcall fn db))
+              (sqlite-execute db "PRAGMA query_only=ON")
+              (sqlite-execute db "BEGIN")
+              (prog1
+                  (when (= org-glance-cache:version
+                           (caar (sqlite-select db "PRAGMA user_version")))
+                    (funcall fn db))
+                (sqlite-commit db)))
           (sqlite-close db))))))
 
 (cl-defun org-glance-cache--file-digest (path)
@@ -131,8 +155,8 @@
                        (directory-file-name (file-name-directory path))))
     id))
 
-(cl-defun org-glance-cache--project (db graph metadata)
-  "Project METADATA from GRAPH into DB."
+(cl-defun org-glance-cache--prepare-headline (graph metadata)
+  "Prepare METADATA's compatibility projection from GRAPH."
   (let* ((id (org-glance-headline-metadata:id metadata))
          (path (org-glance-graph:content-path graph id))
          (row-id (org-glance-cache--row-id id path))
@@ -146,30 +170,37 @@
          (payload (and record
                        (decode-coding-string (json-serialize record) 'utf-8 t))))
     (when (and contents headline digest)
-      (sqlite-execute
-       db
-       "INSERT INTO source(path,digest,producer) VALUES(?,?,?) ON CONFLICT(path) DO UPDATE SET digest=excluded.digest, producer=excluded.producer"
-       (vector path digest "org-glance"))
-      (sqlite-execute
-       db
-       "INSERT INTO headline(id,path,digest,org_id,org_id_property,title,state,priority,tags,scheduled,deadline,closed,category,created,producer) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET path=excluded.path,digest=excluded.digest,org_id=excluded.org_id,org_id_property=excluded.org_id_property,title=excluded.title,state=excluded.state,priority=excluded.priority,tags=excluded.tags,scheduled=excluded.scheduled,deadline=excluded.deadline,closed=excluded.closed,category=excluded.category,created=excluded.created,producer=excluded.producer"
-       (vector row-id path digest id
-               (org-glance-headline:node-property "ID" headline)
-               (org-glance-headline-metadata:title metadata)
-               (org-glance-headline-metadata:state metadata)
-               (org-glance-cache--priority metadata)
-               (org-glance-cache--tags metadata)
-               (org-glance-headline-metadata:schedule metadata)
-               (org-glance-headline-metadata:deadline metadata)
-               (org-glance-cache--entry-value headline "CLOSED")
-               (or (org-glance-cache--entry-value headline "CATEGORY" t) "")
-               (org-glance-headline:node-property
-                "ORG_GLANCE_CREATION_TIME" headline)
-               "org-glance"))
-      (sqlite-execute
-       db
-       "INSERT INTO org_headline(id,path,digest,content_hash,record,producer) VALUES(?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET path=excluded.path,digest=excluded.digest,content_hash=excluded.content_hash,record=excluded.record,producer=excluded.producer"
-       (vector row-id path digest content-hash payload "org-glance")))))
+      (list
+       (list
+        "INSERT INTO source(path,digest,producer) VALUES(?,?,?) ON CONFLICT(path) DO UPDATE SET digest=excluded.digest, producer=excluded.producer"
+        (vector path digest "org-glance"))
+       (list
+        "INSERT INTO headline(id,path,digest,org_id,org_id_property,title,state,priority,tags,scheduled,deadline,closed,category,created,producer) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET path=excluded.path,digest=excluded.digest,org_id=excluded.org_id,org_id_property=excluded.org_id_property,title=excluded.title,state=excluded.state,priority=excluded.priority,tags=excluded.tags,scheduled=excluded.scheduled,deadline=excluded.deadline,closed=excluded.closed,category=excluded.category,created=excluded.created,producer=excluded.producer"
+        (vector row-id path digest id
+                (org-glance-headline:node-property "ID" headline)
+                (org-glance-headline-metadata:title metadata)
+                (org-glance-headline-metadata:state metadata)
+                (org-glance-cache--priority metadata)
+                (org-glance-cache--tags metadata)
+                (org-glance-headline-metadata:schedule metadata)
+                (org-glance-headline-metadata:deadline metadata)
+                (org-glance-cache--entry-value headline "CLOSED")
+                (or (org-glance-cache--entry-value headline "CATEGORY" t) "")
+                (org-glance-headline:node-property
+                 "ORG_GLANCE_CREATION_TIME" headline)
+                "org-glance"))
+       (list
+        "INSERT INTO org_headline(id,path,digest,content_hash,record,producer) VALUES(?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET path=excluded.path,digest=excluded.digest,content_hash=excluded.content_hash,record=excluded.record,producer=excluded.producer"
+        (vector row-id path digest content-hash payload "org-glance"))))))
+
+(cl-defun org-glance-cache--apply-statements (db statements)
+  "Apply fully prepared STATEMENTS to DB."
+  (dolist (statement statements) (apply #'sqlite-execute db statement)))
+
+(cl-defun org-glance-cache--project (db graph metadata)
+  "Project METADATA from GRAPH into DB."
+  (org-glance-cache--apply-statements
+   db (org-glance-cache--prepare-headline graph metadata)))
 
 (cl-defun org-glance-cache--project-edges (db metadata)
   "Replace METADATA's resolved outgoing edges in DB."
@@ -260,9 +291,12 @@
                                    (org-glance-version:parents version)))))))
       (and current (visit current nil)))))
 
-(cl-defun org-glance-cache--project-family
-    (db graph id &optional (inventory nil inventory-supplied-p))
-  "Replace logical family ID's folded cache projection in DB."
+(cl-defstruct org-glance-cache--family-plan
+  id inventory admitted fingerprint statements)
+
+(cl-defun org-glance-cache--prepare-family
+    (graph id &optional (inventory nil inventory-supplied-p))
+  "Prepare ID's folded projection from GRAPH and optional INVENTORY."
   (let* ((dir (org-glance-graph:headline-data-path graph id))
          (observation (if inventory-supplied-p
                           (org-glance-version:observe dir id inventory)
@@ -293,129 +327,136 @@
          (inventory-proof (org-glance-cache--inventory-proof inventory))
          (admitted (mapcar #'org-glance-version:id history))
          (payload-observations (make-hash-table :test #'equal))
-         (previous (car (sqlite-select
-                         db
-                         "SELECT logical_id FROM headline_family WHERE logical_id=?"
-                         (vector id))))
-         (previous-events
-          (mapcar #'car
-                  (sqlite-select
-                   db
-                   "SELECT event_id FROM headline_event WHERE logical_id=?"
-                   (vector id))))
-         (verified (and (null (cl-set-exclusive-or inventory admitted
-                                                   :test #'equal))
-                        (null (cl-set-difference previous-events inventory
-                                                 :test #'equal))))
+         statements
          (projected nil))
-    (unless verified
-      (if previous
-          (sqlite-execute
-           db
-           "UPDATE headline_family SET reconciled_epoch=?,verified=0 WHERE logical_id=?"
-           (vector inventory-proof id))
-        (sqlite-execute
-         db
-         "INSERT INTO headline_family(logical_id,state,current_version_id,family_fingerprint,reconciled_epoch,verified,revived) VALUES(?,?,?,?,?,0,0)"
-         (vector id "empty" nil fingerprint inventory-proof)))
-      (cl-return-from org-glance-cache--project-family nil))
-    (sqlite-execute db "DELETE FROM headline_family WHERE logical_id=?" (vector id))
-    (when history
-      (sqlite-execute
-       db
-       "INSERT INTO headline_family(logical_id,state,current_version_id,family_fingerprint,reconciled_epoch,verified,revived) VALUES(?,?,?,?,?,?,?)"
-       (vector id state current fingerprint inventory-proof 1 (if revived 1 0)))
-      (dolist (version history)
-        (let* ((event (org-glance-version:id version))
-               (version-kind (org-glance-version:kind version))
-               (kind (pcase version-kind
-                       ('snapshot "snapshot-published")
-                       ('tombstone "tombstone-published")
-                       ('rejection "leaves-rejected")))
-               (parents (json-serialize
-                         (apply #'vector (org-glance-version:parents version))))
-               (targets (json-serialize
-                         (apply #'vector (org-glance-version:targets version))))
-               (observed (json-serialize
-                          (apply #'vector
-                                 (org-glance-version:observed-leaves version))))
-               (envelope (org-glance-cache--event-envelope version)))
-          (sqlite-execute
-           db
-           "INSERT INTO headline_event(logical_id,event_id,kind,parents_json,targets_json,observed_leaves_json,payload_digest,producer,created,envelope) VALUES(?,?,?,?,?,?,?,?,?,?)"
-           (vector id event kind parents targets observed
-                   (org-glance-version:content-sha256 version)
-                   (org-glance-version:producer version)
-                   (org-glance-version:created version) envelope))
-          (when (eq 'snapshot (org-glance-version:kind version))
-            (let ((observation
-                   (org-glance-cache--payload-observation
-                    graph id version (gethash event payloads))))
-              (when (member event leaf-ids)
-                (puthash event observation payload-observations))
-              (sqlite-execute
-               db
-               "INSERT INTO headline_payload_observation(logical_id,event_id,path,observed_digest,payload_state) VALUES(?,?,?,?,?)"
-               (vector id event
-                       (org-glance-version:data-file dir event)
-                       (and (equal "available" (car observation))
-                            (org-glance-version:content-sha256 version))
-                       (car observation)))))))
-      (dolist (version candidates)
-        (when (eq 'snapshot (org-glance-version:kind version))
+    (cl-labels ((emit (sql values) (push (list sql values) statements)))
+      (emit "DELETE FROM headline_family WHERE logical_id=?" (vector id))
+      (when history
+        (emit
+         "INSERT INTO headline_family(logical_id,state,current_version_id,family_fingerprint,reconciled_epoch,verified,revived) VALUES(?,?,?,?,?,?,?)"
+         (vector id state current fingerprint inventory-proof 1 (if revived 1 0)))
+        (dolist (version history)
           (let* ((event (org-glance-version:id version))
-                 (observation (gethash event payload-observations))
-                 (metadata
-                  (and (cdr observation)
-                       (if (equal "available" (car observation))
-                           (cdr observation)
-                         (org-glance-headline-metadata:deserialize
-                          (plist-put
-                           (org-glance-headline-metadata:serialize
-                            (cdr observation))
-                           :recovery (car observation))))))
-                 (role (cond
-                        ((not (org-glance-version:valid version)) "recovery")
-                        ((> (length leaf-ids) 1) "conflict")
-                        (t "current")))
-                 (payload (and metadata
-                               (decode-coding-string
-                                (json-serialize
-                                 (org-glance-headline-metadata:serialize metadata))
-                                'utf-8 t))))
-            (when payload
-              (setq projected t)
-              (sqlite-execute
-               db
-               "INSERT INTO headline_projection(logical_id,event_id,role,source_digest,parser_contract,record_payload) VALUES(?,?,?,?,?,?)"
-               (vector id event role
-                       (org-glance-version:content-sha256 version)
-                       "org-glance:1" payload))
-              (sqlite-execute
-               db
-               "INSERT INTO producer_projection(logical_id,event_id,producer,parser_contract,record_payload) VALUES(?,?,?,?,?)"
-               (vector id event "org-glance" "org-glance:1" payload))))))
-      (unless (or projected (member state '("deleted" "empty")))
-        (let* ((observation (and sole
-                                 (eq 'snapshot (org-glance-version:kind sole))
-                                 (gethash (org-glance-version:id sole)
-                                          payload-observations)))
-               (damage (or (car-safe observation) "unavailable"))
-               (metadata (make-org-glance-headline-metadata
-                          :id id :title (format "%s — %s recovery" id damage)
-                          :tags [] :recovery damage))
-               (payload (decode-coding-string
-                         (json-serialize
-                          (org-glance-headline-metadata:serialize metadata))
-                         'utf-8 t)))
+                 (version-kind (org-glance-version:kind version))
+                 (kind (pcase version-kind
+                         ('snapshot "snapshot-published")
+                         ('tombstone "tombstone-published")
+                         ('rejection "leaves-rejected")))
+                 (parents (json-serialize
+                           (apply #'vector (org-glance-version:parents version))))
+                 (targets (json-serialize
+                           (apply #'vector (org-glance-version:targets version))))
+                 (observed (json-serialize
+                            (apply #'vector
+                                   (org-glance-version:observed-leaves version))))
+                 (envelope (org-glance-cache--event-envelope version)))
+            (emit
+             "INSERT INTO headline_event(logical_id,event_id,kind,parents_json,targets_json,observed_leaves_json,payload_digest,producer,created,envelope) VALUES(?,?,?,?,?,?,?,?,?,?)"
+             (vector id event kind parents targets observed
+                     (org-glance-version:content-sha256 version)
+                     (org-glance-version:producer version)
+                     (org-glance-version:created version) envelope))
+            (when (eq 'snapshot (org-glance-version:kind version))
+              (let ((observation
+                     (org-glance-cache--payload-observation
+                      graph id version (gethash event payloads))))
+                (when (member event leaf-ids)
+                  (puthash event observation payload-observations))
+                (emit
+                 "INSERT INTO headline_payload_observation(logical_id,event_id,path,observed_digest,payload_state) VALUES(?,?,?,?,?)"
+                 (vector id event
+                         (org-glance-version:data-file dir event)
+                         (and (equal "available" (car observation))
+                              (org-glance-version:content-sha256 version))
+                         (car observation)))))))
+        (dolist (version candidates)
+          (when (eq 'snapshot (org-glance-version:kind version))
+            (let* ((event (org-glance-version:id version))
+                   (observation (gethash event payload-observations))
+                   (metadata
+                    (and (cdr observation)
+                         (if (equal "available" (car observation))
+                             (cdr observation)
+                           (org-glance-headline-metadata:deserialize
+                            (plist-put
+                             (org-glance-headline-metadata:serialize
+                              (cdr observation))
+                             :recovery (car observation))))))
+                   (role (cond
+                          ((not (org-glance-version:valid version)) "recovery")
+                          ((> (length leaf-ids) 1) "conflict")
+                          (t "current")))
+                   (payload (and metadata
+                                 (decode-coding-string
+                                  (json-serialize
+                                   (org-glance-headline-metadata:serialize metadata))
+                                  'utf-8 t))))
+              (when payload
+                (setq projected t)
+                (emit
+                 "INSERT INTO headline_projection(logical_id,event_id,role,source_digest,parser_contract,record_payload) VALUES(?,?,?,?,?,?)"
+                 (vector id event role
+                         (org-glance-version:content-sha256 version)
+                         "org-glance:1" payload))
+                (emit
+                 "INSERT INTO producer_projection(logical_id,event_id,producer,parser_contract,record_payload) VALUES(?,?,?,?,?)"
+                 (vector id event "org-glance" "org-glance:1" payload))))))
+        (unless (or projected (member state '("deleted" "empty")))
+          (let* ((observation (and sole
+                                   (eq 'snapshot (org-glance-version:kind sole))
+                                   (gethash (org-glance-version:id sole)
+                                            payload-observations)))
+                 (damage (or (car-safe observation) "unavailable"))
+                 (metadata (make-org-glance-headline-metadata
+                            :id id :title (format "%s — %s recovery" id damage)
+                            :tags [] :recovery damage))
+                 (payload (decode-coding-string
+                           (json-serialize
+                            (org-glance-headline-metadata:serialize metadata))
+                           'utf-8 t)))
+            (emit
+             "INSERT INTO headline_projection(logical_id,event_id,role,source_digest,parser_contract,record_payload) VALUES(?,?,?,?,?,?)"
+             (vector id nil "recovery" nil "org-glance:1" payload))
+            (emit
+             "INSERT INTO producer_projection(logical_id,event_id,producer,parser_contract,record_payload) VALUES(?,?,?,?,?)"
+             (vector id nil "org-glance" "org-glance:1" payload))))))
+    (make-org-glance-cache--family-plan
+     :id id :inventory inventory :admitted admitted :fingerprint fingerprint
+     :statements (nreverse statements))))
+
+(cl-defun org-glance-cache--apply-family (db plan)
+  "Publish prepared family PLAN to DB after checking its retained events."
+  (let* ((id (org-glance-cache--family-plan-id plan))
+         (inventory (org-glance-cache--family-plan-inventory plan))
+         (previous (sqlite-select
+                    db "SELECT logical_id FROM headline_family WHERE logical_id=?"
+                    (vector id)))
+         (events (mapcar #'car (sqlite-select
+                                db "SELECT event_id FROM headline_event WHERE logical_id=?"
+                                (vector id)))))
+    (if (and (null (cl-set-exclusive-or
+                    inventory (org-glance-cache--family-plan-admitted plan)
+                    :test #'equal))
+             (null (cl-set-difference events inventory :test #'equal)))
+        (org-glance-cache--apply-statements
+         db (org-glance-cache--family-plan-statements plan))
+      (let ((proof (org-glance-cache--inventory-proof inventory)))
+        (if previous
+            (sqlite-execute
+             db "UPDATE headline_family SET reconciled_epoch=?,verified=0 WHERE logical_id=?"
+             (vector proof id))
           (sqlite-execute
-           db
-           "INSERT INTO headline_projection(logical_id,event_id,role,source_digest,parser_contract,record_payload) VALUES(?,?,?,?,?,?)"
-           (vector id nil "recovery" nil "org-glance:1" payload))
-          (sqlite-execute
-           db
-           "INSERT INTO producer_projection(logical_id,event_id,producer,parser_contract,record_payload) VALUES(?,?,?,?,?)"
-           (vector id nil "org-glance" "org-glance:1" payload)))))))
+           db "INSERT INTO headline_family(logical_id,state,current_version_id,family_fingerprint,reconciled_epoch,verified,revived) VALUES(?,?,?,?,?,0,0)"
+           (vector id "empty" nil
+                   (org-glance-cache--family-plan-fingerprint plan) proof)))))))
+
+(cl-defun org-glance-cache--project-family
+    (db graph id &optional (inventory nil inventory-supplied-p))
+  "Replace logical family ID's folded cache projection in DB for GRAPH."
+  (org-glance-cache--apply-family
+   db (if inventory-supplied-p
+          (org-glance-cache--prepare-family graph id inventory)
+        (org-glance-cache--prepare-family graph id))))
 
 (cl-defun org-glance-cache--delete (db graph id)
   "Delete ID's source projection from GRAPH's DB."
@@ -501,10 +542,11 @@
 
 (cl-defun org-glance-cache--persist-git-proof (graph)
   "Persist GRAPH's clean Git state, removing an inapplicable prior proof."
-  (if-let* ((proof (org-glance-cache--clean-git-proof graph)))
-      (org-glance-graph:cache-write graph org-glance-cache--git-proof-name proof)
-    (let ((path (org-glance-cache--git-proof-path graph)))
-      (when (f-exists? path) (f-delete path)))))
+  (unless org-glance-cache--staging-path
+    (if-let* ((proof (org-glance-cache--clean-git-proof graph)))
+        (org-glance-graph:cache-write graph org-glance-cache--git-proof-name proof)
+      (let ((path (org-glance-cache--git-proof-path graph)))
+        (when (f-exists? path) (f-delete path))))))
 
 (cl-defun org-glance-cache--git-diff-paths (root before after relative)
   "Return (t . PATHS) changed from BEFORE to AFTER below RELATIVE, or nil."
@@ -606,13 +648,15 @@
 
 (cl-defun org-glance-cache--load-inventory-proof (graph)
   "Return GRAPH's persisted directory-entry proof."
-  (org-glance-cache--with-db
-   graph
-   (lambda (db)
-     (mapcar
-      (lambda (row)
-        (cons (car row) (json-parse-string (cadr row) :array-type 'list)))
-      (sqlite-select db "SELECT path,stamp FROM inventory_directory")))))
+  (condition-case nil
+      (org-glance-cache--read-db
+       graph
+       (lambda (db)
+         (mapcar
+          (lambda (row)
+            (cons (car row) (json-parse-string (cadr row) :array-type 'list)))
+          (sqlite-select db "SELECT path,stamp FROM inventory_directory"))))
+    (sqlite-error nil)))
 
 (cl-defun org-glance-cache--persist-inventory-proof (graph proof)
   "Replace GRAPH's persisted directory-entry PROOF."
@@ -634,13 +678,21 @@
         (org-glance-cache--observed-inventory-directories nil))
     (prog1 (funcall thunk)
       (let ((proof (delete-dups org-glance-cache--observed-inventory-directories)))
+        (when org-glance-cache--staging-path
+          (setq org-glance-cache--publication-check
+                (lambda ()
+                  (unless (org-glance-cache--directory-proof-current-p proof)
+                    (error "org-glance: source inventory changed before publication")))))
         (puthash graph proof org-glance-cache--inventory-directory-proofs)
         (org-glance-cache--persist-inventory-proof graph proof)
         (org-glance-cache--persist-git-proof graph)))))
 
-(cl-defun org-glance-cache:publish-staged (live stage &optional hook)
-  "Validate STAGE and atomically replace the database at LIVE.
-Call HOOK after validation and before publication when non-nil."
+(cl-defun org-glance-cache--quote-identifier (name)
+  "Return NAME quoted as one SQLite identifier."
+  (concat "\"" (replace-regexp-in-string "\"" "\"\"" name t t) "\""))
+
+(cl-defun org-glance-cache--validate-stage (stage)
+  "Validate the complete SQLite generation at STAGE."
   (let ((db (sqlite-open stage)))
     (unwind-protect
         (progn
@@ -655,34 +707,105 @@ Call HOOK after validation and before publication when non-nil."
                  db
                  "SELECT logical_id FROM headline_projection WHERE role IN ('current','conflict','recovery','rejected') AND (record_payload IS NULL OR NOT json_valid(record_payload)) LIMIT 1")
             (error "org-glance: staged SQLite projection failure"))
-          (sqlite-select db "PRAGMA wal_checkpoint(TRUNCATE)")
-          (sqlite-select db "PRAGMA journal_mode=DELETE"))
-      (sqlite-close db)))
-  (when hook (funcall hook))
-  (dolist (sidecar (list (concat live "-shm") (concat live "-wal")))
-    (when (file-exists-p sidecar) (delete-file sidecar)))
-  (rename-file stage live t))
+          (sqlite-select db "PRAGMA wal_checkpoint(TRUNCATE)"))
+      (sqlite-close db))))
 
-(cl-defun org-glance-cache--clone-live-generation (live stage)
-  "Copy LIVE's committed database generation to STAGE when it exists."
-  (when (file-exists-p live)
+(cl-defun org-glance-cache--publish-on-connection (db stage version hook)
+  "Publish STAGE on DB if its observed VERSION is unchanged, calling HOOK."
+  (org-glance-cache--validate-stage stage)
+  (when hook (funcall hook))
+  (unless (equal version (caar (sqlite-select db "PRAGMA data_version")))
+    (error "org-glance: live generation changed before publication"))
+  (when org-glance-cache--publication-check
+    (funcall org-glance-cache--publication-check))
+  (sqlite-execute db "ATTACH DATABASE ? AS cache_stage" (vector stage))
+  (unwind-protect
+      (progn
+        (sqlite-execute db "PRAGMA foreign_keys=OFF")
+        (org-glance-cache--transaction
+         db
+         (lambda ()
+           (unless (equal version (caar (sqlite-select db "PRAGMA data_version")))
+             (error "org-glance: live generation changed before publication"))
+           (let ((objects
+                  (sqlite-select
+                   db "SELECT type,name,sql FROM cache_stage.sqlite_master WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%' ORDER BY CASE type WHEN 'table' THEN 0 WHEN 'index' THEN 1 WHEN 'view' THEN 2 ELSE 3 END,name")))
+             (dolist (object
+                      (sqlite-select
+                       db "SELECT type,name FROM main.sqlite_master WHERE type IN ('table','view','trigger') AND name NOT LIKE 'sqlite_%' ORDER BY CASE type WHEN 'trigger' THEN 0 WHEN 'view' THEN 1 ELSE 2 END"))
+               (sqlite-execute
+                db (format "DROP %s %s" (upcase (car object))
+                           (org-glance-cache--quote-identifier (cadr object)))))
+             (dolist (object objects)
+               (when (equal "table" (car object))
+                 (sqlite-execute db (caddr object))
+                 (let ((table (org-glance-cache--quote-identifier (cadr object))))
+                   (sqlite-execute
+                    db (format "INSERT INTO main.%s SELECT * FROM cache_stage.%s"
+                               table table)))))
+             (dolist (object objects)
+               (unless (equal "table" (car object))
+                 (sqlite-execute db (caddr object)))))
+           (sqlite-execute
+            db (format "PRAGMA user_version=%d" org-glance-cache:version))
+           (when (sqlite-select db "PRAGMA foreign_key_check")
+             (error "org-glance: published SQLite foreign-key failure")))))
+    (sqlite-execute db "PRAGMA foreign_keys=ON")
+    (sqlite-execute db "DETACH DATABASE cache_stage")))
+
+(cl-defun org-glance-cache:publish-staged (live stage &optional hook)
+  "Validate STAGE and publish its complete state transactionally into LIVE.
+Call HOOK after validation and before publication when non-nil."
+  (if org-glance-cache--publication-db
+      (org-glance-cache--publish-on-connection
+       org-glance-cache--publication-db stage
+       org-glance-cache--publication-version hook)
     (let ((db (sqlite-open live)))
       (unwind-protect
           (progn
-            (sqlite-execute db "PRAGMA busy_timeout=5000")
-            (sqlite-execute db "VACUUM INTO ?" (vector stage)))
+            (org-glance-cache--prepare db)
+            (org-glance-cache--publish-on-connection
+             db stage (caar (sqlite-select db "PRAGMA data_version")) hook))
         (sqlite-close db)))))
 
-(cl-defun org-glance-cache--generation-token (path)
-  "Return an O(1) token for the committed SQLite generation at PATH."
-  (mapcar
-   (lambda (candidate)
-     (when-let* ((attributes (file-attributes candidate 'string)))
-       (list (file-attribute-file-identifier attributes)
-             (file-attribute-size attributes)
-             (file-attribute-modification-time attributes)
-             (file-attribute-status-change-time attributes))))
-   (list path (concat path "-wal"))))
+(cl-defun org-glance-cache--with-staged-generation (graph thunk)
+  "Build GRAPH's next generation with THUNK, then publish it."
+  (if org-glance-cache--staging-path
+      (funcall thunk)
+    (let* ((live (org-glance-cache:path graph))
+           (parent (file-name-directory live))
+           (_ (make-directory parent t))
+           (stage-dir (make-temp-file
+                       (expand-file-name ".generation-stage-" parent) t))
+           (stage (expand-file-name "glance.sqlite3" stage-dir))
+           db
+           (missing (make-symbol "missing"))
+           (previous-proof
+            (gethash graph org-glance-cache--inventory-directory-proofs missing))
+           published)
+      (unwind-protect
+          (progn
+            (setq db (sqlite-open live))
+            (org-glance-cache--prepare db)
+            (let ((org-glance-cache--publication-db db)
+                  (org-glance-cache--publication-check nil)
+                  (org-glance-cache--publication-version
+                   (caar (sqlite-select db "PRAGMA data_version"))))
+              (sqlite-execute db "VACUUM INTO ?" (vector stage))
+              (let ((result (let ((org-glance-cache--staging-path stage))
+                              (funcall thunk))))
+                (org-glance-cache:publish-staged
+                 live stage org-glance-cache--recovery-publication-hook)
+                (setq published t)
+                (org-glance-cache--persist-git-proof graph)
+                result)))
+        (when db (sqlite-close db))
+        (unless published
+          (if (eq previous-proof missing)
+              (remhash graph org-glance-cache--inventory-directory-proofs)
+            (puthash graph previous-proof
+                     org-glance-cache--inventory-directory-proofs)))
+        (delete-directory stage-dir t)))))
 
 (cl-defun org-glance-cache--clear-owned-generation (graph)
   "Remove org-glance-owned state and return incoming shared edges from GRAPH."
@@ -729,54 +852,24 @@ Call HOOK after validation and before publication when non-nil."
 
 (cl-defun org-glance-cache:recover (graph)
   "Rebuild GRAPH into a separate generation and publish it atomically."
-  (let* ((live (org-glance-cache:path graph))
-         (parent (file-name-directory live))
-         (_ (make-directory parent t))
-         (stage-dir (make-temp-file
-                     (expand-file-name ".recovery-stage-" parent) t))
-         (stage (expand-file-name "glance.sqlite3" stage-dir))
-         (missing (make-symbol "missing"))
-         (previous-proof
-          (gethash graph org-glance-cache--inventory-directory-proofs missing))
-         live-token
-         retained-edges
-         published)
-    (unwind-protect
-        (progn
-          (org-glance-cache--clone-live-generation live stage)
-          (setq live-token (org-glance-cache--generation-token live))
-          (cl-letf (((symbol-function 'org-glance-cache:path)
-                     (lambda (_graph) stage))
-                    ((symbol-function 'org-glance-cache--inventory-proof-current-p)
-                     (lambda (_graph) nil))
-                    ((symbol-function 'org-glance-cache--persist-git-proof)
-                     (lambda (_graph) nil)))
-            (setq retained-edges
-                  (org-glance-cache--clear-owned-generation graph))
-            (org-glance-cache:refresh graph)
-            (org-glance-cache--restore-shared-edges graph retained-edges))
-          (org-glance-cache:publish-staged
-           live stage
+  (let ((org-glance-cache--recovery-publication-hook
+         (let ((hook org-glance-cache--recovery-publication-hook))
            (lambda ()
-             (when org-glance-cache--recovery-publication-hook
-               (funcall org-glance-cache--recovery-publication-hook))
-             (let ((current-token (org-glance-cache--generation-token live)))
-               (unless (equal live-token current-token)
-                 (error "org-glance: live generation changed before publication")))
+             (when hook (funcall hook))
              (when org-glance-cache--recovery-phase-hook
                (funcall org-glance-cache--recovery-phase-hook
-                        'before-publication))))
-          (when org-glance-cache--recovery-phase-hook
-            (funcall org-glance-cache--recovery-phase-hook 'after-publication))
-          (setq published t)
-          (org-glance-cache--persist-git-proof graph)
-          (org-glance-graph--invalidate-cache graph))
-      (unless published
-        (if (eq previous-proof missing)
-            (remhash graph org-glance-cache--inventory-directory-proofs)
-          (puthash graph previous-proof
-                   org-glance-cache--inventory-directory-proofs)))
-      (when (file-exists-p stage-dir) (delete-directory stage-dir t)))))
+                        'before-publication))))))
+    (org-glance-cache--with-staged-generation
+     graph
+     (lambda ()
+       (cl-letf (((symbol-function 'org-glance-cache--inventory-proof-current-p)
+                  (lambda (_graph) nil)))
+         (let ((edges (org-glance-cache--clear-owned-generation graph)))
+           (org-glance-cache:refresh graph)
+           (org-glance-cache--restore-shared-edges graph edges))))))
+  (when org-glance-cache--recovery-phase-hook
+    (funcall org-glance-cache--recovery-phase-hook 'after-publication))
+  (org-glance-graph--invalidate-cache graph))
 
 (cl-defun org-glance-cache--inventory-current-p (held family)
   "Return non-nil when HELD proves observed FAMILY is already projected."
@@ -877,7 +970,14 @@ COMPLETED and TOTAL count UNIT values."
                             (if (org-glance-headline-metadata? spec)
                                 (org-glance-headline-metadata:id spec)
                               (plist-get spec :id)))
-                          specs)))
+                          specs))
+         (families (mapcar (apply-partially #'org-glance-cache--prepare-family graph)
+                           (delete-dups (copy-sequence touched))))
+         (prepared (make-hash-table :test #'equal)))
+    (dolist (metadata headlines)
+      (when (member (org-glance-headline-metadata:id metadata) touched)
+        (puthash (org-glance-headline-metadata:id metadata)
+                 (org-glance-cache--prepare-headline graph metadata) prepared)))
     (org-glance-cache--with-db
      graph
      (lambda (db)
@@ -885,14 +985,15 @@ COMPLETED and TOTAL count UNIT values."
         db
         (lambda ()
           (org-glance-cache--project-compatibility-changes
-           db graph touched headlines)
-          (dolist (id (delete-dups touched))
-            (org-glance-cache--project-family db graph id))))))))
+           db graph touched headlines prepared)
+          (dolist (family families)
+            (org-glance-cache--apply-family db family))))))))
 
 (cl-defun org-glance-cache--project-compatibility-changes
-    (db graph ids &optional headlines)
+    (db graph ids &optional headlines prepared)
   "Project compatibility IDS and affected edges into DB for GRAPH.
-HEADLINES defaults to GRAPH's live compatibility-WAL metadata."
+HEADLINES defaults to GRAPH's live compatibility-WAL metadata.
+PREPARED holds compatibility statements already computed for each changed ID."
   (let ((live (or headlines (org-glance-cache--headlines graph)))
         (changed (delete-dups (copy-sequence ids))))
     (dolist (id changed)
@@ -900,7 +1001,9 @@ HEADLINES defaults to GRAPH's live compatibility-WAL metadata."
                  (cl-find id live
                           :key #'org-glance-headline-metadata:id
                           :test #'equal)))
-          (org-glance-cache--project db graph metadata)
+          (if prepared
+              (org-glance-cache--apply-statements db (gethash id prepared))
+            (org-glance-cache--project db graph metadata))
         (org-glance-cache--delete db graph id)))
     (dolist (metadata live)
       (when (or (member (org-glance-headline-metadata:id metadata) changed)
@@ -959,6 +1062,16 @@ HEADLINES defaults to GRAPH's live compatibility-WAL metadata."
       (org-glance-cache--project-edges db current))))
 
 (cl-defun org-glance-cache:refresh (graph)
+  "Reconcile GRAPH's live headlines through a staged generation."
+  (cond
+   (org-glance-cache--staging-path
+    (org-glance-cache--refresh-in-stage graph))
+   ((org-glance-cache--inventory-proof-current-p graph)
+    (message "org-glance: cache proof current (0 families rebuilt, 0.0s)"))
+   (t (org-glance-cache--with-staged-generation
+       graph (lambda () (org-glance-cache--refresh-in-stage graph))))))
+
+(cl-defun org-glance-cache--refresh-in-stage (graph)
   "Reconcile GRAPH's live headlines into the shared cache."
   (let ((started (float-time)))
     (if (org-glance-cache--inventory-proof-current-p graph)
@@ -1059,16 +1172,25 @@ HEADLINES defaults to GRAPH's live compatibility-WAL metadata."
 
 (cl-defun org-glance-cache:reconcile-families (graph ids)
   "Reconcile immutable family IDS into GRAPH's shared projection."
-  (org-glance-cache--with-db
-   graph
-   (lambda (db)
-     (org-glance-cache--transaction
-      db
-      (lambda ()
-        (dolist (id (delete-dups (copy-sequence ids)))
-          (org-glance-cache--project-family db graph id)))))))
+  (let ((families (mapcar
+                   (apply-partially #'org-glance-cache--prepare-family graph)
+                   (delete-dups (copy-sequence ids)))))
+    (org-glance-cache--with-db
+     graph
+     (lambda (db)
+       (org-glance-cache--transaction
+        db
+        (lambda ()
+          (dolist (family families)
+            (org-glance-cache--apply-family db family))))))))
 
 (cl-defun org-glance-cache:reconcile-inventory (graph &optional complete)
+  "Reconcile GRAPH's family inventory in a staged generation.
+COMPLETE forces observation of every family.  Return the folded family count."
+  (org-glance-cache--with-staged-generation
+   graph (lambda () (org-glance-cache--reconcile-in-stage graph complete))))
+
+(cl-defun org-glance-cache--reconcile-in-stage (graph &optional complete)
   "Reconcile immutable families whose inventory checkpoint changed in GRAPH.
 COMPLETE forces a census when the local projection cannot trust a Git delta.
 Return the number of families folded."
@@ -1078,44 +1200,51 @@ Return the number of families folded."
         (message "org-glance: cache reconcile: clean Git delta (%d families)"
                  (length ids))
         (org-glance-cache:reconcile-families graph ids)
-        (org-glance-graph:cache-write
-         graph org-glance-cache--git-proof-name (plist-get delta :proof))
+        (when org-glance-cache--staging-path
+          (let ((proof (plist-get delta :proof)))
+            (setq org-glance-cache--publication-check
+                  (lambda ()
+                    (unless (equal proof (org-glance-cache--clean-git-proof graph))
+                      (error "org-glance: source Git proof changed before publication"))))))
+        (unless org-glance-cache--staging-path
+          (org-glance-graph:cache-write
+           graph org-glance-cache--git-proof-name (plist-get delta :proof)))
         (length ids))
     (message "org-glance: cache reconcile: complete census (no safe clean Git transition)")
     (org-glance-cache--record-complete-inventory
      graph
      (lambda ()
        (let ((current (org-glance-cache--family-ids graph)))
-       (org-glance-cache--with-db
-        graph
-        (lambda (db)
-          (let* ((held (sqlite-select
-                     db
-                     "SELECT logical_id,reconciled_epoch,verified FROM headline_family"))
-              (ids (sort (delete-dups
-                          (append current (mapcar #'car held))) #'string<))
-              (observed
-               (mapcar
-                (lambda (id)
-                  (cons id (org-glance-cache--inventory-event-ids
-                            (org-glance-graph:headline-data-path graph id))))
-                ids))
-              (changed
-               (if complete
-                   observed
-                 (cl-remove-if-not
-                  (lambda (family)
-                    (not (org-glance-cache--inventory-current-p held family)))
-                  observed))))
-         (org-glance-cache--transaction
-          db
-          (lambda ()
-            (dolist (family changed)
-              (org-glance-cache--project-family
-               db graph (car family) (cdr family)))
-            (org-glance-cache--project-family-compatibility-changes
-             db graph (mapcar #'car changed))))
-            (length changed)))))))))
+         (org-glance-cache--with-db
+          graph
+          (lambda (db)
+            (let* ((held (sqlite-select
+                          db
+                          "SELECT logical_id,reconciled_epoch,verified FROM headline_family"))
+                   (ids (sort (delete-dups
+                               (append current (mapcar #'car held))) #'string<))
+                   (observed
+                    (mapcar
+                     (lambda (id)
+                       (cons id (org-glance-cache--inventory-event-ids
+                                 (org-glance-graph:headline-data-path graph id))))
+                     ids))
+                   (changed
+                    (if complete
+                        observed
+                      (cl-remove-if-not
+                       (lambda (family)
+                         (not (org-glance-cache--inventory-current-p held family)))
+                       observed))))
+              (org-glance-cache--transaction
+               db
+               (lambda ()
+                 (dolist (family changed)
+                   (org-glance-cache--project-family
+                    db graph (car family) (cdr family)))
+                 (org-glance-cache--project-family-compatibility-changes
+                  db graph (mapcar #'car changed))))
+              (length changed)))))))))
 
 (defvar org-glance-cache--inventory-timer nil
   "Timer that reconciles immutable inventories for open graphs.")
@@ -1409,6 +1538,8 @@ INITIAL queues startup work without consuming the first post-open refresh."
          (org-glance-graph--prefer-family-metadata projected ordinary))
         (family nil)
         (t ordinary))))))
+
+
 
 (cl-defun org-glance-cache:material-path (graph id)
   "Return ID's digest-verified current Snapshot path from GRAPH's committed cache.
