@@ -68,41 +68,27 @@
        :type 'error)
       (should (equal before (org-glance-cache:authority graph))))))
 
-(ert-deftest org-glance-test:checkpoint-hydration-preserves-peer-projections ()
-  "Hydration overlays org-glance state while retaining the peer's local rows."
+(ert-deftest org-glance-test:checkpoint-hydration-does-not-touch-glance-cache ()
+  "A held Glance writer stays independent of org-glance checkpoint hydration."
   (org-glance-test:with-graph graph
-    (org-glance-graph:add graph
-                          (org-glance-test:headline "owned" "* Owned"))
-    (org-glance-graph:add graph
-                          (org-glance-test:headline "mixed" "* Mixed"))
+    (org-glance-graph:add graph (org-glance-test:headline "owned" "* Owned"))
     (org-glance-cache:refresh graph)
     (org-glance-checkpoint:seal graph "test-writer")
-    (org-glance-cache--with-db
-     graph
-     (lambda (db)
-       (sqlite-execute
-        db "CREATE TABLE glance_store_epoch_v1(singleton INTEGER PRIMARY KEY,fingerprint TEXT NOT NULL)")
-       (sqlite-execute
-        db "INSERT INTO glance_store_epoch_v1 VALUES(1,'peer-fingerprint')")
-       (sqlite-execute
-        db "INSERT INTO source(path,digest,producer) VALUES('/peer.org','digest','glance')")
-       (sqlite-execute
-        db "INSERT INTO headline(id,path,digest,title,tags,category,producer) VALUES('peer','/peer.org','digest','Peer','','','glance')")
-       (sqlite-execute
-        db "INSERT INTO edge(src,dst,kind,via) SELECT 'peer',id,'mentions','row' FROM headline WHERE org_id='owned'")
-       (sqlite-execute
-        db "UPDATE source SET producer='glance' WHERE path IN (SELECT path FROM headline WHERE org_id='mixed')")
-       (sqlite-execute db "UPDATE headline SET producer='glance' WHERE org_id='mixed'")))
-    (org-glance-checkpoint:hydrate graph)
-    (org-glance-cache--read-db
-     graph
-     (lambda (db)
-       (should (equal '(("peer-fingerprint"))
-                      (sqlite-select db "SELECT fingerprint FROM glance_store_epoch_v1")))
-       (should (equal '(("Peer" "owned"))
-                      (sqlite-select db "SELECT src.title,dst.org_id FROM edge JOIN headline src ON src.id=edge.src JOIN headline dst ON dst.id=edge.dst WHERE src.id='peer'")))
-       (should (equal '(("Mixed"))
-                      (sqlite-select db "SELECT title FROM headline WHERE org_id='mixed'")))))))
+    (let ((peer (sqlite-open (org-glance-graph:cache-file
+                             graph "glance-index.sqlite3"))))
+      (unwind-protect
+          (progn
+            (sqlite-execute peer "CREATE TABLE sentinel(value TEXT)")
+            (sqlite-execute peer "INSERT INTO sentinel VALUES('Glance generation')")
+            (sqlite-execute peer "BEGIN IMMEDIATE")
+            (sqlite-execute peer "UPDATE sentinel SET value='uncommitted Glance generation'")
+            (org-glance-checkpoint:hydrate graph)
+            (should (equal '(("uncommitted Glance generation"))
+                           (sqlite-select peer "SELECT value FROM sentinel")))
+            (should (equal "Owned" (org-glance-headline-metadata:title
+                                    (org-glance-cache:headline graph "owned")))))
+        (sqlite-rollback peer)
+        (sqlite-close peer)))))
 
 (ert-deftest org-glance-test:checkpoint-refuses-a-commit-during-artifact-hydration ()
   "A peer commit while decoding the stage survives the rejected publication."
@@ -124,39 +110,17 @@
                            (sqlite-select writer "SELECT title FROM headline"))))
         (sqlite-close writer)))))
 
-(ert-deftest org-glance-test:checkpoint-ignores-stale-peer-rows-in-an-artifact ()
-  "A mixed-producer artifact preserves the live peer's values and edges."
+(ert-deftest org-glance-test:checkpoint-refuses-loss-of-admitted-events ()
+  "An older self-consistent artifact cannot erase a newer admitted family."
   (org-glance-test:with-graph graph
-    (org-glance-graph:add graph
-                          (org-glance-test:headline "owned" "* Owned"))
-    (org-glance-graph:add graph
-                          (org-glance-test:headline "peer" "* Peer"))
-    (org-glance-cache:refresh graph)
-    (let ((path (org-glance-graph:content-path graph "peer")))
-      (org-glance-cache--with-db
-       graph
-       (lambda (db)
-         (sqlite-execute db "CREATE TABLE glance_store_epoch_v2(singleton INTEGER PRIMARY KEY,config_fingerprint TEXT NOT NULL,fingerprint TEXT NOT NULL)")
-         (sqlite-execute db "INSERT INTO glance_store_epoch_v2 VALUES(1,'config','old-fingerprint')")
-         (sqlite-execute db "UPDATE source SET digest='old-digest',producer='glance' WHERE path=?" (vector path))
-         (sqlite-execute db "UPDATE headline SET digest='old-digest',title='Old peer',producer='glance' WHERE org_id='peer'")
-         (sqlite-execute db "INSERT INTO edge(src,dst,kind,via) SELECT src.id,dst.id,'old-edge','row' FROM headline src,headline dst WHERE src.org_id='peer' AND dst.org_id='owned'")))
-      (org-glance-checkpoint:seal graph "mixed-writer")
-      (org-glance-cache--with-db
-       graph
-       (lambda (db)
-         (sqlite-execute db "UPDATE glance_store_epoch_v2 SET fingerprint='new-fingerprint'")
-         (sqlite-execute db "UPDATE source SET digest='new-digest' WHERE producer='glance'")
-         (sqlite-execute db "UPDATE headline SET title='New peer',digest='new-digest' WHERE org_id='peer'")
-         (sqlite-execute db "UPDATE edge SET kind='new-edge' WHERE src IN (SELECT id FROM headline WHERE org_id='peer')")))
-      (org-glance-checkpoint:hydrate graph)
-      (org-glance-cache--read-db
-       graph
-       (lambda (db)
-         (should (equal '(("new-fingerprint"))
-                        (sqlite-select db "SELECT fingerprint FROM glance_store_epoch_v2")))
-         (should (equal '(("New peer" "new-digest" "new-digest" "new-edge"))
-                        (sqlite-select db "SELECT headline.title,headline.digest,source.digest,edge.kind FROM headline JOIN source USING(path) JOIN edge ON edge.src=headline.id WHERE headline.org_id='peer'"))))))))
+    (org-glance-graph:add graph (org-glance-test:headline "old" "* Older"))
+    (let* ((artifact (org-glance-checkpoint--artifact graph))
+           (decoded (org-glance-checkpoint--decode (plist-get artifact :bytes))))
+      (org-glance-graph:add graph (org-glance-test:headline "new" "* Newer"))
+      (let ((before (org-glance-cache:authority graph)))
+        (should-error (org-glance-checkpoint--hydrate-staged
+                       graph decoded (plist-get artifact :rows)) :type 'error)
+        (should (equal before (org-glance-cache:authority graph)))))))
 
 (ert-deftest org-glance-test:cold-open-hydrates-before-background-refresh ()
   "A missing local cache is usable from an exact checkpoint during open."

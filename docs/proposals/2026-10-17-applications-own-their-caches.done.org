@@ -1,0 +1,58 @@
+#+TITLE: Applications own their caches
+#+DATE: 2026-10-17
+
+Status: *done*
+
+* Decision
+
+org-glance owns =cache/org-glance.sqlite3=. Glance owns
+=cache/glance-index.sqlite3=. Both share canonical Org files, immutable family
+events, and append-only notification hints. Each rebuilds its own query cache.
+
+org-glance keeps its relational queries and removes duplicate producer
+projections, peer-preservation overlays, and cross-application SQL publication.
+Atomic staged publication and stale-generation refusal remain necessary for
+concurrent Emacs processes. The former shared-cache implementation is recorded
+at [[https://github.com/rails-to-cosmos/org-glance/commit/bfb15a2][bfb15a2]],
+=src/data/org-glance-cache.el:1=.
+
+* Migration and recovery
+
+First use takes a committed SQLite snapshot of the schema-6
+=cache/glance.sqlite3=, including its WAL. Conversion changes only the private
+copy. Link publication refuses to overwrite a concurrent first opener. The
+original database remains available to older application versions.
+
+Imported family evidence remains unverified until independent reconciliation.
+Admitted event identities and readable org-glance projections survive partial
+delivery. A family with only peer metadata receives a recovery Row until
+org-glance can parse and verify its canonical Snapshot. A missing event never
+becomes an implicit deletion. Unknown legacy cache formats rebuild from sources.
+
+Checkpoint hydration replaces the private projection and refuses an artifact
+that loses an already admitted event. Reads continue using committed snapshots
+while another org-glance process prepares or publishes a generation.
+
+* Verification
+
+Source compilation passes for 22 modules. All 539 ERT cases pass, including
+private-cache migration with a held legacy writer, recovery from peer-owned
+Rows while the canonical family is absent, independent Glance writers, and
+checkpoint refusal when admission evidence would be lost.
+
+The importer uses a read-only URI attachment on a disk-backed scratch
+connection. The write-refusal and nonempty-copy regression also covers spaces,
+question marks, and UTF-8 paths. This preserves the one-argument SQLite API on
+Emacs 29/30; see
+[[https://raw.githubusercontent.com/emacs-mirror/emacs/emacs-29/src/sqlite.c][the Emacs 29 implementation]] and
+[[https://www.sqlite.org/uri.html][SQLite URI modes]].
+
+Glance passes 2,340 application cases, five publication cases, 194 Elm cases,
+172 browser cases, 40 cross-runtime scenarios, and 53 adapter contracts. Both
+applications commit while the other application's writer remains held.
+Opposite-order Emacs startup and Overview measurements use the frozen
+pre-change working tree. Detailed timings and scope are in
+[[file:../../../glance/docs/reports/2026-10-17-private-application-caches.md][the implementation report]].
+
+The cost is independent cold parsing and loss of cross-application cache seeding.
+The old database remains a rollback artifact; automatic deletion is out of scope.

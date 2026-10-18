@@ -26,6 +26,10 @@ publishes that root atomically, verifies an interrupted publication, and removes
 the compatibility file after publication. Canonical compact JSON field order
 and a trailing newline match Glance byte for byte.
 
+Rejected readable Leaves remain projected with exact =HEADLINE/VERSION= Row
+identities. Materializing one opens its own immutable payload; saving publishes
+a new child above the complete structural frontier and makes the edit current.
+
 The cross-repository interop suite covers concurrent leaves, merge resolution,
 checksum-invalid ancestry, and the sole-current invariant across org-glance,
 Glance HTTP History, and MCP.

@@ -707,17 +707,22 @@ eight, =cursor-counts-bytes= among them; the poll's window START moved off
 =re-laid-mid-fold=.  Moving the ONE SPELLER instead reddens nothing.  59 external cases
 today, up from 50.
 
-* Shared cache
+* Private cache
 
-35. *The shared cache carries two distinct hashes.*  Schema version 6 at
-    =cache/glance.sqlite3= stores the raw file SHA-256 in =source.digest=,
+35. *The private cache carries two distinct hashes.*  Schema version 7 at
+    =cache/org-glance.sqlite3= stores the raw file SHA-256 in =source.digest=,
     =headline.digest= and =org_headline.digest=.  The org-glance projection
     keeps its normalized content SHA-1 in =org_headline.content_hash=.
     =org-glance-cache--prepare-headline= computes both before the immediate
     transaction; =org-glance-cache:metadata= accepts a local row only while both
     hashes match their respective bytes and serialized metadata.  The graph's
     post-append hook updates or deletes the projection after the WAL lands.
-    SQLite owns cross-process writer serialization.  The graph WAL remains the
+    SQLite owns serialization between org-glance processes. Glance owns its
+    independent =cache/glance-index.sqlite3=. First use copies committed
+    schema-6 shared state, retaining admitted events and recovery projections;
+    the original database stays intact. See
+    [[file:proposals/2026-10-17-applications-own-their-caches.done.org][the ownership decision]].
+    The graph WAL remains the
     read path through migration stage 4.  =headline_family.revived= derives
     once during projection and answers tombstone ancestry without reading event
     parent JSON on the authority path.  Startup reports its proof or rebuild
@@ -729,7 +734,7 @@ today, up from 50.
     =cache-refresh-reports-proof-and-rebuild-progress= and Glance's
     =relation-parser-parity= interop
     case.  The latter opens a store written by org-glance under a running
-    Glance daemon and verifies schema version, both producers, both hashes and
+    Glance daemon and verifies independent caches, schema version, both hashes and
     the parsers' resolved typed edge.
 
     A read joins compatibility-WAL, family, and projected Rows through id hash
@@ -781,9 +786,13 @@ today, up from 50.
 
 40. *Immutable history is append-only.*  Physical events remain retained while
     the configured history depth limits the visible ancestry projection.
+    Readable rejected structural Leaves remain searchable under exact
+    =HEADLINE/VERSION= Row identities. A material save from one publishes a
+    child of every structural Leaf, making that edit current. Pinned by
+    =rejected-snapshot-is-visible-and-an-edit-makes-it-current=.
 
 41. *Immutable family inventory is live search authority.*  The isolated
-    reconciliation worker compares event-directory proofs with the shared
+    reconciliation worker compares event-directory proofs with its private
     SQLite checkpoint and folds changed or unverified families. Relay records
     accelerate compatibility ingestion but do not gate discovery. A
     family operation obtains one inventory, History, and payload-byte

@@ -175,7 +175,9 @@ evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
     is git-ignored — what crosses machines is the WAL record the fold produces, at the
     cost of hazard H3. Refusals, ordering rules, the retirement contract and the
     evidence: [[file:docs/invariants.org][docs/invariants.org]].
-35. `cache/glance.sqlite3` is the local multi-writer projection.
+35. `cache/org-glance.sqlite3` is org-glance's private local projection.
+    Glance owns a separate cache. First use imports the former shared schema-6
+    cache without modifying it and retains admitted-event recovery evidence.
     `headline.digest` and `org_headline.digest` are raw file
     SHA-256 values; `org_headline.content_hash` is org-glance's normalized
     content SHA-1. Reads pin compatible committed snapshots. Publishers prepare
@@ -198,7 +200,9 @@ evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
     and migrates before its next write.
 40. Immutable history is append-only. The tree-wide
     =#+GLANCE_HEADLINE_HISTORY_DEPTH:= setting limits the projected ancestry;
-    zero exposes the complete event family.
+    zero exposes the complete event family. Readable rejected Leaves remain
+    searchable by exact version, and saving one publishes a current child of
+    every structural Leaf.
 41. Immutable family directories are search authority. Reads and the session
     timer compare event-name inventories with SQLite checkpoints; relay lines
     are wake-up hints. One operation derives History, payload integrity, parsing,

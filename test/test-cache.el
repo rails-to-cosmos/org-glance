@@ -83,27 +83,25 @@
     (let ((db (sqlite-open (org-glance-cache:path graph))))
       (unwind-protect
           (progn
-          (should (equal '((6)) (sqlite-select db "PRAGMA user_version")))
+          (should (equal '((7)) (sqlite-select db "PRAGMA user_version")))
             (should
              (equal
               '(("headline_event") ("headline_family")
-                ("headline_payload_observation") ("headline_projection")
-                ("producer_projection"))
+                ("headline_payload_observation") ("headline_projection"))
               (sqlite-select
                db
                "SELECT name FROM sqlite_master WHERE (type='table' AND name LIKE 'headline_%') OR name='producer_projection' ORDER BY name")))
             (should
-             (equal '(("headline_projection" 0) ("producer_projection" 0))
+             (equal '(("headline_projection" 0))
                     (sqlite-select
                      db
-                     "SELECT 'headline_projection',\"notnull\" FROM pragma_table_info('headline_projection') WHERE name='event_id' UNION ALL SELECT 'producer_projection',\"notnull\" FROM pragma_table_info('producer_projection') WHERE name='event_id'")))
+                     "SELECT 'headline_projection',\"notnull\" FROM pragma_table_info('headline_projection') WHERE name='event_id'")))
             (should
-             (equal '(("headline_projection_metadata")
-                      ("producer_projection_metadata"))
+             (equal '(("headline_projection_metadata"))
                     (sqlite-select
                      db
                      "SELECT name FROM sqlite_master WHERE type='index' AND name IN ('headline_projection_metadata','producer_projection_metadata') ORDER BY name")))
-            (should (equal '(("glance_payload"))
+            (should (equal nil
                            (sqlite-select
                             db
                             "SELECT name FROM sqlite_master WHERE type='table' AND name='glance_payload'")))
@@ -591,8 +589,10 @@
            (root (car (org-glance-version:current dir "a")))
            (root-id (org-glance-version:id root))
            (created "2026-10-10T00:00:00Z"))
-      (dolist (branch '(("left" "* Left\n") ("right" "* Right\n")))
-        (let ((id (car branch)) (contents (cadr branch)))
+      (dolist (branch '(("left" "Left") ("right" "Right")))
+        (let ((id (car branch))
+              (contents (org-glance-test:org-with-id
+                         (concat "* " (cadr branch)) "a")))
           (org-glance-test--write-family-event
            dir id
            (list :version 2 :event "snapshot-published" :headline "a"
@@ -618,13 +618,68 @@
                              (sqlite-select
                               db
                               "SELECT kind,targets_json,observed_leaves_json FROM headline_event WHERE event_id='reject-left'")))
-              (should (equal '(("right" "current"))
+              (should (equal '(("left" "rejected") ("right" "current"))
                              (sqlite-select
                               db
                               "SELECT event_id,role FROM headline_projection WHERE logical_id='a'"))))
           (sqlite-close db))))))
 
-
+(ert-deftest org-glance-test:rejected-snapshot-is-visible-and-an-edit-makes-it-current ()
+  "A rejected Snapshot stays addressable; saving it publishes the current child."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "a" "* Root"))
+    (let* ((dir (org-glance-graph:headline-data-path graph "a"))
+           (root (car (org-glance-version:current dir "a")))
+           (root-id (org-glance-version:id root))
+           (created "2026-10-10T00:00:00Z"))
+      (dolist (branch '(("left" "Left :work:") ("right" "Right :work:")))
+        (let ((id (car branch))
+              (contents (org-glance-test:org-with-id
+                         (concat "* " (cadr branch)) "a")))
+          (org-glance-test--write-family-event
+           dir id
+           (list :version 2 :event "snapshot-published" :headline "a"
+                 :id id :parents (vector root-id)
+                 :contentSha256 (secure-hash 'sha256 contents)
+                 :created created :producer "glance")
+           contents)))
+      (org-glance-test--write-family-event
+       dir "reject-left"
+       (list :version 2 :event "leaves-rejected" :headline "a"
+             :id "reject-left" :targets ["left"]
+             :observedLeaves ["left" "right"] :contentSha256 nil
+             :created created :producer "glance"))
+      (org-glance-cache:refresh graph)
+      (should (= 1 (cl-count "a/left"
+                             (mapcar #'org-glance-headline-metadata:id
+                                     (org-glance-cache:headlines graph))
+                             :test #'equal)))
+      (should (= 1 (cl-count "a/left"
+                             (mapcar #'org-glance-headline-metadata:id
+                                     (org-glance-cache:headlines-for-filter
+                                      graph '(:tags ("work"))))
+                             :test #'equal)))
+      (should (equal "Right"
+                     (org-glance-headline-metadata:title
+                      (org-glance-cache:headline graph "a"))))
+      (org-glance-test:with-open buffer
+          (org-glance-material:open graph "a/left")
+        (with-current-buffer buffer
+          (goto-char (point-min))
+          (should (search-forward "Left" nil t))
+          (replace-match "Left edited" t t)
+          (org-glance-test:save)))
+      (let* ((history (org-glance-version:history dir "a"))
+             (current (org-glance-version:current dir "a")))
+        (should (= 1 (length current)))
+        (should (equal '("left" "right")
+                       (sort (copy-sequence
+                              (org-glance-version:parents (car current)))
+                             #'string<)))
+        (should (equal "Left edited"
+                       (org-glance-headline-metadata:title
+                        (org-glance-cache:headline graph "a"))))
+        (should (= 5 (length history)))))))
 
 (ert-deftest org-glance-test:shared-cache-follows-delete ()
   "Deleting a graph headline removes its shared source and incoming edges."
@@ -1000,7 +1055,6 @@
       (unwind-protect
           (progn
             (sqlite-execute db "DELETE FROM headline_projection")
-            (sqlite-execute db "DELETE FROM producer_projection")
             (sqlite-execute db "DELETE FROM inventory_directory"))
         (sqlite-close db)))
     (remhash graph org-glance-cache--inventory-directory-proofs)
@@ -1189,9 +1243,6 @@
              (vector (json-serialize (plist-put record :title "Retained"))))
             (sqlite-execute
              db "UPDATE headline_projection SET record_payload=? WHERE logical_id='generation'"
-             (vector (json-serialize record)))
-            (sqlite-execute
-             db "UPDATE producer_projection SET record_payload=? WHERE logical_id='generation'"
              (vector (json-serialize record))))
         (sqlite-close db)))
     (should (equal "Retained"
@@ -1214,38 +1265,132 @@
                    (org-glance-headline-metadata:title
                     (org-glance-cache:headline graph "generation"))))))
 
-(ert-deftest org-glance-test:cache-recovery-preserves-glance-projections ()
-  "Recovery replaces org-glance state without dropping shared Glance rows."
+(ert-deftest org-glance-test:private-cache-migration-preserves-the-shared-database ()
+  "Import committed org-glance Rows while leaving the old database untouched."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
       (org-glance-test:headline "owned" "* TODO Owned"))
-    (let ((db (sqlite-open (org-glance-cache:path graph))))
+    (let* ((target (org-glance-cache:path graph))
+           (legacy (org-glance-graph:cache-file graph "glance.sqlite3"))
+           (db (sqlite-open target)))
       (unwind-protect
           (progn
-            (sqlite-execute
-             db
-             "INSERT INTO source(path,digest,producer) VALUES('/glance.org','digest','glance')")
-            (sqlite-execute
-             db
-             "INSERT INTO headline(id,path,digest,title,tags,category,producer) VALUES('glance-row','/glance.org','digest','Glance row','','','glance')")
-            (sqlite-execute
-             db
-             "INSERT INTO edge(src,dst,kind,via) SELECT 'glance-row',id,'mentions','row' FROM headline WHERE org_id='owned' LIMIT 1"))
-        (sqlite-close db)))
-    (org-glance-cache:recover graph)
-    (let ((db (sqlite-open (org-glance-cache:path graph))))
+            (sqlite-execute db "PRAGMA user_version=6")
+            (sqlite-execute db "UPDATE headline SET producer='glance'")
+            (sqlite-execute db "UPDATE source SET producer='glance'")
+            (sqlite-execute db "UPDATE headline_projection SET parser_contract='glance:2',record_payload='{}'")
+            (sqlite-execute db "CREATE TABLE glance_payload(path TEXT)")
+            (sqlite-execute db "INSERT INTO glance_payload VALUES('peer-preserved')"))
+        (sqlite-close db))
+      (rename-file target legacy)
+      (delete-directory (org-glance-graph:headline-data-path graph "owned") t)
+      (let ((digest (org-glance-cache--file-digest legacy)))
+        (org-glance-cache--migrate graph)
+        (should (equal digest (org-glance-cache--file-digest legacy))))
+      (should (equal "Owned" (org-glance-headline-metadata:title
+                              (org-glance-cache:headline graph "owned"))))
+      (org-glance-cache--read-db
+       graph
+       (lambda (held)
+         (should-not (sqlite-select held "SELECT name FROM sqlite_master WHERE name='glance_payload'"))
+         (should (equal '(("org-glance"))
+                        (sqlite-select held "SELECT producer FROM headline")))
+         (should (equal '((0)) (sqlite-select held "SELECT verified FROM headline_family")))))
+      (let ((peer (sqlite-open legacy)))
+        (unwind-protect
+            (progn
+              (sqlite-execute peer "BEGIN IMMEDIATE")
+              (sqlite-execute peer "DELETE FROM glance_payload")
+              (org-glance-cache:recover graph)
+              (should (equal "Owned" (org-glance-headline-metadata:title
+                                      (org-glance-cache:headline graph "owned"))))
+              (should (equal '(("peer-preserved"))
+                             (let ((other (sqlite-open legacy)))
+                               (unwind-protect
+                                   (sqlite-select other "SELECT path FROM glance_payload")
+                                 (sqlite-close other))))))
+          (sqlite-rollback peer)
+          (sqlite-close peer)))
+      (with-temp-file legacy (insert "unreadable old cache"))
+      (org-glance-cache--migrate graph)
+      (should (equal "Owned" (org-glance-headline-metadata:title
+                              (org-glance-cache:headline graph "owned")))))))
+
+(ert-deftest org-glance-test:private-cache-migration-opens-the-legacy-file-read-only ()
+  "Refuse writes through the migration handle, including URI-special paths."
+  (with-temp-directory directory
+    (let* ((graph (org-glance-graph (f-join directory "space ? café")))
+           (target (org-glance-cache:path graph))
+           (legacy (org-glance-graph:cache-file graph "glance.sqlite3"))
+           (db (sqlite-open target))
+           (execute (symbol-function 'sqlite-execute))
+           (probes 0))
+      (org-glance-graph:add graph
+        (org-glance-test:headline "owned" "* Read-only snapshot"))
       (unwind-protect
-          (should
-           (equal '(("Glance row" "glance"))
-                  (sqlite-select
-                   db
-                   "SELECT title,producer FROM headline WHERE id='glance-row'")))
-          (should
-           (equal '(("glance-row" "owned" "mentions" "row"))
-                  (sqlite-select
-                   db
-                   "SELECT edge.src,headline.org_id,edge.kind,edge.via FROM edge JOIN headline ON edge.dst=headline.id WHERE edge.src='glance-row'")))
-        (sqlite-close db)))))
+          (sqlite-execute db "PRAGMA user_version=6")
+        (sqlite-close db))
+      (rename-file target legacy)
+      (let ((before (org-glance-cache--file-digest legacy)))
+        (cl-letf (((symbol-function 'sqlite-execute)
+                   (lambda (handle sql &rest args)
+                     (prog1 (apply execute handle sql args)
+                       (when (equal sql "ATTACH DATABASE ? AS legacy")
+                         (cl-incf probes)
+                         (should-error
+                          (funcall execute handle
+                                   "CREATE TABLE legacy.forbidden(value TEXT)")
+                          :type 'sqlite-error))))))
+          (org-glance-cache--migrate graph))
+        (should (= 1 probes))
+        (should (equal "Read-only snapshot"
+                       (org-glance-headline-metadata:title
+                        (org-glance-cache:headline graph "owned"))))
+        (should (equal before (org-glance-cache--file-digest legacy)))))))
+
+(ert-deftest org-glance-test:private-cache-migration-preserves-unknown-legacy-bytes ()
+  "An unknown legacy format remains intact while canonical sources rebuild."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "owned" "* Canonical"))
+    (let ((target (org-glance-cache:path graph))
+          (legacy (org-glance-graph:cache-file graph "glance.sqlite3")))
+      (delete-file target)
+      (with-temp-file legacy (insert "unknown cache format"))
+      (org-glance-cache--reconcile-now graph)
+      (should (equal "Canonical" (org-glance-headline-metadata:title
+                                  (org-glance-cache:headline graph "owned"))))
+      (should (equal "unknown cache format" (f-read-text legacy))))))
+
+(ert-deftest org-glance-test:private-cache-migration-rebuilds-peer-only-projections ()
+  "Peer metadata becomes a recovery Row until org-glance verifies the source."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-test:headline "owned" "* TODO Independently parsed"))
+    (let* ((target (org-glance-cache:path graph))
+           (legacy (org-glance-graph:cache-file graph "glance.sqlite3"))
+           (db (sqlite-open target)))
+      (unwind-protect
+          (progn
+            (sqlite-execute db "PRAGMA user_version=6")
+            (sqlite-execute db "DELETE FROM org_headline")
+            (sqlite-execute db "UPDATE headline_projection SET parser_contract='glance:2',record_payload='{}'"))
+        (sqlite-close db))
+      (rename-file target legacy)
+      (let ((peer (sqlite-open legacy)))
+        (unwind-protect
+            (progn
+              (sqlite-execute peer "BEGIN IMMEDIATE")
+              (sqlite-execute peer "DELETE FROM headline_family")
+              (org-glance-cache--migrate graph)
+              (should (equal "unavailable"
+                             (org-glance-headline-metadata:recovery
+                              (org-glance-cache:headline graph "owned")))))
+          (sqlite-rollback peer)
+          (sqlite-close peer)))
+      (org-glance-cache--reconcile-now graph)
+      (should (equal "Independently parsed"
+                     (org-glance-headline-metadata:title
+                      (org-glance-cache:headline graph "owned")))))))
 
 (ert-deftest org-glance-test:cache-recovery-refuses-a-concurrent-publication ()
   "Recovery cannot replace a local Row committed after its inventory proof."

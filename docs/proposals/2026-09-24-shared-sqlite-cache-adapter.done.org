@@ -3,6 +3,9 @@
 
 Status: *done*
 
+Shared-schema ownership is superseded by
+[[file:2026-10-17-applications-own-their-caches.done.org][independent application caches]].
+
 * Decision
 
 At implementation time, org-glance and the optional Glance daemon shared

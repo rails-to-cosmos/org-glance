@@ -111,6 +111,9 @@ Set it with `org-glance-material:set-project-dir' (`C-c d').")
 (defvar-local org-glance-material--id nil
   "ORG_GLANCE_ID of the headline materialized in the current buffer.")
 
+(defvar-local org-glance-material--row-id nil
+  "Exact projection Row used to open the current material buffer.")
+
 (defvar-local org-glance-material--encrypted nil
   "Non-nil when this materialized buffer's stored blob is encrypted.")
 
@@ -142,11 +145,12 @@ Plugins use it instead of the buffer-local internals."
       (let* ((dir (org-glance-graph:headline-data-path
                    org-glance-material--graph org-glance-material--id))
              (selected (f-filename (f-parent buffer-file-name)))
-             (current (mapcar #'org-glance-version:id
-                              (org-glance-version:current
-                               dir org-glance-material--id))))
-        (unless (member selected current)
-          (user-error "Headline %s changed to another current version"
+             (leaves (mapcar #'org-glance-version:id
+                             (org-glance-version:leaves
+                              (org-glance-version:history
+                               dir org-glance-material--id)))))
+        (unless (member selected leaves)
+          (user-error "Headline %s changed; the selected version is no longer a Leaf"
                       org-glance-material--id))))
     (let ((temp (make-temp-file "org-glance-material-")))
       (unwind-protect
@@ -162,6 +166,7 @@ Plugins use it instead of the buffer-local internals."
               (let ((path (org-glance-graph:put-content
                            org-glance-material--graph headline)))
                 (set-visited-file-name path t)
+                (setq-local org-glance-material--row-id org-glance-material--id)
                 (setq-local revert-buffer-function #'org-glance-material--revert)
                 (add-hook 'write-file-functions
                           #'org-glance-material--write-version nil t)
@@ -758,14 +763,15 @@ Crypt blocks stay SEALED unless DECRYPT; an open material buffer for ID is
 reused.  Signal a `user-error' when ID is dead or has no stored blob."
   (cl-check-type graph org-glance-graph)
   (cl-check-type id string)
-  (let ((meta (org-glance-cache:headline graph id)))
+  (let* ((meta (org-glance-cache:headline graph id))
+         (logical-id (org-glance-cache:logical-id graph id)))
     (unless (org-glance-headline-metadata? meta)
       (user-error "No indexed live headline with id %s" id))
     (let ((path (org-glance-cache:material-path graph id)))
       (unless path
         (user-error "No digest-verified current Snapshot for id %s" id))
       (when-let* ((existing (find-buffer-visiting path)))
-        (when (equal id (buffer-local-value 'org-glance-material--id existing))
+        (when (equal id (buffer-local-value 'org-glance-material--row-id existing))
           (with-current-buffer existing
             (org-glance-material--refresh-derived-relations))
           (when decrypt (org-glance-material--maybe-decrypt meta existing))
@@ -780,7 +786,8 @@ reused.  Signal a `user-error' when ID is dead or has no stored blob."
         (with-current-buffer buffer
           (rename-buffer (format "*org-glance: %s*" (org-glance-headline-metadata:title meta)) t)
           (setq-local org-glance-material--graph graph
-                      org-glance-material--id id)
+                      org-glance-material--id logical-id
+                      org-glance-material--row-id id)
           ;; invariant 2: temp-then-rename; a crash never truncates the blob.
           (setq-local file-precious-flag t)
           ;; NEVER `setq-local' `org-todo-keywords': `sync' binds it globally.

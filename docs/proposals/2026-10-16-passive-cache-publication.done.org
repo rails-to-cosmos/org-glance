@@ -1,6 +1,11 @@
 #+TITLE: Passive reads and atomic cache publication
 #+DATE: 2026-10-16
 
+Shared-schema ownership is superseded by
+[[file:2026-10-17-applications-own-their-caches.done.org][independent application caches]].
+Passive reads and atomic generation publication continue within each cache.
+The implementation below records the original shared-writer repair.
+
 * Decision
 
 Keep one local shared SQLite projection with two connection roles. Readers pin

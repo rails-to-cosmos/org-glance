@@ -3,6 +3,9 @@
 
 Status: *done*
 
+The machine-local payload rule remains in force. Cache ownership now follows
+[[file:2026-10-17-applications-own-their-caches.done.org][independent application caches]].
+
 * Decision
 
 Keep parser payloads in =.org-glance/cache/glance.sqlite3=.  Stop reading and
