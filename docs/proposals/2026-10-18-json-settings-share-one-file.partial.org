@@ -1,0 +1,114 @@
+#+TITLE: JSON settings share one file with Glance
+#+DATE: 2026-10-18
+
+* Status
+
+Partial: file protocol independently verified; typed preparation and Org context
+author-verified, with independent review pending. Application cutover remains
+pending. The canonical cross-application decision and delivery ledger
+are in [[file:../../../glance/docs/proposals/partial/2026-10-18-settings-use-json-and-table-view.md][Glance's proposal]].
+
+* Delivered foundation
+
+=org-glance-config-file= provides a strict format-1 JSON envelope, exact-byte
+SHA-256 revisions, shared mkdir locking, and atomic file replacement. Reads
+create no files. Invalid input remains visible, stale writes are refused,
+semantic no-op writes retain exact bytes, and both client sections survive unrelated
+edits. Duplicate keys, invalid UTF-8, excessive nesting, and numerals that
+would silently round are refused.
+
+Independent review found one P2
+[[file:../../../glance/docs/bugs/fixed/2026-10-18-org-glance-json-noop-rewrites-equivalent-objects.md][no-op equality defect]], now repaired. The comparison in
+=src/data/org-glance-config-file.el:170–215= (new working-tree code on
+[[https://github.com/rails-to-cosmos/org-glance/commit/60d80c2317e47d623972789eaca4aa221c6b6450][60d80c2]]) ignores object order while preserving JSON values and array order.
+Fresh and destructive equivalent callbacks retain the original snapshot;
+identity saves retain the original fast path. Independent repair re-review
+confirms the original reproduction, 18 Haskell/process and 15 focused ERT
+cases, and isolated writer work counts, with no further repair findings.
+
+The module currently has test callers only. Graph, capture, Material, Overview,
+and table settings still use their existing configuration owners. No file in
+=~/sync/views= or the user's managed Glance workspace was changed.
+
+Source: [[file:../../src/data/org-glance-config-file.el][org-glance-config-file.el]],
+new working-tree implementation on
+[[https://github.com/rails-to-cosmos/org-glance/commit/60d80c2317e47d623972789eaca4aa221c6b6450][base 60d80c2]].
+The [[file:../../../glance/docs/reports/done/2026-10-18-json-settings-step-1-file-protocol.md][step 1 report]] pins source hashes, checks, reproduction commands and limits.
+
+* Typed preparation and context
+
+The new [[file:../../src/data/org-glance-config.el][typed settings owner]] and the keyword helpers in
+[[file:../../src/data/org-glance-tag-config.el][the tag owner]] are uncommitted working-tree code on
+[[https://github.com/rails-to-cosmos/org-glance/commit/60d80c2317e47d623972789eaca4aa221c6b6450][base 60d80c2]]. They validate shared tree data, retain existing tag records,
+resolve default/system/selected-tag/source precedence, and produce four
+semantic fingerprints independently of exact-byte write revisions.
+
+One source value and a canonical Span determine the prepared Org context and
+body. File metadata outside the subtree remains available; generated context
+is read-only and body edits map back to their original source coordinates.
+Native =PLAN= activity, keyword metadata, mixed-Overview refusal and exact
+Unicode/CRLF boundaries pass shared and focused tests. Original cycle groups
+remain data; native per-cycle workflow and standalone-export integration
+remain application work. Legacy readers and writers still own live behavior.
+
+The [[file:../../../glance/docs/reports/done/2026-10-18-json-settings-step-2-resolution-and-org-context.md][Step 2 report]] pins source hashes and fresh evidence: 22 shared vectors,
+11 focused Haskell/process cases, the 2,371-case full Haskell/process gate,
+561 ERT cases and 24 warning-free compiled sources. Existing Eask metadata
+still warns about its lexical-binding cookie. Three in-memory mutations fail
+their targeted regressions. The report records separate preparation samples,
+an older source-block declaration mismatch and a retained generated-fixture
+hot-journal incident. No live settings or source data changed.
+
+* Shared protocol
+
+- One selected tree owns =.org-glance/config.json=; format is 1.
+- Absence has revision nil; existing files use SHA-256 of exact bytes.
+- A writer atomically creates =config.json.lock= beside the file. Existing
+  locks fail immediately. Both runtimes hold it through read, revision check,
+  candidate validation and rename; cleanup runs on ordinary unwinding.
+- A killed writer can leave an orphan lock. Reads continue; writers refuse.
+  Stop/verify owners before explicitly recovering it. No timeout steals locks.
+- Control-directory and file symlinks are refused; a selected root alias is
+  canonicalized. This protects admission under cooperative writers; it does
+  not defend against a hostile same-user process replacing directories.
+- The temporary file is fsynced before rename. Directory fsync and power-loss
+  recovery are outside the Emacs primitive's guarantee and remain a review limit.
+
+* Confirmed migration choices
+
+Start with zero reusable agent profiles, keep stock factories and existing
+conversations, retain hourly autosync configuration, require local family
+storage for exact =notification= tag membership, and classify =PLAN= active.
+Preserve the six Org/ELD sources, tag titles and templates, table identity,
+column labels/order/hidden state, and sort directions through migration.
+
+* Remaining work
+
+1. Independently review the preparation slice; repair the older source-block
+   declaration mismatch before cutover.
+2. Wire prepared values and context through real readers, native per-cycle
+   workflows, compatible exports and Material save receipts. Validate remaining
+   client presentation values and select private-cache dependencies.
+3. Authoritative JSON readers and known-setting writers for graph, checkpoint,
+   cache, tag configuration, capture, Material, Overview and table layouts.
+4. Complete Settings workflows in both clients and remove legacy writers only
+   after the actual views tree is backed up, migrated and verified.
+
+* Verification
+
+=test/test-config-file.el= is included in the Eask test suite. Set
+=GLANCE_CONFIG_VECTORS= to Glance's =test/fixtures/config-file-v1.json= for the
+shared compatibility vectors. Glance's =make config-file-test= exercises both
+runtime writers against isolated trees, including real peer processes.
+Full gate results and measurement provenance belong in the linked step report.
+Independent rechecks pass all 17 Haskell/process and 12 ERT cases. A further
+1,229 codec cases agree between runtimes; the separately reproduced no-op
+defect was then repaired. Fresh repair checks pass 18 Haskell/process and 15
+focused ERT cases, compilation of 23 files, and the full 553-case ERT suite.
+The new reconstruction regressions fail against the frozen reviewed source.
+The linked report preserves historical review evidence and separate fresh
+writer measurements/source hashes. Live settings remain unchanged.
+Independent re-review also reruns the new ERT regression against the pinned
+pre-repair module and repaired module: it fails before and passes after.
+The file-protocol slice is verified. Typed preparation is now author-verified
+as recorded above; independent Step 2 review and application cutover are pending.

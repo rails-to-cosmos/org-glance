@@ -59,8 +59,8 @@ evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
    projections, never written independently. Occurrence snapshots are canonical content,
    GC'd with the id dir at compaction.
 6. Ids are path-safety-checked via `error` (never `cl-assert`) before any filesystem use.
-7. Single-user, no locking; staleness detection uses the full store snapshot (mtime +
-   size + segment names), never mtime alone.
+7. Store staleness uses the full snapshot (mtime + size + segment names), never
+   mtime alone; JSON configuration transactions use the shared mkdir/revision lock.
 8. Git conflicts heal by union merge. Writer-owned `meta/tag-metrics-seg-*.eld`
    components sum across files; divergent snapshots of one component and migrated
    legacy baselines merge non-inflating by earliest/latest/`max`. The property index is

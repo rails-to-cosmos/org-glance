@@ -249,5 +249,23 @@ Depends on the integration protocol decision in phase 4.
 
 * Unscheduled backlog
 
+** TODO Share JSON settings with Glance
+The [[file:proposals/2026-10-18-json-settings-share-one-file.partial.org][partial migration]] adds the strict file envelope and shared lock/revision
+transaction. Typed preparation, semantic fingerprints and canonical-body Org
+context are now author-verified in the [[file:../../glance/docs/reports/done/2026-10-18-json-settings-step-2-resolution-and-org-context.md][Step 2 report]], with independent review
+pending. All 2,371 Haskell/process and 561 ERT cases pass; 22 shared vectors
+cover =PLAN=, scope precedence, metadata and safe save boundaries. The older
+source-block declaration mismatch remains a cutover blocker. Reader activation,
+setting edits, live presentation integration and the live
+views-tree cutover remain pending; legacy configuration still owns application
+behavior. Source hashes and both-repository validation are in the linked
+Glance step report. Current numbered-phase priorities are unchanged.
+The review's [[file:../../glance/docs/bugs/fixed/2026-10-18-org-glance-json-noop-rewrites-equivalent-objects.md][no-op defect]] is repaired: equivalent reconstructed objects retain
+bytes and revision with zero publication calls. Discriminating ERT/process
+regressions, the protocol gate and all 553 sibling tests pass. Independent
+repair re-review passes the original reproduction, both focused suites and
+isolated writer work counts. The file-protocol slice is verified; migration
+stays partial.
+
 Items remaining =TODO= in [[file:../org-glance.org][org-glance.org]] are ideas, not commitments.  Promote an
 item into a numbered phase here before implementation.

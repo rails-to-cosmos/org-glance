@@ -168,6 +168,34 @@ Nil means TAG uses the default capture template and system TODO cycle."
   "Return CYCLE's `org-todo-keywords' form, or DEFAULT when CYCLE is nil."
   (if cycle (org-glance-tag-config:cycle->keywords cycle) default))
 
+(defun org-glance-tag-config:resolve-keywords (scopes recognition)
+  "Resolve ordered SCOPES of (ACTIVE . INACTIVE), retaining RECOGNITION.
+The first scope naming a keyword decides its meaning.
+Unclaimed words are active."
+  (let ((seen (make-hash-table :test 'equal)) active inactive)
+    (dolist (scope (append '((("TODO") . ("DONE"))) scopes
+                           (list (cons recognition nil))))
+      (dolist (word (append (car scope) (cdr scope)))
+        (unless (gethash word seen)
+          (puthash word t seen)
+          (if (member word (car scope)) (push word active) (push word inactive)))))
+    (cons (nreverse active) (nreverse inactive))))
+
+(defun org-glance-tag-config:declared-keywords (text)
+  "Read TEXT's source-owned TODO declarations with explicit active meaning."
+  (with-temp-buffer
+    (insert text)
+    (let ((case-fold-search t) active inactive)
+      (dolist (entry (org-collect-keywords '("TODO" "SEQ_TODO" "TYP_TODO")))
+        (dolist (line (cdr entry))
+          (let ((done nil))
+            (dolist (token (split-string line))
+              (if (equal token "|") (setq done t)
+                (let ((word (car (org-remove-keyword-keys (list token)))))
+                  (if done (push word inactive) (push word active))))))))
+      (let ((a (delete-dups (nreverse active))))
+        (cons a (cl-set-difference (delete-dups (nreverse inactive)) a :test #'equal))))))
+
 (cl-defun org-glance-tag-config:done-keywords-for-filter (graph filter)
   "Return the done keywords FILTER's views honour in GRAPH.
 Those of its system and tag cycles, else `org-glance--done-keywords'.

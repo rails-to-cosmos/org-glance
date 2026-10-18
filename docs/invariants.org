@@ -68,12 +68,18 @@ argument in [[file:proposals][docs/proposals/]].
    store (traversal; an empty id resolves to the data root, which compaction GC would
    delete).
 
-7. *Single user, no locking.*  Cross-process staleness is detected by the store
+7. *Store staleness.*  Cross-process staleness is detected by the store
    snapshot — open-segment mtime + SIZE + sealed-segment NAME list, never mtime alone
    (=org-glance-graph--store-snapshot=); in-process mutations call =--invalidate-cache=
    explicitly.  Violation: same-second external compaction serves deleted data as live.
    Two Emacsen folding one =EXTERNAL.jsonl= need no lock: inv 34 leaves them nothing to
    serialise.
+
+   JSON configuration transactions serialize with Glance through
+   =.org-glance/config.json.lock= and compare exact-byte SHA-256 revisions.
+   Existing legacy configuration writers remain outside that protocol until
+   the coordinated JSON cutover; see
+   [[file:proposals/2026-10-18-json-settings-share-one-file.partial.org][the partial migration]].
 
    Cold open performs one WAL fold.  Healing derives the maximum storage
    ordinal and seeds the read cache from that same decoded state; the first
