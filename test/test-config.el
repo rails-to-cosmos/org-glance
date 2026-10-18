@@ -132,5 +132,59 @@
                     :start (length (org-glance-org-presentation:prefix presentation))
                     :end (1+ (length (org-glance-org-presentation:prefix presentation))) :text "!")))))
 
+(ert-deftest org-glance-config-test-unicode-identity-is-context-free ()
+  (dolist (pair '(("ΑΣ" . "ασ") ("BØK" . "bøk") ("I" . "i")))
+    (let* ((decode (lambda (name)
+                     (org-glance-config-test--settings
+                      (format "{\"format\":1,\"tree\":{\"inboxTag\":\"%s\"},\"tags\":{\"%s\":{\"storage\":\"local\",\"todoCycles\":[{\"inactive\":[\"PLAN\"]}]}}}"
+                              name name))))
+           (upper (funcall decode (car pair)))
+           (lower (funcall decode (cdr pair))))
+      (should (equal (org-glance-config:fingerprints upper) (org-glance-config:fingerprints lower)))
+      (should (equal (org-glance-config:keywords upper nil (list (car pair)))
+                     (org-glance-config:keywords lower nil (list (cdr pair)))))))
+  (should (equal "ας" (org-glance-config--tag-name "ας")))
+  (should (equal "i\u0307" (org-glance-config--tag-name "İ")))
+  (should-not (org-glance-config--tag (org-glance-config--tag-name "İ"))))
+
+(ert-deftest org-glance-config-test-interleaved-aliases-share-one-source-observation ()
+  (let* ((settings (org-glance-config-test--settings "{\"format\":1}"))
+         (before "#+TODO: FIRST | END\r\n#+SEQ_TODO: PLAN(p) | FINISHED\r\n#+TODO: PLAN(q) LAST | STOP\r\n")
+         (body "* PLAN Title文\r\n")
+         (source (concat before body))
+         (observe (symbol-function 'org-glance-tag-config:todo-declarations))
+         (calls 0)
+         (presentation
+          (cl-letf (((symbol-function 'org-glance-tag-config:todo-declarations)
+                     (lambda (text) (cl-incf calls) (funcall observe text))))
+            (org-glance-config:present settings nil source :start (length before)))))
+    (should (equal "#+TODO: TODO FIRST PLAN(p) LAST | DONE END FINISHED STOP\n"
+                   (org-glance-org-presentation:header presentation)))
+    (should (= 1 calls))
+    (with-temp-buffer
+      (org-glance-config:insert-presentation presentation)
+      (should (equal '("PLAN" . 112) (assoc "PLAN" org-todo-key-alist)))
+      (should (equal body (org-glance-config:canonical-body presentation (buffer-string)))))
+    (let ((offset (length (org-glance-org-presentation:prefix presentation))))
+      (should (equal (list (+ (length before) 2) (+ (length before) 6) "DONE")
+                     (org-glance-config:map-edit presentation :start (+ offset 2) :end (+ offset 6) :text "DONE"))))))
+
+(ert-deftest org-glance-config-test-ordered-declarations-exclude-opaque-blocks ()
+  (let* ((source "#+TODO: FIRST | END\n#+begin_src org\n#+SEQ_TODO: FAKE(f) | FALSE\n#+end_src\n#+TYP_TODO: PLAN(p) | STOP\n#+TODO: PLAN(q) | CLOSED\n")
+         (declarations (org-glance-tag-config:todo-declarations source)))
+    (should (equal '("FIRST | END" "PLAN(p) | STOP" "PLAN(q) | CLOSED")
+                   (mapcar (lambda (entry) (nth 2 entry)) declarations)))
+    (should (equal '(("FIRST" "PLAN") "END" "STOP" "CLOSED")
+                   (org-glance-tag-config:declaration-keywords declarations)))
+    (dolist (entry declarations)
+      (should (string-prefix-p "#+" (substring source (car entry) (cadr entry)))))))
+
+(ert-deftest org-glance-config-test-unicode-admission-uses-parser-classes ()
+  (should-error (org-glance-config--token "Ⅷ") :type 'org-glance-config-error)
+  (should (equal "PLAN" (org-glance-config--token "PLAN(\u200b)")))
+  (should-error (org-glance-config-test--settings
+                 "{\"format\":1,\"tree\":{\"repositoryRemote\":\"\u200borigin\u200b\"}}")
+                :type 'org-glance-config-error))
+
 (provide 'test-config)
 ;;; test-config.el ends here

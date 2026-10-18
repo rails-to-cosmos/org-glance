@@ -181,20 +181,39 @@ Unclaimed words are active."
           (if (member word (car scope)) (push word active) (push word inactive)))))
     (cons (nreverse active) (nreverse inactive))))
 
-(defun org-glance-tag-config:declared-keywords (text)
-  "Read TEXT's source-owned TODO declarations with explicit active meaning."
+(defun org-glance-tag-config:todo-declarations (text)
+  "Observe TEXT's TODO aliases as (START END VALUE) in source order.
+Spans are zero-based and half-open.  Opaque blocks are excluded.
+SETUPFILE is not followed: this observation owns only the supplied source."
   (with-temp-buffer
     (insert text)
-    (let ((case-fold-search t) active inactive)
-      (dolist (entry (org-collect-keywords '("TODO" "SEQ_TODO" "TYP_TODO")))
-        (dolist (line (cdr entry))
-          (let ((done nil))
-            (dolist (token (split-string line))
-              (if (equal token "|") (setq done t)
-                (let ((word (car (org-remove-keyword-keys (list token)))))
-                  (if done (push word inactive) (push word active))))))))
-      (let ((a (delete-dups (nreverse active))))
-        (cons a (cl-set-difference (delete-dups (nreverse inactive)) a :test #'equal))))))
+    (setq-local tab-width 8)
+    (let ((major-mode 'org-mode) (case-fold-search t) declarations)
+      (goto-char (point-min))
+      (while (re-search-forward (org-make-options-regexp '("TODO" "SEQ_TODO" "TYP_TODO")) nil t)
+        (let ((element (org-element-at-point)))
+          (when (org-element-type-p element 'keyword)
+            (push (list (1- (line-beginning-position))
+                        (1- (line-beginning-position 2))
+                        (org-element-property :value element)) declarations))))
+      (nreverse declarations))))
+
+(defun org-glance-tag-config:declaration-keywords (declarations)
+  "Resolve observed DECLARATIONS with explicit active meaning in source order."
+  (let (active inactive)
+    (dolist (declaration declarations)
+      (let ((done nil))
+        (dolist (token (split-string (nth 2 declaration)))
+          (if (equal token "|") (setq done t)
+            (let ((word (car (org-remove-keyword-keys (list token)))))
+              (if done (push word inactive) (push word active)))))))
+    (let ((a (delete-dups (nreverse active))))
+      (cons a (cl-remove-if (lambda (word) (member word a))
+                            (delete-dups (nreverse inactive)))))))
+
+(defun org-glance-tag-config:declared-keywords (text)
+  "Read TEXT's source-owned TODO declarations with explicit active meaning."
+  (org-glance-tag-config:declaration-keywords (org-glance-tag-config:todo-declarations text)))
 
 (cl-defun org-glance-tag-config:done-keywords-for-filter (graph filter)
   "Return the done keywords FILTER's views honour in GRAPH.

@@ -3,8 +3,8 @@
 
 * Status
 
-Partial: file protocol independently verified; typed preparation and Org context
-author-verified, with independent review pending. Application cutover remains
+Partial: file protocol and preparation correctness independently verified on
+GHC 9.6.7 / Emacs 31.1. Application cutover remains
 pending. The canonical cross-application decision and delivery ledger
 are in [[file:../../../glance/docs/proposals/partial/2026-10-18-settings-use-json-and-table-view.md][Glance's proposal]].
 
@@ -59,6 +59,30 @@ their targeted regressions. The report records separate preparation samples,
 an older source-block declaration mismatch and a retained generated-fixture
 hot-journal incident. No live settings or source data changed.
 
+Independent review reran all 11 focused Haskell/process cases and 561 ERT
+cases successfully. Another 38 cross-runtime probes found three P2 defects:
+[[file:../../../glance/docs/bugs/fixed/2026-10-18-json-settings-unicode-tag-identities-disagree.md][Unicode tag identity changes active/done meaning]],
+[[file:../../../glance/docs/bugs/fixed/2026-10-18-org-context-aliases-reorder-source-metadata.md][interleaved TODO aliases reorder metadata]], and
+[[file:../../../glance/docs/bugs/fixed/2026-10-18-json-settings-unicode-validation-disagrees.md][Unicode validation admits different shared files]].
+The linked report retains source hashes, exact outputs, repair contracts and
+fresh preparation measurements. An older
+[[file:../../../glance/docs/bugs/open/2026-10-18-empty-todo-directive-refuses-org-context.md][empty-directive parser limit]] also needs compatibility follow-up.
+Author repair verification passed 48 shared vectors, 13 focused
+Haskell/process cases, all 565 ERT cases and three regressions that fail on
+the frozen pre-repair modules. An exhaustive paired scalar check covers
+138,610 nontrivial character entries. Declaration order, metadata and source
+ownership now reuse one span-aware observation. The linked report records
+the normalization/validation rules and preparation costs. Independent repair
+re-review now passes the focused gate, all original probes except the known
+older parser limit, six frozen before/after reproductions and 65 additional
+fingerprint cases. No preparation correctness findings remain on the
+exercised runtime pair; other supported runtime pairs still need verification.
+Variable Haskell timing samples leave the fresh latency comparison inconclusive.
+The sweep also repaired control-escape spelling
+in semantic fingerprint preimages; exact file revisions remain unchanged.
+Production code and live data were unchanged by
+the review; the subsequent repair changes preparation owners only.
+
 * Shared protocol
 
 - One selected tree owns =.org-glance/config.json=; format is 1.
@@ -84,8 +108,8 @@ column labels/order/hidden state, and sort directions through migration.
 
 * Remaining work
 
-1. Independently review the preparation slice; repair the older source-block
-   declaration mismatch before cutover.
+1. Resolve the older source-block and empty-directive parser limits
+   before cutover.
 2. Wire prepared values and context through real readers, native per-cycle
    workflows, compatible exports and Material save receipts. Validate remaining
    client presentation values and select private-cache dependencies.
@@ -110,5 +134,7 @@ The linked report preserves historical review evidence and separate fresh
 writer measurements/source hashes. Live settings remain unchanged.
 Independent re-review also reruns the new ERT regression against the pinned
 pre-repair module and repaired module: it fails before and passes after.
-The file-protocol slice is verified. Typed preparation is now author-verified
-as recorded above; independent Step 2 review and application cutover are pending.
+The file-protocol slice and Step 2 preparation correctness are independently
+verified on GHC 9.6.7 / Emacs 31.1. Supported-runtime compatibility and
+application cutover remain pending; fresh Haskell latency comparison is
+inconclusive.

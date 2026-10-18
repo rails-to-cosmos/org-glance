@@ -29,20 +29,77 @@
   (maphash (lambda (key _) (unless (member key names)
                              (org-glance-config--error (concat "Unknown setting: " key)))) object))
 
+(defconst org-glance-config--newer-characters
+  (let ((table (make-char-table nil nil)))
+    (dolist (range '((#x88f . #x88f) (#xc5c . #xc5c) (#xcdc . #xcdc) (#x1c89 . #x1c8a)
+                     (#xa7cb . #xa7cf) (#xa7d2 . #xa7d2) (#xa7d4 . #xa7d4) (#xa7da . #xa7dc)
+                     (#xa7f1 . #xa7f1) (#x105c0 . #x105f3) (#x10940 . #x10959)
+                     (#x10d40 . #x10d65) (#x10d6f . #x10d85) (#x10ec2 . #x10ec7)
+                     (#x11380 . #x11389) (#x1138b . #x1138b) (#x1138e . #x1138e)
+                     (#x11390 . #x113b5) (#x113b7 . #x113b7) (#x113d1 . #x113d1) (#x113d3 . #x113d3)
+                     (#x116d0 . #x116e3) (#x11bc0 . #x11be0) (#x11bf0 . #x11bf9)
+                     (#x11db0 . #x11ddb) (#x11de0 . #x11de9) (#x13460 . #x143fa)
+                     (#x16100 . #x1611d) (#x16130 . #x16139) (#x16d40 . #x16d6c) (#x16d70 . #x16d79)
+                     (#x16ea0 . #x16eb8) (#x16ebb . #x16ed3) (#x16ff2 . #x16ff6)
+                     (#x187f8 . #x187ff) (#x18cff . #x18cff) (#x18d09 . #x18d1e) (#x18d80 . #x18df2)
+                     (#x1ccf0 . #x1ccf9) (#x1e5d0 . #x1e5ed) (#x1e5f0 . #x1e5fa)
+                     (#x1e6c0 . #x1e6de) (#x1e6e0 . #x1e6e2) (#x1e6e4 . #x1e6e5)
+                     (#x1e6e7 . #x1e6ed) (#x1e6f0 . #x1e6f4) (#x1e6fe . #x1e6ff)
+                     (#x2b73a . #x2b73f) (#x2cea2 . #x2cead) (#x323b0 . #x33479)))
+      (set-char-table-range table range 'Cn))
+    table)
+  "Unicode 16/17 letters and numbers absent from the parser's Unicode 15.1.
+Derived from GHC.Unicode; checked exhaustively at the paired boundary.")
+
+(defun org-glance-config--category (char)
+  "Return CHAR's parser-compatible category on the supported Unicode repertoire."
+  (or (aref org-glance-config--newer-characters char)
+      (get-char-code-property char 'general-category)))
+
 (defun org-glance-config--tag (text)
   "Return non-nil when TEXT is an exact supported tag."
-  (and (stringp text) (string-match-p "\\`[[:alnum:]_@#%_-]+\\'" text)))
+  (and (stringp text) (> (length text) 0)
+       (if (string-match-p "[^\0-\177]" text)
+           (cl-every (lambda (char)
+                       (or (memq char '(?_ ?@ ?# ?% ?-))
+                           (memq (org-glance-config--category char)
+                                 '(Lu Ll Lt Lm Lo Nd Nl No)))) text)
+         (string-match-p "\\`[A-Za-z0-9_@#%_-]+\\'" text))))
+
+(defun org-glance-config--tag-name (text)
+  "Use context-free Unicode lowercase, matching Data.Text.toLower.
+U+0130 has the sole unconditional multi-character lowercase mapping.
+Final sigma stays distinct; storage membership retains its owner's case folding."
+  (if (string-match-p "[^\0-\177]" text)
+      (mapconcat (lambda (char) (cond ((= char #x130) "i\u0307")
+                                    ((= char #x212a) "k")
+                                    ((eq (org-glance-config--category char) 'Cn) (char-to-string char))
+                                    (t (char-to-string (downcase char))))) text "")
+    (downcase text)))
+
+(defconst org-glance-config--space "[\t-\r \u00a0\u1680\u2000-\u200a\u202f\u205f\u3000]"
+  "Data.Char.isSpace: ASCII HT through CR, and Unicode Space_Separator.
+NEL, line/paragraph separators and format characters are excluded.")
 
 (defun org-glance-config--trim (text)
   "Trim TEXT's Unicode whitespace using the shared settings convention."
-  (string-trim text "[[:space:]]+" "[[:space:]]+"))
+  (string-trim text (concat org-glance-config--space "+")
+               (concat org-glance-config--space "+")))
 
 (defun org-glance-config--token (text)
   "Return TEXT's keyword name, refusing malformed tokens and metadata."
-  (unless (and (stringp text)
-               (string-match "\\`\\([[:alpha:]_]+\\)\\(?:([^()[:space:]]*)\\)?\\'" text))
-    (org-glance-config--error "Invalid TODO keyword or metadata"))
-  (match-string 1 text))
+  (unless (stringp text) (org-glance-config--error "Invalid TODO keyword or metadata"))
+  (let ((end 0))
+    (while (and (< end (length text))
+                (let ((char (aref text end)))
+                  (or (= char ?_)
+                      (memq (org-glance-config--category char) '(Lu Ll Lt Lm Lo)))))
+      (cl-incf end))
+    (let ((suffix (substring text end)))
+      (unless (and (> end 0) (not (string-match-p org-glance-config--space text))
+                   (or (equal suffix "") (string-match-p "\\`([^()]*)\\'" suffix)))
+        (org-glance-config--error "Invalid TODO keyword or metadata")))
+    (substring text 0 end)))
 
 (defun org-glance-config--cycles (value)
   "Validate VALUE's ordered TODO cycles and return their token pairs."
@@ -82,7 +139,10 @@
     (org-glance-config--known tree '("inboxTag" "headlineHistoryDepth" "repositoryAutosync"
                                      "repositoryRemote" "googleOAuthClientId" "defaultAgent"))
     (let ((values (make-hash-table :test 'equal)))
-      (puthash "inboxTag" (downcase (org-glance-config--field tree "inboxTag" #'org-glance-config--tag "inbox")) values)
+      (let ((inbox (org-glance-config--tag-name
+                    (org-glance-config--field tree "inboxTag" #'org-glance-config--tag "inbox"))))
+        (unless (org-glance-config--tag inbox) (org-glance-config--error "Invalid normalized inbox tag"))
+        (puthash "inboxTag" inbox values))
       (puthash "headlineHistoryDepth" (org-glance-config--field tree "headlineHistoryDepth"
                                                                 (lambda (v) (and (integerp v) (<= 0 v) (<= v #x7fffffffffffffff))) 10) values)
       (puthash "repositoryAutosync" (org-glance-config--field tree "repositoryAutosync"
@@ -91,13 +151,15 @@
                                                                          (lambda (v) (and (stringp v) (string-match-p
                                                                                 "\\`[a-zA-Z0-9_./][a-zA-Z0-9_./-]*\\'" (org-glance-config--trim v)))) "origin")) values)
       (let ((client (org-glance-config--field tree "googleOAuthClientId"
-                                              (lambda (v) (and (stringp v) (string-match-p
-                                                                       "\\`[^[:space:]]+\\'" (org-glance-config--trim v)))))))
+                                              (lambda (v) (and (stringp v)
+                                                               (> (length (org-glance-config--trim v)) 0)
+                                                               (not (string-match-p org-glance-config--space
+                                                                                    (org-glance-config--trim v))))))))
         (puthash "googleOAuthClientId" (and client (org-glance-config--trim client)) values))
       (puthash "defaultAgent" (org-glance-config--field tree "defaultAgent" #'stringp) values)
       (setq tree values))
     (dolist (pair (org-glance-config--pairs raw-tags))
-      (let* ((name (downcase (car pair))) (raw (org-glance-config--object (cdr pair))))
+      (let* ((name (org-glance-config--tag-name (car pair))) (raw (org-glance-config--object (cdr pair))))
         (unless (and (org-glance-config--tag name) (not (gethash name seen)))
           (org-glance-config--error "Invalid or ambiguous case-folded tag name"))
         (puthash name t seen)
@@ -140,26 +202,36 @@
                                            (mapcan (lambda (kw) (copy-sequence (cdr kw))) all)))))
     (org-glance-tag-config:resolve-keywords
      (append (list system)
-             (mapcar (lambda (tag) (org-glance-config--names (nth 2 (assoc (downcase tag) tag-settings)))) tags)
+             (mapcar (lambda (tag) (org-glance-config--names (nth 2 (assoc (org-glance-config--tag-name tag) tag-settings)))) tags)
              (list file)) recognition)))
 
-(defun org-glance-config:header (settings file tags &optional source)
-  "Render SETTINGS' effective FILE and TAGS declaration with SOURCE metadata."
+(defun org-glance-config:header (settings file tags &optional declarations)
+  "Render SETTINGS' effective FILE and TAGS declaration with DECLARATIONS metadata."
   (let* ((keywords (org-glance-config:keywords settings file tags))
          (cycles (append (org-glance-settings:cycles settings)
                          (mapcan (lambda (tag) (copy-sequence (nth 2
-                                                                   (assoc (downcase tag) (org-glance-settings:tags settings))))) tags)))
+                                                                   (assoc (org-glance-config--tag-name tag) (org-glance-settings:tags settings))))) tags)))
          (tokens (append (apply #'append (mapcar (lambda (c) (append (car c) (cdr c))) cycles))
-                         (when source (with-temp-buffer
-                                        (insert source)
-                                        (mapcan (lambda (entry) (mapcan #'split-string (cdr entry)))
-                                                (org-collect-keywords '("TODO" "SEQ_TODO" "TYP_TODO")))))))
+                         (mapcan (lambda (declaration) (split-string (nth 2 declaration))) declarations)))
          (decorate (lambda (name) (or (cl-find-if
                                        (lambda (token) (and (not (equal token "|"))
                                              (equal name (org-glance-config--token token))
                                              (not (equal name token)))) tokens) name))))
     (concat "#+TODO: " (string-join (append (mapcar decorate (car keywords)) '("|")
                                             (mapcar decorate (cdr keywords))) " ") "\n")))
+
+(defun org-glance-config--fingerprint (value)
+  "Hash VALUE with Aeson's control escapes; exact file revisions stay separate."
+  (secure-hash
+   'sha256
+   (replace-regexp-in-string
+    "\\\\\\(?:[\"\\\\/bfnrt]\\|u[0-9A-Fa-f]\\{4\\}\\)"
+    (lambda (escape)
+      (cond ((equal escape "\\b") "\\u0008")
+            ((equal escape "\\f") "\\u000c")
+            ((string-prefix-p "\\u" escape) (downcase escape))
+            (t escape)))
+    (substring (org-glance-config-file--serialize value) 0 -1) t t)))
 
 (defun org-glance-config:fingerprints (settings)
   "Return SETTINGS' semantic dependency fingerprints separately from revisions."
@@ -170,8 +242,7 @@
          (tree (org-glance-settings:tree settings)))
     (cl-labels ((pair (p) (vector (vconcat (car p)) (vconcat (cdr p))))
                 (cycles (cs) (vconcat (mapcar #'pair cs)))
-                (hash (version value) (secure-hash 'sha256
-                                                   (substring (org-glance-config-file--serialize (vector version value)) 0 -1))))
+                (hash (version value) (org-glance-config--fingerprint (vector version value))))
       (list
        (hash "recognition/1" (vconcat (sort (delete-dups (append
                  (car defaults) (cdr defaults) (car system) (cdr system)
@@ -204,11 +275,11 @@
                (<= 0 start end (length source)))
     (org-glance-config--error "Invalid canonical body Span"))
   (let* ((body (substring source start end))
-         (file (org-glance-tag-config:declared-keywords source))
-         (header (org-glance-config:header settings file tags source))
-         (source (with-temp-buffer
-                   (insert body)
-                   (org-collect-keywords '("TODO" "SEQ_TODO" "TYP_TODO"))))
+         (declarations (org-glance-tag-config:todo-declarations source))
+         (file (org-glance-tag-config:declaration-keywords declarations))
+         (header (org-glance-config:header settings file tags declarations))
+         (source (cl-some (lambda (declaration)
+                            (and (<= start (car declaration)) (<= (cadr declaration) end))) declarations))
          (prefix (if source "" (if (string-match-p "\r\n" body)
                                    (replace-regexp-in-string "\n" "\r\n" header t t) header))))
     (org-glance-org-presentation--make :prefix prefix :body body :origin start :header header)))

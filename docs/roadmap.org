@@ -252,10 +252,20 @@ Depends on the integration protocol decision in phase 4.
 ** TODO Share JSON settings with Glance
 The [[file:proposals/2026-10-18-json-settings-share-one-file.partial.org][partial migration]] adds the strict file envelope and shared lock/revision
 transaction. Typed preparation, semantic fingerprints and canonical-body Org
-context are now author-verified in the [[file:../../glance/docs/reports/done/2026-10-18-json-settings-step-2-resolution-and-org-context.md][Step 2 report]], with independent review
-pending. All 2,371 Haskell/process and 561 ERT cases pass; 22 shared vectors
-cover =PLAN=, scope precedence, metadata and safe save boundaries. The older
-source-block declaration mismatch remains a cutover blocker. Reader activation,
+context are now independently reviewed in the [[file:../../glance/docs/reports/done/2026-10-18-json-settings-step-2-resolution-and-org-context.md][Step 2 report]]. The author gate
+passed all 2,371 Haskell/process and 561 ERT cases; independent review reran
+all 11 focused Haskell/process and 561 ERT cases. Additional probes found
+three P2 gaps: Unicode tag identity changes classification, interleaved source
+aliases reorder metadata, and Unicode validators admit different files.
+The three repairs now pass 48 shared vectors, 13 Haskell/process and 565 ERT
+cases, plus exhaustive Unicode scalar parity. Three focused regressions fail
+on frozen pre-repair modules and pass after repair. Independent repair
+re-review passes the focused gate, six concrete frozen reproductions and
+65 additional fingerprint cases, with no remaining preparation correctness
+findings on GHC 9.6.7 / Emacs 31.1. Other supported pairs remain unverified;
+the fresh Haskell latency comparison is inconclusive. The older source-block
+and empty-directive
+parser limits remain pre-cutover compatibility work. Reader activation,
 setting edits, live presentation integration and the live
 views-tree cutover remain pending; legacy configuration still owns application
 behavior. Source hashes and both-repository validation are in the linked
