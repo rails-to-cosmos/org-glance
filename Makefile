@@ -1,4 +1,12 @@
-.PHONY: build test info clean lint lint-package bench loc
+.PHONY: bootstrap init build test info clean lint lint-package bench loc
+
+bootstrap:
+	@command -v eask >/dev/null 2>&1 || { \
+	  command -v npm >/dev/null 2>&1 \
+	    || { echo "bootstrap: npm is required to install eask" >&2; exit 1; }; \
+	  echo "bootstrap: installing eask"; \
+	  npm install --global @emacs-eask/cli; \
+	}
 
 info:
 	eask info
@@ -8,7 +16,7 @@ info:
 loc:
 	@tools/loc
 
-init:
+init: bootstrap
 	eask install-deps
 	eask recompile
 	eask install
