@@ -17,13 +17,19 @@
   "Registered instances of `org-glance-graph' in current session.")
 
 ;; invariant 7: single user, no mutex / locking.
+(declare-function org-glance-config:current "org-glance-config")
+(declare-function org-glance-config:local-tags-p "org-glance-config")
+(declare-function org-glance-settings:tree "org-glance-config")
+
 (cl-defstruct (org-glance-graph (:predicate org-glance-graph?)
                                    (:conc-name org-glance-graph:))
   (directory org-glance-directory :read-only t :type directory)
   ;; invariant 1: storage ordinal only -- never ordering, never in metadata.
   (seq 0 :type integer)
   (-paths nil)
-  (-meta-cache nil))
+  (-meta-cache nil)
+  (-config :unread)
+  (-config-error nil))
 
 (defcustom org-glance-graph-segment-max-bytes (* 256 1024)
   "Soft cap, in bytes, on the open metadata segment before it is sealed.
@@ -232,6 +238,9 @@ heal their own git conflicts here.  Errors are demoted (invariant 9).")
          (graph (gethash directory org-glance-graph:list)))
     (unless graph
       (setq graph (make-org-glance-graph :directory directory))
+      (f-mkdir-full-path directory)
+      (require 'org-glance-config)
+      (org-glance-config:current graph)
       (f-mkdir-full-path (org-glance-graph:data-path graph))
       (f-mkdir-full-path (org-glance-graph:meta-path graph))
       (f-touch (org-glance-graph:headline-meta-path graph))
@@ -708,6 +717,9 @@ Signal a `user-error' when ID has concurrent leaves of either kind."
 
 (cl-defun org-glance-graph--headline-history-depth (graph)
   "Return GRAPH's configured immutable headline history depth."
+  (when-let* ((settings (org-glance-config:current graph)))
+    (cl-return-from org-glance-graph--headline-history-depth
+      (gethash "headlineHistoryDepth" (org-glance-settings:tree settings))))
   (let ((path (org-glance-graph:config-file graph "system.org"))
         (depth org-glance-graph--default-headline-history-depth)
         (case-fold-search t))
@@ -749,6 +761,17 @@ Return the file path, or nil if HEADLINE has no id."
   (cl-check-type headline org-glance-headline)
   (when-let* ((id (org-glance-headline:id headline)))
     (let* ((dir (org-glance-graph:headline-data-path graph id))
+           (settings (org-glance-config:current graph))
+           (local (and settings (org-glance-config:local-tags-p
+                                 settings (org-glance-headline:tags headline))))
+           (_ (when (and local (file-directory-p dir)
+                         (file-in-directory-p dir (org-glance-graph:data-path graph)))
+                (user-error "Local tags require explicit localization of family %s" id)))
+           (dir (if (and local (not (file-directory-p dir)))
+                    (if (> (length id) 2)
+                        (f-join (org-glance-graph:local-data-path graph) (substring id 0 2) (substring id 2))
+                      (f-join (org-glance-graph:local-data-path graph) id))
+                  dir))
            (history (org-glance-graph--version-history-for-write dir id)))
       (f-mkdir-full-path dir)
       (let* ((candidates (org-glance-version:candidates history))
@@ -779,12 +802,13 @@ Return the file path, or nil if HEADLINE has no id."
     (when held (f-read-text held 'utf-8))))
 
 (cl-defun org-glance-graph:make-id (graph)
+  "Return a fresh unallocated ID for GRAPH; writes select its storage root."
   (cl-check-type graph org-glance-graph)
   (cl-loop while t
            for id = (org-id-uuid)
            for data-path = (org-glance-graph:headline-data-path graph id)
            unless (f-exists? data-path)
-           return (prog1 id (f-mkdir-full-path data-path))))
+           return id))
 
 (cl-defun org-glance-graph:migrate-versions (graph)
   "Migrate every legacy headline blob in GRAPH; return the migrated count."
@@ -1380,11 +1404,16 @@ move to the next generation (invariant 34)."
 ;; Reached by name: `org-glance-tag-config' requires THIS module.
 (declare-function org-glance-tag-config:cycle-for-filter "org-glance-tag-config")
 (declare-function org-glance-tag-config:cycle->keywords-or "org-glance-tag-config")
+(declare-function org-glance-config:org-context "org-glance-config")
+(defvar org-glance-config--pending-context)
 
 (cl-defun org-glance-graph--reparse-blob (graph meta contents)
   "Parse CONTENTS as META's headline in GRAPH, with its tag's todo cycle in scope.
 Mirrors `org-glance-material:sync'; else a custom state folds into the title."
-  (let ((org-todo-keywords
+  (let ((org-glance-config--pending-context
+         (org-glance-config:org-context
+          graph (append (org-glance-headline-metadata:tags meta) nil)))
+        (org-todo-keywords
          (if (fboundp 'org-glance-tag-config:cycle-for-filter)
              (org-glance-tag-config:cycle->keywords-or
               (org-glance-tag-config:cycle-for-filter

@@ -256,7 +256,7 @@ Each returned node carries payload integrity in its `valid' slot."
                for data = (f-join dir "data.org")
                for payload = (condition-case nil
                                  (if (f-file? data)
-                                     (cons t (f-read-text data 'utf-8))
+                                     (cons t (f-read-text data 'utf-8-unix))
                                    (cons nil nil))
                                (error (cons t nil)))
                do (puthash (file-name-nondirectory dir) payload payloads)
@@ -316,7 +316,7 @@ Each returned node carries payload integrity in its `valid' slot."
   (let ((data (f-join headline-dir "data.org")))
     (when (f-file? data)
       (condition-case nil
-          (let* ((contents (f-read-text data 'utf-8))
+          (let* ((contents (f-read-text data 'utf-8-unix))
                  (digest (secure-hash 'sha256 contents)))
             (make-org-glance-version
              :schema 1 :headline headline
@@ -330,7 +330,7 @@ Each returned node carries payload integrity in its `valid' slot."
   "Publish HEADLINE's deterministic root, then remove legacy data.org."
   (when-let* ((legacy (org-glance-version--legacy headline-dir headline))
               (data (f-join headline-dir "data.org"))
-              (contents (f-read-text data 'utf-8))
+              (contents (f-read-text data 'utf-8-unix))
               (id (org-glance-version:id legacy))
               (final (org-glance-version:path headline-dir id)))
     (let ((version (make-org-glance-version

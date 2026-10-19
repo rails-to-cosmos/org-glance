@@ -20,6 +20,7 @@
 (require 'org-glance-filter)
 (require 'org-glance-tag)
 (require 'org-glance-tag-config)
+(require 'org-glance-config)
 (require 'org-glance-datetime-mode)
 (require 'org-glance-view)
 
@@ -131,6 +132,96 @@ Plugins use it instead of the buffer-local internals."
 (defvar-local org-glance-material--cycle nil
   "Per-tag `#+TODO:'-style cycle string for this buffer's headline, or nil.")
 
+(defun org-glance-material--context-tags ()
+  "Return the current Material's authored root tags."
+  (save-excursion
+    (goto-char (point-min))
+    (unless (org-at-heading-p) (org-next-visible-heading 1))
+    (org-get-tags nil t)))
+
+(defun org-glance-material--reload-context (graph)
+  "Refresh GRAPH's open Material buffers without changing their source or point."
+  (dolist (buffer (buffer-list))
+    (with-current-buffer buffer
+      (when (eq graph org-glance-material--graph)
+        (setq-local org-glance-config--org-context
+                    (org-glance-config:org-context graph #'org-glance-material--context-tags))
+        (setq org-glance-material--cycle
+              (org-glance-tag-config:cycle-for-filter
+               graph (list :tags (mapcar #'org-glance-tag:from-string
+                                         (org-glance-material--context-tags)))))
+        (let ((org-todo-keywords (org-glance-tag-config:cycle->keywords-or
+                                 org-glance-material--cycle org-todo-keywords)))
+          (org-set-regexps-and-options))))))
+
+(add-hook 'org-glance-config-after-reload-functions #'org-glance-material--reload-context)
+
+(defvar-local org-glance-material--newline-default 'lf
+  "Ending used for newly inserted Material lines.")
+
+(defvar-local org-glance-material--drawer-lines nil
+  "Original property drawer delimiters, with newline provenance.")
+
+(defvar-local org-glance-material--newline-mixed nil
+  "Non-nil when existing lines need endings different from the default.")
+
+(defun org-glance-material--read-endings ()
+  "Read exact source into LF editing text with per-newline provenance."
+  (setq org-glance-material--newline-default 'lf
+        org-glance-material--newline-mixed nil)
+  (when (or (eq 1 (coding-system-eol-type buffer-file-coding-system))
+            (save-excursion (goto-char (point-min)) (search-forward "\r\n" nil t)))
+    (let ((source (f-read-text buffer-file-name 'utf-8-unix))
+          (modified (buffer-modified-p))
+          (position (point))
+          (buffer-undo-list t)
+          (inhibit-read-only t))
+      (setq org-glance-material--newline-default
+            (if (string-match "\r?\n" source)
+                (if (eq (aref source (match-beginning 0)) ?\r) 'crlf 'lf)
+              'lf))
+      (erase-buffer)
+      (insert source)
+      (goto-char (point-min))
+      (while (search-forward "\n" nil t)
+        (let ((crlf (eq (char-before (1- (point))) ?\r)))
+          (when crlf (delete-region (- (point) 2) (1- (point))))
+          (unless (eq (if crlf 'crlf 'lf) org-glance-material--newline-default)
+            (setq org-glance-material--newline-mixed t)
+            (add-text-properties
+             (1- (point)) (point)
+             (list 'org-glance-newline (if crlf 'crlf 'lf)
+                   'rear-nonsticky '(org-glance-newline))))))
+      (goto-char (min position (point-max)))
+      (set-buffer-modified-p modified)))
+  (setq-local buffer-file-coding-system 'utf-8-unix))
+
+(defun org-glance-material--ending-annotations (start end)
+  "Restore original newline bytes for the editing region START to END."
+  (when (and (not (stringp start))
+             (or org-glance-material--newline-mixed
+                 (eq org-glance-material--newline-default 'crlf)))
+    (save-excursion
+      (goto-char start)
+      (let (annotations)
+        (while (search-forward "\n" end t)
+          (when (eq (or (get-text-property (1- (point)) 'org-glance-newline)
+                        org-glance-material--newline-default) 'crlf)
+            (push (cons (1- (point)) "\r") annotations)))
+        (nreverse annotations)))))
+
+(defun org-glance-material--encode-endings (text)
+  "Restore newline bytes in inserted annotation TEXT."
+  (let ((start 0) (cursor 0) parts)
+    (while (string-match "\n" text cursor)
+      (setq cursor (match-end 0))
+      (when (eq (or (get-text-property (1- cursor) 'org-glance-newline text)
+                    org-glance-material--newline-default) 'crlf)
+        (push (substring-no-properties text start (1- cursor)) parts)
+        (push "\r\n" parts)
+        (setq start cursor)))
+    (apply #'concat (nreverse (cons (substring-no-properties text start) parts)))))
+
 (cl-defun org-glance-material--write-version ()
   "Publish this material buffer as an immutable child snapshot."
   (when (and org-glance-material--graph org-glance-material--id)
@@ -157,8 +248,9 @@ Plugins use it instead of the buffer-local internals."
           (progn
             (let ((coding-system-for-write 'utf-8-unix))
               (write-region (point-min) (point-max) temp nil 'silent))
-            (let* ((headline (org-glance-headline--from-string
-                              (f-read-text temp 'utf-8)))
+            (let* ((org-glance-config--pending-context org-glance-config--org-context)
+                   (headline (org-glance-headline--from-string
+                              (f-read-text temp 'utf-8-unix)))
                    (id (org-glance-headline:id headline)))
               (unless (equal id org-glance-material--id)
                 (user-error "org-glance: %s lost its ORG_GLANCE_ID drawer"
@@ -183,11 +275,12 @@ A file whose id differs from the buffer's is skipped with a message."
   (when (and org-glance-material--graph org-glance-material--id)
     (let* ((graph org-glance-material--graph)
            (id org-glance-material--id)
-           (headline (let ((org-todo-keywords
+           (headline (let ((org-glance-config--pending-context org-glance-config--org-context)
+                           (org-todo-keywords
                             (org-glance-tag-config:cycle->keywords-or
                              org-glance-material--cycle org-todo-keywords)))
                        (org-glance-headline--from-string
-                        (f-read-text buffer-file-name 'utf-8)))))
+                        (f-read-text buffer-file-name 'utf-8-unix)))))
       (if (equal (org-glance-headline:id headline) id)
           (org-glance-graph:insert graph (list (org-glance-headline:metadata headline)))
         (message "org-glance: %s lost its ORG_GLANCE_ID drawer; metadata not updated" id)))))
@@ -251,7 +344,8 @@ An integer, or t/inf/unlimited for all; junk reads as 0, floats truncate.")
           (f-mkdir-full-path dir)
           (org-glance--atomic-write
            (f-join dir (concat (org-glance-material--occurrence-stamp ts) ".org"))
-           (buffer-substring-no-properties (point-min) (point-max)))
+           (org-glance-material--encode-endings
+            (buffer-substring (point-min) (point-max))))
           (setq org-glance-material--snapshotted t)
           (when (integerp depth)                     ; t = unlimited, no prune
             (cl-loop for (_stamp . path) in (nthcdr depth
@@ -273,13 +367,13 @@ Runs `:after' `org-auto-repeat-maybe'; consumes the `--snapshotted' flag."
           (setq org-glance-material--snapshotted nil))
     (save-excursion
       (goto-char (point-min))
-      (let ((header (s-trim (buffer-substring-no-properties
+      (let ((header (s-trim (buffer-substring
                              (point)
                              (save-excursion (org-end-of-meta-data) (point)))))
             (pinned (cl-loop while (search-forward "#+begin_pin" nil t)
                              collect (save-excursion
                                        (beginning-of-line)
-                                       (buffer-substring-no-properties
+                                       (buffer-substring
                                         (point)
                                         (progn (search-forward "#+end_pin" nil t)
                                                (point)))))))
@@ -671,10 +765,11 @@ KIND supplies its relation label and STAMP names the source snapshot time."
   (member (org-glance-material--line-key (thing-at-point 'line t))
           org-glance-material--managed-keys))
 
-(cl-defun org-glance-material--remove-reserved-lines ()
+(cl-defun org-glance-material--remove-reserved-lines (&optional keep-delimiters)
   "Delete the managed lines of the heading's property drawer; return them.
 Each line comes back verbatim, newline included, in drawer order.  A drawer
-left with no property goes whole."
+left with no property goes whole.
+KEEP-DELIMITERS retains its source delimiters."
   (save-excursion
     (org-glance-material--goto-first-heading)
     (when-let* ((body (and org-glance-material--managed-keys
@@ -682,12 +777,20 @@ left with no property goes whole."
                            (org-get-property-block))))
       (let ((end (copy-marker (cdr body)))
             lines)
+        (when keep-delimiters
+          (setq org-glance-material--drawer-lines
+                (save-excursion
+                  (goto-char (car body))
+                  (cons (buffer-substring (line-beginning-position 0) (car body))
+                        (progn
+                          (goto-char (cdr body))
+                          (buffer-substring (point) (line-beginning-position 2)))))))
         (goto-char (car body))
         (while (< (point) end)
           (if (org-glance-material--reserved-line?)
               (let ((beg (point)))
                 (forward-line 1)
-                (push (buffer-substring-no-properties beg (point)) lines)
+                (push (buffer-substring beg (point)) lines)
                 (delete-region beg (point)))
             (forward-line 1)))
         (when (and lines (= (car body) end))    ; emptied: drop the drawer
@@ -704,8 +807,9 @@ org-glance manages, which `--reserved-annotations' restores on write.
 Buffer-local `after-revert-hook' too, since a revert reads them back in."
   (let ((buffer-undo-list t)
         (modified (buffer-modified-p)))
+    (setq org-glance-material--drawer-lines nil)
     (setq-local org-glance-material--reserved-lines
-                (org-glance-material--remove-reserved-lines))
+                (org-glance-material--remove-reserved-lines t))
     (set-buffer-modified-p modified)))
 
 (cl-defun org-glance-material--drawer-splice (lines)
@@ -718,7 +822,14 @@ planning line.  Point is on the heading."
     (when (looking-at-p org-planning-line-re) (forward-line 1))
     ;; a heading on the file's last line ends without a newline to follow
     (cons (point)
-          (concat (unless (bolp) "\n") ":PROPERTIES:\n" lines ":END:\n"))))
+          (concat (unless (bolp) "\n")
+                  (or (car org-glance-material--drawer-lines) ":PROPERTIES:\n")
+                  lines
+                  (or (cdr org-glance-material--drawer-lines) ":END:\n")
+                  (when (and (< (point) (point-max))
+                             org-glance-material--drawer-lines
+                             (not (string-suffix-p "\n" (cdr org-glance-material--drawer-lines))))
+                    "\n")))))
 
 (cl-defun org-glance-material--reserved-annotations (start _end)
   "Splice the stashed managed lines back into the bytes being written.
@@ -728,8 +839,10 @@ is a string when the caller writes one; nothing is added then."
     (save-excursion
       (org-glance-material--goto-first-heading)
       (when (org-at-heading-p)
-        (list (org-glance-material--drawer-splice
-               (apply #'concat org-glance-material--reserved-lines)))))))
+        (let ((splice (org-glance-material--drawer-splice
+                       (apply #'concat org-glance-material--reserved-lines))))
+          (list (cons (car splice)
+                      (org-glance-material--encode-endings (cdr splice)))))))))
 
 (cl-defun org-glance-material--normalize-tags ()
   "Canonicalize heading tags before saving, and warn when they change."
@@ -784,12 +897,20 @@ reused.  Signal a `user-error' when ID is dead or has no stored blob."
                     (org-glance-tag-config:cycle->keywords-or cycle org-todo-keywords)))
                (find-file-noselect path))))
         (with-current-buffer buffer
+          (when (buffer-modified-p)
+            (user-error "Source buffer has unsaved edits; save or discard them before opening Material"))
+          (org-glance-material--read-endings)
           (rename-buffer (format "*org-glance: %s*" (org-glance-headline-metadata:title meta)) t)
           (setq-local org-glance-material--graph graph
                       org-glance-material--id logical-id
                       org-glance-material--row-id id)
+          (when-let* ((context (org-glance-config:org-context
+                               graph #'org-glance-material--context-tags)))
+            (setq-local org-glance-config--org-context context)
+            (org-set-regexps-and-options))
           ;; invariant 2: temp-then-rename; a crash never truncates the blob.
           (setq-local file-precious-flag t)
+          (setq-local require-final-newline nil)
           ;; NEVER `setq-local' `org-todo-keywords': `sync' binds it globally.
           (setq-local org-glance-material--cycle cycle)
           (add-hook 'after-save-hook #'org-glance-material:sync nil t)
@@ -801,8 +922,11 @@ reused.  Signal a `user-error' when ID is dead or has no stored blob."
           (org-glance-material--strip-reserved)
           (add-hook 'write-region-annotate-functions
                     #'org-glance-material--reserved-annotations nil t)
+          (add-hook 'write-region-annotate-functions
+                    #'org-glance-material--ending-annotations nil t)
           (setq-local revert-buffer-function #'org-glance-material--revert)
-          (add-hook 'after-revert-hook #'org-glance-material--strip-reserved nil t)
+          (add-hook 'after-revert-hook #'org-glance-material--read-endings nil t)
+          (add-hook 'after-revert-hook #'org-glance-material--strip-reserved t t)
           (add-hook 'after-revert-hook
                     #'org-glance-material--refresh-derived-relations t t)
           (add-hook 'before-save-hook

@@ -260,6 +260,15 @@ argument in [[file:proposals][docs/proposals/]].
     agenda shows the span), relations and plain links — all from metadata, zero blob
     parses; agenda and link-following work without materializing.  Violation: agenda
     misses planning, or the render cost becomes O(blobs).
+    JSON Overview resolves cached source TODO receipts per Row and refuses
+    incompatible standalone headers after filtering; rendering reads no blobs.
+    Persistent exports admit one atomic SPEC pointer to immutable local artifacts;
+    returned bytes survive later publishers until explicit local cache cleanup.
+    Publication/admission: =src/view/org-glance-overview.el:57=, base
+    [[https://github.com/rails-to-cosmos/org-glance/commit/0174379][0174379]].
+    Source: =src/view/org-glance-overview.el:136= and
+    =src/data/org-glance-cache.el:1595=, base
+    [[https://github.com/rails-to-cosmos/org-glance/commit/0174379][0174379]].
 
 21. *Managed drawer keys live in the file, never in the material buffer.*  The keys in
     =org-glance-material-hidden-properties= (snapshotted per buffer at open,
@@ -280,6 +289,12 @@ argument in [[file:proposals][docs/proposals/]].
     (=org-glance-material--normalize-tags=) — each raising a =display-warning= — and the
     crypt seal (inv 14).  Violation: a silent rewrite clobbers user text with no trace
     (collides with inv 11).
+    LF editing retains original LF/CRLF endings through write annotations;
+    new lines use the first source ending. The shared encoder preserves
+    repetition snapshot endings. Source: =src/view/org-glance-material.el:168=,
+    base [[https://github.com/rails-to-cosmos/org-glance/commit/0174379][0174379]].
+    Repetition cleanup retains header and pinned newline properties
+    (=src/view/org-glance-material.el:370= and =:376= on that base).
 
 23. *LLM session state is derived live, never persisted.*  Running / exited / stopped,
     buffer names and titles recompute at fill (=org-glance-llm--session-rows=) from two

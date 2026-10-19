@@ -83,7 +83,7 @@
     (let ((db (sqlite-open (org-glance-cache:path graph))))
       (unwind-protect
           (progn
-          (should (equal '((7)) (sqlite-select db "PRAGMA user_version")))
+          (should (equal (list (list org-glance-cache:version)) (sqlite-select db "PRAGMA user_version")))
             (should
              (equal
               '(("headline_event") ("headline_family")

@@ -13,6 +13,10 @@
 (require 'org-glance-utils)
 
 (require 'org-glance-core)
+(declare-function org-glance-config:current "org-glance-config")
+(declare-function org-glance-config:native-keywords "org-glance-config")
+(declare-function org-glance-settings:tags "org-glance-config")
+(declare-function org-glance-config-file:path "org-glance-config-file")
 
 (defcustom org-glance-tag-config-dir nil
   "Directory of per-tag config files, or nil for the store's `config/tags/'."
@@ -142,6 +146,12 @@ Called after in-process writes, which mtime granularity could hide."
 
 (cl-defun org-glance-tag-config--by-tag (graph)
   "Return GRAPH's tag -> config hash, re-parsed on a dir or snapshot change."
+  (when (and (fboundp 'org-glance-config:current) (org-glance-graph? graph))
+    (when-let* ((settings (org-glance-config:current graph)))
+      (let ((table (make-hash-table :test 'eq)))
+        (dolist (entry (org-glance-settings:tags settings))
+          (puthash (intern (car entry)) (cadr entry) table))
+        (cl-return-from org-glance-tag-config--by-tag table))))
   (let* ((dir (org-glance-tag-config:dir graph))
          (snapshot (org-glance-tag-config--snapshot dir))
          (cache org-glance-tag-config--cache))
@@ -260,6 +270,15 @@ Org derives them, so the split matches what a `#+TODO:' header produces."
   "Return distinct TODO cycles and their source files for FILTER in GRAPH.
 Each result is (CYCLE SOURCE...), ordered system first and then by tag.  METAS,
 when supplied, is GRAPH's precomputed live Row projection."
+  (when (and (fboundp 'org-glance-config:current) (org-glance-graph? graph))
+    (when-let* ((settings (org-glance-config:current graph)))
+      (let* ((tags (mapcar #'symbol-name
+                           (if metas-supplied-p (org-glance-tag-config--tags-for-filter graph filter metas)
+                             (org-glance-tag-config--tags-for-filter graph filter))))
+             (cycles (org-glance-config:native-keywords settings nil tags))
+             (path (org-glance-config-file:path (org-glance-graph:directory graph))))
+        (cl-return-from org-glance-tag-config--cycle-sources
+          (mapcar (lambda (cycle) (list (string-join (cdr cycle) " ") path)) cycles)))))
   (let ((system-file (org-glance-tag-config:system-file graph))
         groups)
     (cl-labels ((add (cycle source)
@@ -386,6 +405,8 @@ On `org-glance-graph-after-open-functions' (error-demoted, invariant 9), each
 level-1 `:TAG:' headline becomes `<tag>.org': heading text as `#+TITLE:',
 `:TODO_KEYWORDS:' as `#+TODO:', subtree minus both keys as capture entry.
 Existing per-tag files are kept; the legacy file becomes `tags.org.bak'."
+  (when (and (fboundp 'org-glance-config:current) (org-glance-config:current graph))
+    (cl-return-from org-glance-tag-config--migrate-on-open nil))
   (when-let* ((legacy (org-glance-graph:config-file graph "tags.org"))
               ((f-exists? legacy))
               (dir (org-glance-tag-config:dir graph)))
@@ -488,6 +509,9 @@ Flags residual `:TODO_KEYWORDS:'/`:TAG:' keys and a missing capture entry."
   "Open TAG's config file, creating a stub if absent; `C' in the transient.
 With TAG nil, prompt for it among live tags and existing configs."
   (interactive)
+  (when (and (fboundp 'org-glance-config:current) (org-glance-initialized?)
+             (org-glance-config:current org-glance-graph))
+    (user-error "config.json owns settings; compound tag settings tables are pending"))
   (let* ((graph (and (org-glance-initialized?) org-glance-graph))
          (tag-str (or tag (completing-read "Configure tag: "
                                            (org-glance-tag-config--edit-candidates graph))))

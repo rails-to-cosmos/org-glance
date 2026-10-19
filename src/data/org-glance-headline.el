@@ -167,7 +167,10 @@ Stripping them MUTATES the buffer: call it LAST on a shared one."
   (declare (indent 1))
   `(progn
      (cl-check-type ,contents string)
-     (thunk-delay (org-glance-headline:with-contents ,contents ,@body))))
+     (thunk-delay
+       (org-glance-headline:with-contents
+           (replace-regexp-in-string "\r\n" "\n" ,contents t t)
+         ,@body))))
 
 (cl-defun org-glance-headline--hash (contents)
   (org-glance-headline--lazy-fact contents (org-glance-headline--buffer-hash)))
@@ -207,7 +210,8 @@ Reuse its `-facts' memo when keyed by its own (`eq') contents, else compute."
   (let ((memo (org-glance-headline:-facts headline)))
     (if (and memo (eq (car memo) (org-glance-headline:contents headline)))
         (cdr memo)
-      (org-glance-headline:with-contents headline
+      (org-glance-headline:with-contents
+          (replace-regexp-in-string "\r\n" "\n" (org-glance-headline:contents headline) t t)
         (org-glance-headline--buffer-content-facts)))))
 
 (cl-defun org-glance-headline--buffer-content-facts ()
@@ -240,17 +244,34 @@ blocks hide theirs (invariant 14)."
 
 (cl-defun org-glance-headline--from-string (contents)
   (cl-check-type contents string)
-  (org-glance-headline:with-contents contents      ; with-contents already entered org-mode
-    (unless (or (org-at-heading-p) (re-search-forward org-heading-regexp nil t))
-      (error "Unable to find `org-element' of type `headline' in the provided contents"))
-    (let* ((headline (org-glance-headline:at-point))
-           (parsed (org-glance-headline:contents headline)))
-      ;; Runs AFTER `at-point' captured CONTENTS -- the hash pass mutates.
-      ;; Exact equality: computing here equals a fresh CONTENTS-only buffer.
-      (if (equal parsed (buffer-substring-no-properties (point-min) (point-max)))
-          (org-glance-headline--copy headline
-            :-facts (cons parsed (org-glance-headline--buffer-content-facts)))
-        headline))))
+  (let ((analysis (replace-regexp-in-string "\r\n" "\n" contents t t)))
+    (org-glance-headline:with-contents analysis
+      (unless (or (org-at-heading-p) (re-search-forward org-heading-regexp nil t))
+        (error "Unable to find `org-element' of type `headline' in the provided contents"))
+      (let* ((start (1- (save-excursion (org-back-to-heading t) (point))))
+             (headline (org-glance-headline:at-point))
+             (parsed (org-glance-headline:contents headline))
+             (raw (if (equal analysis contents) parsed
+                    (substring contents
+                               (org-glance-headline--source-offset contents start)
+                               (org-glance-headline--source-offset
+                                contents (+ start (length parsed))))))
+             (headline (if (equal raw parsed) headline
+                         (org-glance-headline--copy headline :contents raw))))
+        ;; Runs AFTER `at-point' captured CONTENTS -- the hash pass mutates.
+        ;; Exact equality: computing here equals a fresh CONTENTS-only buffer.
+        (if (equal parsed (buffer-substring-no-properties (point-min) (point-max)))
+            (org-glance-headline--copy headline
+              :-facts (cons raw (org-glance-headline--buffer-content-facts)))
+          headline)))))
+
+(defun org-glance-headline--source-offset (source offset)
+  "Map LF analysis OFFSET back into exact SOURCE containing CRLF."
+  (let ((cursor 0) (removed 0))
+    (while (and (string-match "\r\n" source cursor)
+                (< (- (match-beginning 0) removed) offset))
+      (setq cursor (match-end 0) removed (1+ removed)))
+    (+ offset removed)))
 
 (cl-defun org-glance-headline--normalized-tags (headline)
   "Return HEADLINE with canonical heading tags in its stored contents."

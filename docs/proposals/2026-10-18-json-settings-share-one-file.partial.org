@@ -8,6 +8,55 @@ on GHC 9.6.7 / Emacs 31.1. Application cutover remains
 pending. The canonical cross-application decision and delivery ledger
 are in [[file:../../../glance/docs/proposals/partial/2026-10-18-settings-use-json-and-table-view.md][Glance's proposal]].
 
+The [[file:../../../glance/docs/reports/partial/2026-10-19-json-settings-step-4-activation.md][initial activation slice]] now connects JSON-present startup authority,
+validated scalar writes, last-good reloads and private-cache dependency
+receipts. Native cycling and initial Material/capture adapters are implemented.
+The initial native cache advanced to format 8. Author validation passes all
+580 ERT cases and the report's listed cross-application gates;
+independent review freshly passes all 580 ERT cases, 18 typed Haskell/process,
+19 protocol/startup and 78 Config cases. It finds
+[[file:../../../glance/docs/bugs/fixed/2026-10-19-json-native-local-capture-discards-content.md][P1 capture content loss during ordinary local finalization]],
+[[file:../../../glance/docs/bugs/fixed/2026-10-19-json-native-unicode-local-storage-bypass.md][P2 Unicode local-storage bypass]], and
+[[file:../../../glance/docs/bugs/fixed/2026-10-19-json-settings-mixed-case-tag-write-refused.md][P2 mixed-case Settings write refusal]].
+The three repairs now pass real finalization, retained-draft retry and Unicode
+storage admission tests; frozen reviewed native owners fail those regressions.
+Full scalar folding agrees with Data.Text, and Settings keeps original keys
+and whole-file revisions. The linked report retains source-pinned evidence.
+Independent repair re-review now passes all 116 focused Haskell/process and
+583 ERT cases, the original probes, exhaustive folding parity, and combined
+and isolated frozen comparisons. No repair-scope findings remain. Real Overview
+context, client/compound settings and full workflow cutover remain pending.
+The subsequent [[file:../../../glance/docs/reports/partial/2026-10-19-json-settings-step-5-native-byte-preserving-saves.md][byte-preserving Material slice]] supports LF/CRLF/mixed saves, reverts and
+repetition snapshots. LF analysis retains exact selected source bytes; native
+cache format 9 and parser contract 2 invalidate earlier CRLF interpretations
+once. Independent review freshly passes all 587 ERT cases but reproduces
+[[file:../../../glance/docs/bugs/fixed/2026-10-19-native-material-repetition-normalizes-retained-mixed-endings.md][P2 retained mixed-ending normalization during repetition]]. The two-copy repair
+preserves retained newline properties. Independent repair re-review passes all
+588 ERT cases, the original reviewer probe and the repeated-cycle regression;
+each old copy independently fails its targeted assertion. No repair-scope
+findings remain. Isolated opening latency attribution remains pending; cleanup
+cost is measured separately. No live tree or installed application was migrated.
+
+The [[file:../../../glance/docs/reports/partial/2026-10-19-json-settings-step-6-native-overview-context.md][native Overview slice]] now derives standalone Org/Agenda headers from
+JSON and source TODO receipts in private format-10 Rows. Rendering reads no
+blobs; state filtering resolves per Row before incompatible exports are
+refused. Semantic SPEC receipts handle presentation and family-only updates.
+Refresh restores the selected Row and rebuilds native keyword regexes.
+Initial review passed all 594 ERT cases and seven Overview contracts but
+reproduced [[file:../../../glance/docs/bugs/fixed/2026-10-19-native-overview-cache-receipt-certifies-another-export.md][P2 crossed export/SPEC publication]] with two real native processes. The
+keyword-refresh repair is independently verified; its process-local mutation
+fails WORK recognition. The author pairing repair uses one atomic SPEC manifest
+and immutable SHA-256 artifacts under local =cache/overviews/=. Admission returns
+the certified path; refresh can change that path. Transient exports, Agenda and
+legacy copy-on-write refresh share publication. Old caches remain untouched.
+Distinct exports remain until explicit local cache cleanup; automatic retention
+needs a separate open-reader lifetime contract. Independent repair re-review
+passes 597 native cases, 52 focused Overview cases and two additional probes
+for late manifests and artifact reuse; selected old definitions fail the concurrency regression. No
+repair-scope findings remain. Compound/client tables, later workflows and live
+migration remain pending.
+Author gates pass 597 native, 116 focused Haskell/process and 40 interop tests.
+
 * Delivered foundation
 
 =org-glance-config-file= provides a strict format-1 JSON envelope, exact-byte

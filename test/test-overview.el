@@ -81,7 +81,8 @@
     (org-glance-graph:add graph (org-glance-test:headline "o1" "* Alpha"))
     (let ((file (org-glance-overview:write graph)))
       (should (f-exists? file))
-      (should (string= file (org-glance-overview:file graph)))
+      (should (file-in-directory-p file (org-glance-overview:cache-path graph)))
+      (should (org-glance-overview--spec-owns-cache? nil file graph))
       (should (s-contains? ":ORG_GLANCE_ID: o1" (f-read-text file 'utf-8))))))
 
 (ert-deftest org-glance-test:overview-incremental-update-matches-full-render ()
@@ -90,13 +91,17 @@
     (org-glance-graph:add graph
       (org-glance-test:headline "a" "* TODO Alpha")
       (org-glance-test:headline "b" "* TODO Beta"))
-    (let ((file (org-glance-overview:write graph)))
+    (let* ((file (org-glance-overview:write graph))
+           (bytes (f-read-text file 'utf-8)))
       (org-glance-test:simulate-material-save
        graph "a" "* DONE Alpha\n:PROPERTIES:\n:ORG_GLANCE_ID: a\n:END:\n")
-      (should (eq 'incremental
-                  (org-glance-overview:update graph nil '("a"))))
+      (cl-letf (((symbol-function 'org-glance-overview:render)
+                 (lambda (&rest _) (ert-fail "Bounded splice rendered every Row"))))
+        (should (eq 'incremental
+                    (org-glance-overview:update graph nil '("a")))))
+      (should (equal bytes (f-read-text file 'utf-8)))
       (should (string= (org-glance-overview:render graph)
-                       (f-read-text file 'utf-8))))))
+                       (f-read-text (org-glance-overview:cached-file graph) 'utf-8))))))
 
 (ert-deftest org-glance-test:overview-incremental-membership-flip-renders-full ()
   "A changed Row entering a filtered Overview takes the full-render path."
@@ -257,8 +262,8 @@ sidecar mismatch rebuilds, then the owner hits.  A pinned `spec-key' collides."
                  (lambda (_filter) "deadbeef0000")))
         (should (string= (org-glance-overview:spec-key s1)
                          (org-glance-overview:spec-key s2)))
-        (org-glance-overview:cached-file graph s1)             ; s1 owns the dir
         (org-glance-test:store-mtime graph -100)               ; cache is fresh
+        (org-glance-overview:cached-file graph s1)             ; s1 owns the dir
         (org-glance-test:counting-renders (renders org-glance-overview:header)
           (org-glance-overview:cached-file graph s1)         ; owner -> hit
           (should (= 0 renders))
@@ -271,12 +276,11 @@ sidecar mismatch rebuilds, then the owner hits.  A pinned `spec-key' collides."
   "A cache with a stale `-v2' mode prop-line rebuilds even when mtime-fresh."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "a" "* Alpha"))
-    (let ((file (org-glance-overview:cached-file graph '(:tags ("work")))))
-      (f-write-text (s-replace "mode: org-glance-overview"
-                               "mode: org-glance-overview-v2"
-                               (f-read-text file 'utf-8))
-                    'utf-8 file)
-      (org-glance-test:store-mtime graph -100)                 ; cache is fresh
+    (let* ((filter '(:tags ("work")))
+           (file (org-glance-overview--publish
+                  graph filter (org-glance-overview--dependency graph filter)
+                  (s-replace "mode: org-glance-overview" "mode: org-glance-overview-v2"
+                             (org-glance-overview:render graph filter)))))
       (should-not (org-glance-overview--header-current? file))
       (should (s-contains? "mode: org-glance-overview -*-"
                            (f-read-text (org-glance-overview:cached-file graph '(:tags ("work")))
@@ -297,8 +301,8 @@ sidecar mismatch rebuilds, then the owner hits.  A pinned `spec-key' collides."
   "A fresh cache is served without re-reading the graph or re-rendering."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "o1" "* Alpha"))
+    (org-glance-test:store-mtime graph -100)
     (let ((file (org-glance-overview:cached-file graph)))   ; warm
-      (org-glance-test:store-mtime graph -100)
       (org-glance-test:counting-renders (renders)
         (should (string= file (org-glance-overview:cached-file graph)))
         (should (= 0 renders))))))
@@ -330,15 +334,16 @@ sidecar mismatch rebuilds, then the owner hits.  A pinned `spec-key' collides."
         (should (= 1 renders))))))
 
 (ert-deftest org-glance-test:overview-filtered-uses-separate-dir ()
-  "Filtered overviews live in their own dir; unfiltered stays at overview.org."
+  "Filtered and unfiltered artifacts have separate local publication scopes."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "o1" "* Alpha :work:"))
     (let ((filtered (org-glance-overview:cached-file graph '(:tags ("work")))))
       (should (s-contains? (org-glance-overview:cache-path graph) filtered))
       (should (f-exists? filtered))
       (should-not (string= filtered (org-glance-overview:file graph))))
-    (should (string= (org-glance-overview:cached-file graph)
-                     (org-glance-overview:file graph)))))
+    (should (file-in-directory-p
+             (org-glance-overview:cached-file graph)
+             (f-dirname (org-glance-overview:file graph))))))
 
 (ert-deftest org-glance-test:overview-open-stale-headline-errors ()
   "Acting on a heading whose headline was deleted gives a user-error, not a crash."

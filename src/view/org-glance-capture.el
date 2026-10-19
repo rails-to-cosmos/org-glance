@@ -14,6 +14,8 @@
 (require 'org-glance-core)
 
 (declare-function org-glance-material:insert-reference "org-glance-material")
+(declare-function org-glance-config:current "org-glance-config")
+(declare-function org-glance-settings:template "org-glance-config")
 
 (defvar org-glance-capture-mode-map (make-sparse-keymap)
   "Keymap for `org-glance-capture-mode'.")
@@ -41,12 +43,18 @@ skeleton; system and tag TODO declarations prefix every template."
   (cl-check-type title string)
   (let* ((tags (org-glance-tag:as-list tags))
          (config (when (= 1 (length tags))
-                   (org-glance-tag-config:resolve org-glance-graph (car tags)))))
+                   (org-glance-tag-config:resolve org-glance-graph (car tags))))
+         (settings (org-glance-config:current org-glance-graph))
+         (config (if (and settings (not (and config (org-glance-tag-config:template config))))
+                     (when-let* ((template (org-glance-settings:template settings)))
+                       (org-glance-tag-config :tag (car tags) :template template))
+                   config)))
     (let ((body (if config
                     (org-glance-tag-config:render config title tags)
                   (format "* %s%%?  :%s:" title
                           (mapconcat #'org-glance-tag:to-string tags ":")))))
-      (concat (unless (s-contains? "#+TODO:" body)
+      (concat (unless (if settings (org-glance-tag-config:todo-declarations body)
+                        (s-contains? "#+TODO:" body))
                 (org-glance-tag-config:preamble-for-filter
                  org-glance-graph (list :tags tags)))
               body))))
@@ -97,13 +105,11 @@ Finalization stores an inactive ORG_GLANCE_CREATION_TIME in the headline."
     (when preamble
       (f-write-text (concat preamble "\n") 'utf-8 file))
     (find-file file)
-    (add-hook 'kill-buffer-query-functions #'org-glance--kill-buffer-noconfirm nil t)
     (add-hook 'org-capture-after-finalize-hook
               (lambda ()
-                (unwind-protect
-                    (when-let* ((buffer (get-file-buffer file)))
-                      (org-glance-graph:capture org-glance-graph buffer))
-                  (org-glance--discard-buffer (get-file-buffer file))
+                (when-let* ((buffer (get-file-buffer file)))
+                  (org-glance-graph:capture org-glance-graph buffer)
+                  (org-glance--discard-buffer buffer)
                   (f-delete file)))
               0 t)
     (org-capture nil capture-token)

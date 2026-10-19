@@ -280,8 +280,40 @@ with no remaining Step 3 findings on GHC 9.6.7 / Emacs 31.1. Fresh parser
 medians show no regression, and warm-cache counters are unchanged;
 other runtime verification remains pending. Reader activation,
 setting edits, live presentation integration and the live
-views-tree cutover remain pending; legacy configuration still owns application
-behavior. Source hashes and both-repository validation are in the linked
+views-tree cutover remain pending in that foundation slice. The new
+[[file:../../glance/docs/reports/partial/2026-10-19-json-settings-step-4-activation.md][initial activation slice]] connects JSON readers, scalar writes, reloads,
+cache dependency receipts and initial native Material/capture cycling.
+Format-10 native admission requires a coherent complete census. The
+[[file:../../glance/docs/reports/partial/2026-10-19-json-settings-step-5-native-byte-preserving-saves.md][byte-preserving Material slice]] supports LF/CRLF/mixed saves, reverts and
+uniform CRLF repetition snapshots. Independent review passes all 587 ERT
+cases but reproduces [[file:../../glance/docs/bugs/fixed/2026-10-19-native-material-repetition-normalizes-retained-mixed-endings.md][P2 retained mixed-ending normalization during repetition]].
+The two-copy repair retains newline properties in headers and pinned blocks.
+Independent repair re-review passes all 588 native cases, the original probe
+and both single-copy failure controls; no repair-scope findings remain.
+Isolated opening latency attribution remains pending; measured cleanup cost
+is separate from that follow-up.
+The [[file:../../glance/docs/reports/partial/2026-10-19-json-settings-step-6-native-overview-context.md][native Overview slice]] implements metadata-only source receipts, per-Row
+state filtering, standalone Org/Agenda headers and mixed-context refusal.
+Semantic receipts invalidate presentation/family changes; refresh restores
+point and native regexes. Initial review passed all 594 ERT cases and seven
+Overview contracts but reproduced [[file:../../glance/docs/bugs/fixed/2026-10-19-native-overview-cache-receipt-certifies-another-export.md][P2 crossed export/SPEC publication]] with two
+native processes. The author repair binds immutable local exports to one atomic
+manifest. Independent repair re-review passes 597 native cases, 52 focused
+Overview cases and two late-manifest/artifact-reuse probes; selected old
+definitions fail the concurrency regression. No repair-scope findings remain.
+The regex repair is independently verified. Compound/client settings remain pending.
+Author gates pass 597 native, 116 focused Haskell/process and 40 interop tests.
+Independent review passes 580 ERT cases and the
+focused cross-application gates, but reproduces P1 ordinary local capture
+content loss, P2 Unicode local-storage bypass and P2 mixed-case Settings write
+refusal. The three repairs now pass ordinary local finalization, retained-draft
+retry, Unicode storage/refusal and mixed-case HTTP edit checks. Exhaustive
+scalar folding matches Data.Text while classification scopes remain distinct.
+The linked report owns frozen comparisons and final author gates. Independent
+repair re-review passes 116 focused Haskell/process and 583 ERT cases, original
+probes, exhaustive folding parity and isolated frozen comparisons. No repair-scope
+findings remain; live migration and unfinished workflows remain pending.
+No installed application or live source was changed. Source hashes and both-repository validation are in the linked
 Glance step report. Current numbered-phase priorities are unchanged.
 The review's [[file:../../glance/docs/bugs/fixed/2026-10-18-org-glance-json-noop-rewrites-equivalent-objects.md][no-op defect]] is repaired: equivalent reconstructed objects retain
 bytes and revision with zero publication calls. Discriminating ERT/process

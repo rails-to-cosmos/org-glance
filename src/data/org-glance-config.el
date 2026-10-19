@@ -5,7 +5,7 @@
 
 (cl-defstruct (org-glance-settings (:constructor org-glance-settings--make)
                                    (:conc-name org-glance-settings:))
-  tree cycles tags storage views colors diagnostics)
+  tree cycles template tags storage views colors diagnostics)
 
 (defun org-glance-config--error (message)
   "Signal an invalid configuration with MESSAGE."
@@ -80,6 +80,104 @@ Final sigma stays distinct; storage membership retains its owner's case folding.
 (defconst org-glance-config--space "[\t-\r \u00a0\u1680\u2000-\u200a\u202f\u205f\u3000]"
   "Data.Char.isSpace: ASCII HT through CR, and Unicode Space_Separator.
 NEL, line/paragraph separators and format characters are excluded.")
+
+;; Unicode full-fold differences from lowercase, matching Data.Text 2.0.2.
+(defconst org-glance-config--storage-fold-exceptions
+  (let ((table (make-char-table nil nil)))
+    (dolist (entry
+             '((#xb5 . "\u03bc") (#xdf . "\u0073\u0073") (#x149 . "\u02bc\u006e") (#x17f . "\u0073")
+                 (#x1f0 . "\u006a\u030c") (#x345 . "\u03b9") (#x390 . "\u03b9\u0308\u0301") (#x3b0 . "\u03c5\u0308\u0301")
+                 (#x3c2 . "\u03c3") (#x3d0 . "\u03b2") (#x3d1 . "\u03b8") (#x3d5 . "\u03c6")
+                 (#x3d6 . "\u03c0") (#x3f0 . "\u03ba") (#x3f1 . "\u03c1") (#x3f5 . "\u03b5")
+                 (#x587 . "\u0565\u0582") (#x13a0 . "\u13a0") (#x13a1 . "\u13a1") (#x13a2 . "\u13a2")
+                 (#x13a3 . "\u13a3") (#x13a4 . "\u13a4") (#x13a5 . "\u13a5") (#x13a6 . "\u13a6")
+                 (#x13a7 . "\u13a7") (#x13a8 . "\u13a8") (#x13a9 . "\u13a9") (#x13aa . "\u13aa")
+                 (#x13ab . "\u13ab") (#x13ac . "\u13ac") (#x13ad . "\u13ad") (#x13ae . "\u13ae")
+                 (#x13af . "\u13af") (#x13b0 . "\u13b0") (#x13b1 . "\u13b1") (#x13b2 . "\u13b2")
+                 (#x13b3 . "\u13b3") (#x13b4 . "\u13b4") (#x13b5 . "\u13b5") (#x13b6 . "\u13b6")
+                 (#x13b7 . "\u13b7") (#x13b8 . "\u13b8") (#x13b9 . "\u13b9") (#x13ba . "\u13ba")
+                 (#x13bb . "\u13bb") (#x13bc . "\u13bc") (#x13bd . "\u13bd") (#x13be . "\u13be")
+                 (#x13bf . "\u13bf") (#x13c0 . "\u13c0") (#x13c1 . "\u13c1") (#x13c2 . "\u13c2")
+                 (#x13c3 . "\u13c3") (#x13c4 . "\u13c4") (#x13c5 . "\u13c5") (#x13c6 . "\u13c6")
+                 (#x13c7 . "\u13c7") (#x13c8 . "\u13c8") (#x13c9 . "\u13c9") (#x13ca . "\u13ca")
+                 (#x13cb . "\u13cb") (#x13cc . "\u13cc") (#x13cd . "\u13cd") (#x13ce . "\u13ce")
+                 (#x13cf . "\u13cf") (#x13d0 . "\u13d0") (#x13d1 . "\u13d1") (#x13d2 . "\u13d2")
+                 (#x13d3 . "\u13d3") (#x13d4 . "\u13d4") (#x13d5 . "\u13d5") (#x13d6 . "\u13d6")
+                 (#x13d7 . "\u13d7") (#x13d8 . "\u13d8") (#x13d9 . "\u13d9") (#x13da . "\u13da")
+                 (#x13db . "\u13db") (#x13dc . "\u13dc") (#x13dd . "\u13dd") (#x13de . "\u13de")
+                 (#x13df . "\u13df") (#x13e0 . "\u13e0") (#x13e1 . "\u13e1") (#x13e2 . "\u13e2")
+                 (#x13e3 . "\u13e3") (#x13e4 . "\u13e4") (#x13e5 . "\u13e5") (#x13e6 . "\u13e6")
+                 (#x13e7 . "\u13e7") (#x13e8 . "\u13e8") (#x13e9 . "\u13e9") (#x13ea . "\u13ea")
+                 (#x13eb . "\u13eb") (#x13ec . "\u13ec") (#x13ed . "\u13ed") (#x13ee . "\u13ee")
+                 (#x13ef . "\u13ef") (#x13f0 . "\u13f0") (#x13f1 . "\u13f1") (#x13f2 . "\u13f2")
+                 (#x13f3 . "\u13f3") (#x13f4 . "\u13f4") (#x13f5 . "\u13f5") (#x13f8 . "\u13f0")
+                 (#x13f9 . "\u13f1") (#x13fa . "\u13f2") (#x13fb . "\u13f3") (#x13fc . "\u13f4")
+                 (#x13fd . "\u13f5") (#x1c80 . "\u0432") (#x1c81 . "\u0434") (#x1c82 . "\u043e")
+                 (#x1c83 . "\u0441") (#x1c84 . "\u0442") (#x1c85 . "\u0442") (#x1c86 . "\u044a")
+                 (#x1c87 . "\u0463") (#x1c88 . "\ua64b") (#x1e96 . "\u0068\u0331") (#x1e97 . "\u0074\u0308")
+                 (#x1e98 . "\u0077\u030a") (#x1e99 . "\u0079\u030a") (#x1e9a . "\u0061\u02be") (#x1e9b . "\u1e61")
+                 (#x1e9e . "\u0073\u0073") (#x1f50 . "\u03c5\u0313") (#x1f52 . "\u03c5\u0313\u0300") (#x1f54 . "\u03c5\u0313\u0301")
+                 (#x1f56 . "\u03c5\u0313\u0342") (#x1f80 . "\u1f00\u03b9") (#x1f81 . "\u1f01\u03b9") (#x1f82 . "\u1f02\u03b9")
+                 (#x1f83 . "\u1f03\u03b9") (#x1f84 . "\u1f04\u03b9") (#x1f85 . "\u1f05\u03b9") (#x1f86 . "\u1f06\u03b9")
+                 (#x1f87 . "\u1f07\u03b9") (#x1f88 . "\u1f00\u03b9") (#x1f89 . "\u1f01\u03b9") (#x1f8a . "\u1f02\u03b9")
+                 (#x1f8b . "\u1f03\u03b9") (#x1f8c . "\u1f04\u03b9") (#x1f8d . "\u1f05\u03b9") (#x1f8e . "\u1f06\u03b9")
+                 (#x1f8f . "\u1f07\u03b9") (#x1f90 . "\u1f20\u03b9") (#x1f91 . "\u1f21\u03b9") (#x1f92 . "\u1f22\u03b9")
+                 (#x1f93 . "\u1f23\u03b9") (#x1f94 . "\u1f24\u03b9") (#x1f95 . "\u1f25\u03b9") (#x1f96 . "\u1f26\u03b9")
+                 (#x1f97 . "\u1f27\u03b9") (#x1f98 . "\u1f20\u03b9") (#x1f99 . "\u1f21\u03b9") (#x1f9a . "\u1f22\u03b9")
+                 (#x1f9b . "\u1f23\u03b9") (#x1f9c . "\u1f24\u03b9") (#x1f9d . "\u1f25\u03b9") (#x1f9e . "\u1f26\u03b9")
+                 (#x1f9f . "\u1f27\u03b9") (#x1fa0 . "\u1f60\u03b9") (#x1fa1 . "\u1f61\u03b9") (#x1fa2 . "\u1f62\u03b9")
+                 (#x1fa3 . "\u1f63\u03b9") (#x1fa4 . "\u1f64\u03b9") (#x1fa5 . "\u1f65\u03b9") (#x1fa6 . "\u1f66\u03b9")
+                 (#x1fa7 . "\u1f67\u03b9") (#x1fa8 . "\u1f60\u03b9") (#x1fa9 . "\u1f61\u03b9") (#x1faa . "\u1f62\u03b9")
+                 (#x1fab . "\u1f63\u03b9") (#x1fac . "\u1f64\u03b9") (#x1fad . "\u1f65\u03b9") (#x1fae . "\u1f66\u03b9")
+                 (#x1faf . "\u1f67\u03b9") (#x1fb2 . "\u1f70\u03b9") (#x1fb3 . "\u03b1\u03b9") (#x1fb4 . "\u03ac\u03b9")
+                 (#x1fb6 . "\u03b1\u0342") (#x1fb7 . "\u03b1\u0342\u03b9") (#x1fbc . "\u03b1\u03b9") (#x1fbe . "\u03b9")
+                 (#x1fc2 . "\u1f74\u03b9") (#x1fc3 . "\u03b7\u03b9") (#x1fc4 . "\u03ae\u03b9") (#x1fc6 . "\u03b7\u0342")
+                 (#x1fc7 . "\u03b7\u0342\u03b9") (#x1fcc . "\u03b7\u03b9") (#x1fd2 . "\u03b9\u0308\u0300") (#x1fd3 . "\u03b9\u0308\u0301")
+                 (#x1fd6 . "\u03b9\u0342") (#x1fd7 . "\u03b9\u0308\u0342") (#x1fe2 . "\u03c5\u0308\u0300") (#x1fe3 . "\u03c5\u0308\u0301")
+                 (#x1fe4 . "\u03c1\u0313") (#x1fe6 . "\u03c5\u0342") (#x1fe7 . "\u03c5\u0308\u0342") (#x1ff2 . "\u1f7c\u03b9")
+                 (#x1ff3 . "\u03c9\u03b9") (#x1ff4 . "\u03ce\u03b9") (#x1ff6 . "\u03c9\u0342") (#x1ff7 . "\u03c9\u0342\u03b9")
+                 (#x1ffc . "\u03c9\u03b9") (#xab70 . "\u13a0") (#xab71 . "\u13a1") (#xab72 . "\u13a2")
+                 (#xab73 . "\u13a3") (#xab74 . "\u13a4") (#xab75 . "\u13a5") (#xab76 . "\u13a6")
+                 (#xab77 . "\u13a7") (#xab78 . "\u13a8") (#xab79 . "\u13a9") (#xab7a . "\u13aa")
+                 (#xab7b . "\u13ab") (#xab7c . "\u13ac") (#xab7d . "\u13ad") (#xab7e . "\u13ae")
+                 (#xab7f . "\u13af") (#xab80 . "\u13b0") (#xab81 . "\u13b1") (#xab82 . "\u13b2")
+                 (#xab83 . "\u13b3") (#xab84 . "\u13b4") (#xab85 . "\u13b5") (#xab86 . "\u13b6")
+                 (#xab87 . "\u13b7") (#xab88 . "\u13b8") (#xab89 . "\u13b9") (#xab8a . "\u13ba")
+                 (#xab8b . "\u13bb") (#xab8c . "\u13bc") (#xab8d . "\u13bd") (#xab8e . "\u13be")
+                 (#xab8f . "\u13bf") (#xab90 . "\u13c0") (#xab91 . "\u13c1") (#xab92 . "\u13c2")
+                 (#xab93 . "\u13c3") (#xab94 . "\u13c4") (#xab95 . "\u13c5") (#xab96 . "\u13c6")
+                 (#xab97 . "\u13c7") (#xab98 . "\u13c8") (#xab99 . "\u13c9") (#xab9a . "\u13ca")
+                 (#xab9b . "\u13cb") (#xab9c . "\u13cc") (#xab9d . "\u13cd") (#xab9e . "\u13ce")
+                 (#xab9f . "\u13cf") (#xaba0 . "\u13d0") (#xaba1 . "\u13d1") (#xaba2 . "\u13d2")
+                 (#xaba3 . "\u13d3") (#xaba4 . "\u13d4") (#xaba5 . "\u13d5") (#xaba6 . "\u13d6")
+                 (#xaba7 . "\u13d7") (#xaba8 . "\u13d8") (#xaba9 . "\u13d9") (#xabaa . "\u13da")
+                 (#xabab . "\u13db") (#xabac . "\u13dc") (#xabad . "\u13dd") (#xabae . "\u13de")
+                 (#xabaf . "\u13df") (#xabb0 . "\u13e0") (#xabb1 . "\u13e1") (#xabb2 . "\u13e2")
+                 (#xabb3 . "\u13e3") (#xabb4 . "\u13e4") (#xabb5 . "\u13e5") (#xabb6 . "\u13e6")
+                 (#xabb7 . "\u13e7") (#xabb8 . "\u13e8") (#xabb9 . "\u13e9") (#xabba . "\u13ea")
+                 (#xabbb . "\u13eb") (#xabbc . "\u13ec") (#xabbd . "\u13ed") (#xabbe . "\u13ee")
+                 (#xabbf . "\u13ef") (#xfb00 . "\u0066\u0066") (#xfb01 . "\u0066\u0069") (#xfb02 . "\u0066\u006c")
+                 (#xfb03 . "\u0066\u0066\u0069") (#xfb04 . "\u0066\u0066\u006c") (#xfb05 . "\u0073\u0074") (#xfb06 . "\u0073\u0074")
+                 (#xfb13 . "\u0574\u0576") (#xfb14 . "\u0574\u0565") (#xfb15 . "\u0574\u056b") (#xfb16 . "\u057e\u0576")
+                 (#xfb17 . "\u0574\u056d")))
+      (aset table (car entry) (cdr entry)))
+    table)
+  "Full case-fold mappings that differ from context-free lowercase.")
+
+(defun org-glance-config--storage-tag-name (text)
+  "Fold TEXT for shared storage membership, independently of scope identity."
+  (if (string-match-p "[^\0-\177]" text)
+      (mapconcat (lambda (char)
+                   (or (aref org-glance-config--storage-fold-exceptions char)
+                       (org-glance-config--tag-name (char-to-string char)))) text "")
+    (downcase text)))
+
+(defun org-glance-config:local-tags-p (settings tags)
+  "Return non-nil when SETTINGS require local storage for any of TAGS."
+  (let ((local (mapcar #'org-glance-config--storage-tag-name
+                       (org-glance-settings:storage settings))))
+    (cl-some (lambda (tag)
+               (member (org-glance-config--storage-tag-name (format "%s" tag)) local)) tags)))
 
 (defun org-glance-config--trim (text)
   "Trim TEXT's Unicode whitespace using the shared settings convention."
@@ -178,7 +276,7 @@ NEL, line/paragraph separators and format characters are excluded.")
                                                                                (append (car cycle) '("|") (cdr cycle)) " ")) tag-cycles "\n"))
                       tag-cycles) tags))))
     (maphash (lambda (key _) (unless (member key '("format" "tree" "todoCycles" "tags" "views"
-                                                   "stateColors" "application" "actions" "datasets" "clients"))
+                                                   "template" "stateColors" "application" "actions" "datasets" "clients"))
                                (push (concat "unknown setting: " key) diagnostics))) object)
     (let ((views (org-glance-config--field object "views" #'hash-table-p (make-hash-table :test 'equal)))
           (colors (org-glance-config--field object "stateColors" #'hash-table-p (make-hash-table :test 'equal))))
@@ -189,6 +287,7 @@ NEL, line/paragraph separators and format characters are excluded.")
                  (maphash (lambda (_ value) (unless (stringp value)
                                               (org-glance-config--error "Invalid state color"))) pairs)) colors)
       (org-glance-settings--make :tree tree :cycles cycles
+                                 :template (org-glance-config--field object "template" #'stringp)
                                  :tags (sort tags (lambda (a b) (string< (car a) (car b))))
                                  :storage (sort (delete-dups (cons "notification" storage)) #'string<)
                                  :views views :colors colors :diagnostics (sort diagnostics #'string<)))))
@@ -254,7 +353,8 @@ NEL, line/paragraph separators and format characters are excluded.")
                                        (mapcar (lambda (k) (or (gethash k tree) :null))
                                                '("inboxTag" "headlineHistoryDepth" "repositoryAutosync" "repositoryRemote"
                                                  "googleOAuthClientId" "defaultAgent")))))
-       (hash "presentation/1" (vector (cycles (org-glance-settings:cycles settings))
+       (hash "presentation/2" (vector (cycles (org-glance-settings:cycles settings))
+                                      (or (org-glance-settings:template settings) :null)
                                       (vconcat (mapcar (lambda (tag) (vector (car tag)
                                                                              (or (org-glance-tag-config:title (cadr tag)) :null)
                                                                              (or (org-glance-tag-config:template (cadr tag)) :null) (cycles (nth 2 tag)))) tags))
@@ -328,6 +428,202 @@ SCOPES contains (NAME . PRESENTATION) pairs."
                  (<= end (+ offset (length body))))
       (org-glance-config--error "Edit crosses the canonical body boundary"))
     (list (+ origin (- start offset)) (+ origin (- end offset)) text)))
+
+(defun org-glance-config:native-keywords (settings file tags &optional declarations)
+  "Resolve SETTINGS, FILE and TAGS while preserving native cycle boundaries.
+DECLARATIONS retains source-owned cycle metadata."
+  (let* ((meaning (org-glance-config:keywords settings file tags))
+         (header (org-glance-config:header settings file tags declarations))
+         (tokens (split-string (substring header (length "#+TODO: "))))
+         (raw (append '((("TODO") . ("DONE")))
+                      (org-glance-settings:cycles settings)
+                      (mapcan (lambda (tag)
+                                (copy-sequence
+                                 (nth 2 (assoc (org-glance-config--tag-name tag)
+                                               (org-glance-settings:tags settings))))) tags)
+                      (mapcar
+                       (lambda (declaration)
+                         (let* ((words (split-string (nth 2 declaration)))
+                                (bar (member "|" words)))
+                           (cons (if bar (butlast words (length bar)) words) (cdr bar))))
+                       declarations)))
+         seen result)
+    (cl-labels ((word (token) (car (org-remove-keyword-keys (list token))))
+                (decorate (name) (or (cl-find-if (lambda (token) (equal name (word token))) tokens) name))
+                (add (active inactive)
+                  (when (or active inactive)
+                    (setq active (mapcar #'word active) inactive (mapcar #'word inactive))
+                    (setq seen (append active inactive seen))
+                    (when (and active (null inactive))
+                      (setq inactive (list (car (cdr meaning))))
+                      (setq inactive (delq nil inactive)))
+                    (push (cons 'sequence (append (mapcar #'decorate active) '("|")
+                                                  (mapcar #'decorate inactive))) result))))
+      (dolist (cycle raw)
+        (add (cl-remove-if-not (lambda (token) (member (word token) (car meaning))) (car cycle))
+             (cl-remove-if-not (lambda (token) (member (word token) (cdr meaning))) (cdr cycle))))
+      (add (cl-set-difference (car meaning) seen :test #'equal)
+           (cl-set-difference (cdr meaning) seen :test #'equal)))
+    (nreverse result)))
+
+(defvar-local org-glance-config--org-context nil
+  "Function returning effective native TODO cycles for this Org buffer.")
+
+(defvar org-glance-config--pending-context nil
+  "Native TODO context inherited by scratch Org parsing buffers.")
+
+(defun org-glance-config--collect-keywords (original keywords &rest arguments)
+  "Supply derived TODO context to ORIGINAL for requested KEYWORDS and ARGUMENTS."
+  (let ((values (apply original keywords arguments))
+        (context (or org-glance-config--org-context org-glance-config--pending-context)))
+    (if (and context
+             (seq-intersection keywords '("TODO" "SEQ_TODO" "TYP_TODO") #'equal))
+        (cons (cons "TODO" (mapcar (lambda (cycle) (string-join (cdr cycle) " "))
+                                   (funcall context)))
+              (cl-remove-if (lambda (entry) (member (car entry) '("TODO" "SEQ_TODO" "TYP_TODO"))) values))
+      values)))
+
+(advice-add 'org-collect-keywords :around #'org-glance-config--collect-keywords)
+
+(defun org-glance-config:org-context (graph tags)
+  "Return GRAPH and TAGS' native context function, or nil for legacy settings.
+TAGS may be a function reading the current buffer's tag names."
+  (when (org-glance-config:current graph)
+    (lambda ()
+      (let* ((settings (org-glance-config:current graph))
+             (declarations (org-glance-tag-config:todo-declarations
+                            (buffer-substring-no-properties (point-min) (point-max))))
+             (file (org-glance-tag-config:declaration-keywords declarations)))
+        (org-glance-config:native-keywords settings file
+                                          (mapcar (lambda (tag) (if (symbolp tag) (symbol-name tag) tag))
+                                                  (if (functionp tags) (funcall tags) tags))
+                                          declarations)))))
+
+(cl-defstruct (org-glance-config--observation
+               (:constructor org-glance-config--observe))
+  snapshot settings key presentation)
+
+(defvar org-glance-config-after-reload-functions nil
+  "Functions called with GRAPH after a valid configuration replacement.")
+
+(defun org-glance-config:current (graph)
+  "Return GRAPH's published JSON settings, or nil on the legacy path."
+  (when (org-glance-graph? graph)
+    (when (eq :unread (org-glance-graph:-config graph))
+      (org-glance-config:refresh graph))
+    (when-let* ((observation (org-glance-graph:-config graph)))
+      (org-glance-config--observation-settings observation))))
+
+(defun org-glance-config:snapshot (graph)
+  "Return GRAPH's published JSON write snapshot, or nil."
+  (org-glance-config:current graph)
+  (when-let* ((observation (org-glance-graph:-config graph)))
+    (org-glance-config--observation-snapshot observation)))
+
+(defun org-glance-config:cache-key (graph)
+  "Return GRAPH's parsing dependency key, excluding presentation settings."
+  (org-glance-config:current graph)
+  (when-let* ((observation (org-glance-graph:-config graph)))
+    (org-glance-config--observation-key observation)))
+
+(defun org-glance-config:presentation-key (graph)
+  "Return GRAPH's prepared presentation fingerprint, or nil for legacy settings."
+  (org-glance-config:current graph)
+  (when-let* ((observation (org-glance-graph:-config graph)))
+    (org-glance-config--observation-presentation observation)))
+
+(defun org-glance-config:refresh (graph)
+  "Observe GRAPH's JSON configuration and publish a valid coherent reload.
+Cold errors signal.  Reload errors retain the last good settings and warn."
+  (let ((previous (org-glance-graph:-config graph))
+        (old-key (unless (eq :unread (org-glance-graph:-config graph))
+                   (org-glance-config:cache-key graph))))
+    (condition-case err
+        (let* ((snapshot (org-glance-config-file:read (org-glance-graph:directory graph)))
+               (unchanged (and (not (eq previous :unread))
+                               (equal (and previous (org-glance-config-file:revision
+                                                     (org-glance-config--observation-snapshot previous)))
+                                      (org-glance-config-file:revision snapshot))))
+               (settings (if unchanged
+                             (and previous (org-glance-config--observation-settings previous))
+                           (and (org-glance-config-file:revision snapshot)
+                                (org-glance-config:decode snapshot))))
+               (next (if unchanged previous
+                       (and settings
+                         (let ((fingerprints (org-glance-config:fingerprints settings)))
+                          (org-glance-config--observe
+                           :snapshot snapshot :settings settings
+                           :presentation (nth 3 fingerprints)
+                           :key (secure-hash 'sha256
+                                             (prin1-to-string
+                                              (cl-subseq fingerprints 0 2)))))))))
+          (unless (and (not (eq previous :unread))
+                       (equal (and previous (org-glance-config-file:revision
+                                             (org-glance-config--observation-snapshot previous)))
+                              (and next (org-glance-config-file:revision snapshot))))
+            (setf (org-glance-graph:-config graph) next)
+            (when (and (not (eq previous :unread))
+                       (fboundp 'org-glance-cache:reconcile-inventory)
+                       (file-exists-p (org-glance-cache:path graph))
+                       (not (equal old-key (org-glance-config:cache-key graph))))
+              (org-glance-cache:reconcile-inventory graph t))
+            (when next
+              (dolist (diagnostic (org-glance-settings:diagnostics settings))
+                (display-warning 'org-glance diagnostic)))
+            (unless (eq previous :unread)
+              (with-demoted-errors "org-glance: configuration notification: %S"
+                (run-hook-with-args 'org-glance-config-after-reload-functions graph)
+                (run-hook-with-args 'org-glance-graph-after-commit-functions graph :structural))))
+          (setf (org-glance-graph:-config-error graph) nil)
+          settings)
+      (error
+       (setf (org-glance-graph:-config graph) previous)
+       (if (eq previous :unread) (signal (car err) (cdr err))
+         (let ((message (format "Configuration reload failed; previous settings retained: %s"
+                                (error-message-string err))))
+           (unless (equal message (org-glance-graph:-config-error graph))
+             (display-warning 'org-glance message))
+           (setf (org-glance-graph:-config-error graph) message)
+           (when previous (org-glance-config--observation-settings previous))))))))
+
+(cl-defun org-glance-config:set-tree-setting (graph key value &key expected)
+  "Write known tree setting KEY to VALUE in GRAPH at revision EXPECTED."
+  (unless (org-glance-config:current graph)
+    (user-error "JSON activation requires a published config.json"))
+  (unless (member key '("inboxTag" "headlineHistoryDepth" "repositoryAutosync"
+                        "repositoryRemote" "googleOAuthClientId" "defaultAgent"))
+    (org-glance-config--error "Unknown tree setting"))
+  (let ((saved (org-glance-config-file:write
+                (org-glance-graph:directory graph) :expected expected
+                :change (lambda (object)
+                          (let ((tree (gethash "tree" object)))
+                            (unless tree
+                              (setq tree (make-hash-table :test 'equal))
+                              (puthash "tree" tree object))
+                            (if (eq value :reset) (remhash key tree) (puthash key value tree))
+                            (org-glance-config:decode
+                             (org-glance-config-file--make :object object))
+                            object)))))
+    (org-glance-config:refresh graph)
+    (when (org-glance-graph:-config-error graph)
+      (user-error "JSON saved but live application failed: %s"
+                  (org-glance-graph:-config-error graph)))
+    saved))
+
+(defun org-glance-config-set-tree-setting (key json-value)
+  "Set KEY to JSON-VALUE in the current tree's JSON configuration."
+  (interactive
+   (list (completing-read "Tree setting: " '("inboxTag" "headlineHistoryDepth"
+                                           "repositoryAutosync" "repositoryRemote"
+                                           "googleOAuthClientId" "defaultAgent") nil t)
+         (read-string "JSON value (or reset): ")))
+  (let* ((graph (org-glance-ensure-init))
+         (_ (org-glance-config:current graph))
+         (snapshot (org-glance-config:snapshot graph)))
+    (org-glance-config:set-tree-setting
+     graph key (if (equal json-value "reset") :reset
+                 (json-parse-string json-value :null-object :null :false-object :false))
+     :expected (and snapshot (org-glance-config-file:revision snapshot)))))
 
 (provide 'org-glance-config)
 ;;; org-glance-config.el ends here

@@ -6,9 +6,14 @@
 ;;; Code:
 
 (declare-function org-glance--batch-worker-command "org-glance-core")
+(declare-function org-glance-config:current "org-glance-config")
+(declare-function org-glance-config:refresh "org-glance-config")
+(declare-function org-glance-config:snapshot "org-glance-config")
+(declare-function org-glance-config:cache-key "org-glance-config")
 
 (require 'cl-lib)
 (require 'json)
+(require 'org-glance-config-file)
 (require 'sqlite)
 (require 'url-util)
 
@@ -17,7 +22,7 @@
 (require 'org-glance-filter)
 (require 'org-glance-version)
 
-(defconst org-glance-cache:version 7
+(defconst org-glance-cache:version 10
   "Private org-glance cache schema version.")
 
 (defcustom org-glance-cache-progress-step 25
@@ -38,7 +43,8 @@
     "CREATE TABLE IF NOT EXISTS headline_payload_observation (logical_id TEXT NOT NULL, event_id TEXT NOT NULL, path TEXT NOT NULL, observed_digest TEXT, payload_state TEXT NOT NULL, PRIMARY KEY(logical_id,event_id), FOREIGN KEY(logical_id,event_id) REFERENCES headline_event(logical_id,event_id) ON DELETE CASCADE)"
     "CREATE TABLE IF NOT EXISTS headline_projection (logical_id TEXT NOT NULL REFERENCES headline_family(logical_id) ON DELETE CASCADE, event_id TEXT, role TEXT NOT NULL, source_digest TEXT, parser_contract TEXT NOT NULL, record_payload TEXT, PRIMARY KEY(logical_id,event_id))"
     "CREATE UNIQUE INDEX IF NOT EXISTS headline_projection_metadata ON headline_projection(logical_id) WHERE event_id IS NULL"
-    "CREATE TABLE IF NOT EXISTS inventory_directory (path TEXT PRIMARY KEY, stamp TEXT NOT NULL)")
+    "CREATE TABLE IF NOT EXISTS inventory_directory (path TEXT PRIMARY KEY, stamp TEXT NOT NULL)"
+    "CREATE TABLE IF NOT EXISTS configuration_dependency (singleton INTEGER PRIMARY KEY CHECK(singleton=1), format INTEGER NOT NULL, fingerprint TEXT NOT NULL)")
   "DDL owned by org-glance.")
 
 (defvar org-glance-cache--staging-path nil
@@ -170,7 +176,7 @@
               (funcall fn db)))
         (when db (sqlite-close db))))))
 
-(cl-defun org-glance-cache--read-db (graph fn)
+(cl-defun org-glance-cache--read-db (graph fn &optional configuration-independent)
   "Call FN against GRAPH's last committed cache without taking a write lock."
   (let ((path (org-glance-cache:path graph)))
     (when (and (sqlite-available-p) (file-exists-p path))
@@ -183,6 +189,12 @@
               (prog1
                   (when (= org-glance-cache:version
                            (caar (sqlite-select db "PRAGMA user_version")))
+                    (unless configuration-independent
+                      (let* ((key (org-glance-config:cache-key graph))
+                             (held (sqlite-select db "SELECT format,fingerprint FROM configuration_dependency WHERE singleton=1")))
+                        (when (and (or key (and held (not (equal "" (cadar held)))))
+                                   (not (equal held (list (list 1 (or key ""))))))
+                          (error "org-glance: cached Rows require configuration reconciliation"))))
                     (funcall fn db))
                 (sqlite-commit db)))
           (sqlite-close db))))))
@@ -228,8 +240,8 @@
          (record (plist-put
                   (org-glance-headline-metadata:serialize metadata)
                   :hash content-hash))
-         (payload (and record
-                       (decode-coding-string (json-serialize record) 'utf-8 t))))
+         (payload (and record contents (decode-coding-string
+                               (org-glance-cache--context-record record contents) 'utf-8 t))))
     (when (and contents headline digest)
       (list
        (list
@@ -456,8 +468,9 @@
                            (org-glance-headline-metadata:deserialize record))))
                    (payload (and metadata
                                  (decode-coding-string
-                                  (json-serialize
-                                   (org-glance-headline-metadata:serialize metadata))
+                                  (org-glance-cache--context-record
+                                   (org-glance-headline-metadata:serialize metadata)
+                                   (cdr (gethash event payloads)))
                                   'utf-8 t))))
               (when payload
                 (setq projected t)
@@ -465,7 +478,7 @@
                  "INSERT INTO headline_projection(logical_id,event_id,role,source_digest,parser_contract,record_payload) VALUES(?,?,?,?,?,?)"
                  (vector id event role
                          (org-glance-version:content-sha256 version)
-                         "org-glance:1" payload))))))
+                         "org-glance:3" payload))))))
         (unless (or projected (member state '("deleted" "empty")))
           (let* ((observation (and sole
                                    (eq 'snapshot (org-glance-version:kind sole))
@@ -476,12 +489,12 @@
                             :id id :title (format "%s — %s recovery" id damage)
                             :tags [] :recovery damage))
                  (payload (decode-coding-string
-                           (json-serialize
-                            (org-glance-headline-metadata:serialize metadata))
+                           (org-glance-cache--context-record
+                            (org-glance-headline-metadata:serialize metadata) "")
                            'utf-8 t)))
             (emit
              "INSERT INTO headline_projection(logical_id,event_id,role,source_digest,parser_contract,record_payload) VALUES(?,?,?,?,?,?)"
-             (vector id nil "recovery" nil "org-glance:1" payload))))))
+             (vector id nil "recovery" nil "org-glance:3" payload))))))
     (make-org-glance-cache--family-plan
      :id id :inventory inventory :admitted admitted :fingerprint fingerprint
      :statements (nreverse statements))))
@@ -672,8 +685,20 @@
              finally (error "org-glance: immutable inventory changed during census: %s"
                             dir))))
 
+(cl-defun org-glance-cache--configuration-current-on-db (graph db)
+  "Return non-nil when DB's Rows use GRAPH's current parsing dependencies."
+  (equal (list (list 1 (or (org-glance-config:cache-key graph) "")))
+         (sqlite-select db "SELECT format,fingerprint FROM configuration_dependency WHERE singleton=1")))
+
+(cl-defun org-glance-cache--configuration-current-p (graph)
+  "Return non-nil when GRAPH's committed cache uses its current configuration."
+  (org-glance-cache--read-db
+   graph (apply-partially #'org-glance-cache--configuration-current-on-db graph) t))
+
 (cl-defun org-glance-cache--inventory-proof-current-p (graph)
   "Return non-nil when GRAPH's last directory-entry proof remains current."
+  (unless (org-glance-cache--configuration-current-p graph)
+    (cl-return-from org-glance-cache--inventory-proof-current-p nil))
   (let ((git-path (org-glance-cache--git-proof-path graph)))
     (if (f-exists? git-path)
         (when-let* ((held (org-glance-graph:cache-read
@@ -698,7 +723,7 @@
          (caar
           (sqlite-select
            db
-           "SELECT NOT EXISTS (SELECT 1 FROM headline LEFT JOIN headline_family ON headline_family.logical_id=headline.org_id WHERE headline.org_id IS NOT NULL AND headline_family.logical_id IS NULL UNION ALL SELECT 1 FROM headline_family WHERE state NOT IN ('deleted','empty') AND NOT EXISTS (SELECT 1 FROM headline_projection WHERE headline_projection.logical_id=headline_family.logical_id AND headline_projection.parser_contract='org-glance:1'))"))))
+           "SELECT NOT EXISTS (SELECT 1 FROM headline LEFT JOIN headline_family ON headline_family.logical_id=headline.org_id WHERE headline.org_id IS NOT NULL AND headline_family.logical_id IS NULL UNION ALL SELECT 1 FROM headline_family WHERE state NOT IN ('deleted','empty') AND NOT EXISTS (SELECT 1 FROM headline_projection WHERE headline_projection.logical_id=headline_family.logical_id AND headline_projection.parser_contract='org-glance:3'))"))) t)
       0)))
 
 (cl-defun org-glance-cache--directory-proof-current-p (proof)
@@ -747,6 +772,10 @@
                     (error "org-glance: source inventory changed before publication")))))
         (puthash graph proof org-glance-cache--inventory-directory-proofs)
         (org-glance-cache--persist-inventory-proof graph proof)
+        (org-glance-cache--with-db
+         graph (lambda (db)
+                 (sqlite-execute db "INSERT OR REPLACE INTO configuration_dependency VALUES(1,1,?)"
+                                 (vector (or (org-glance-config:cache-key graph) "")))))
         (org-glance-cache--persist-git-proof graph)))))
 
 (cl-defun org-glance-cache--quote-identifier (name)
@@ -836,6 +865,7 @@ Call HOOK after validation and before publication when non-nil."
            (stage-dir (make-temp-file
                        (expand-file-name ".generation-stage-" parent) t))
            (stage (expand-file-name "glance.sqlite3" stage-dir))
+           (configuration (org-glance-config:snapshot graph))
            db
            (missing (make-symbol "missing"))
            (previous-proof
@@ -851,10 +881,19 @@ Call HOOK after validation and before publication when non-nil."
               (sqlite-execute db "VACUUM INTO ?" (vector stage))
               (let ((result (let ((org-glance-cache--staging-path stage))
                               (funcall thunk))))
+                (let ((prior org-glance-cache--publication-check))
+                  (setq org-glance-cache--publication-check
+                        (lambda ()
+                          (when prior (funcall prior))
+                          (unless (equal (and configuration (org-glance-config-file:revision configuration))
+                                         (org-glance-config-file:revision
+                                          (org-glance-config-file:read (org-glance-graph:directory graph))))
+                            (error "org-glance: configuration changed before publication")))))
                 (org-glance-cache--publish-on-connection
                  db stage version org-glance-cache--recovery-publication-hook)
                 (setq published t)
-                (org-glance-cache--persist-git-proof graph)
+                (with-demoted-errors "org-glance: optional Git proof: %S"
+                  (org-glance-cache--persist-git-proof graph))
                 result)))
         (when db (sqlite-close db))
         (unless published
@@ -1036,11 +1075,29 @@ PREPARED holds compatibility statements already computed for each changed ID."
                          (org-glance-headline-metadata:relation-targets metadata)))
         (org-glance-cache--project-edges db metadata)))))
 
+(defvar org-glance-cache--context-receipts nil
+  "Query-local metadata identities paired with source TODO declarations.")
+
+(defun org-glance-cache--context-record (record source)
+  "Encode private RECORD with TODO declarations observed in exact SOURCE."
+  (json-serialize
+   (plist-put record :_orgTodo
+              (vconcat (mapcar #'vconcat
+                               (org-glance-tag-config:todo-declarations source))))))
+
 (cl-defun org-glance-cache--decode-metadata (payload)
   "Decode one serialized metadata PAYLOAD, returning nil when malformed."
   (ignore-errors
-    (org-glance-headline-metadata:deserialize
-     (json-parse-string payload :object-type 'plist))))
+    (let* ((record (json-parse-string payload :object-type 'plist))
+           (metadata (org-glance-headline-metadata:deserialize record)))
+      (when org-glance-cache--context-receipts
+        (puthash metadata
+                 (if (vectorp (plist-get record :_orgTodo))
+                     (mapcar (lambda (entry) (append entry nil))
+                             (append (plist-get record :_orgTodo) nil))
+                   :missing)
+                 org-glance-cache--context-receipts))
+      metadata)))
 
 (cl-defun org-glance-cache--family-metadata (db id)
   "Return ID's current immutable-family metadata from DB."
@@ -1137,10 +1194,11 @@ PREPARED holds compatibility statements already computed for each changed ID."
                        db
                        "SELECT logical_id,reconciled_epoch,verified FROM headline_family"))
                      (changed
-                      (cl-remove-if
+                      (if (not (org-glance-cache--configuration-current-on-db graph db)) observed
+                        (cl-remove-if
                        (lambda (family)
                          (org-glance-cache--inventory-current-p held family))
-                       observed))
+                       observed)))
                      (changed-total (length changed)))
                 (org-glance-cache--report-progress
                  started "families" 0 changed-total)
@@ -1219,6 +1277,7 @@ COMPLETE forces observation of every family.  Return the folded family count."
   "Reconcile immutable families whose inventory checkpoint changed in GRAPH.
 COMPLETE forces a census when the local projection cannot trust a Git delta.
 Return the number of families folded."
+  (setq complete (or complete (not (org-glance-cache--configuration-current-p graph))))
   (if-let* ((delta (and (not complete)
                         (org-glance-cache--clean-git-family-delta graph))))
       (let ((ids (plist-get delta :ids)))
@@ -1373,7 +1432,7 @@ INITIAL queues startup work without consuming the first post-open refresh."
 (cl-defun org-glance-cache--refresh-on-open (graph)
   "Refresh GRAPH according to the current startup execution policy."
   (org-glance-cache--migrate graph)
-  (if org-glance-cache--refresh-synchronously
+  (if (or org-glance-cache--refresh-synchronously (org-glance-config:current graph))
       (org-glance-cache--reconcile-now graph)
     (org-glance-cache:refresh-async graph t)))
 
@@ -1382,8 +1441,10 @@ INITIAL queues startup work without consuming the first post-open refresh."
   (maphash
    (lambda (_directory graph)
      (condition-case err
-         (org-glance-cache:refresh-async
-          graph (org-glance-graph--external-pending-p graph))
+         (when (file-directory-p (org-glance-graph:directory graph))
+           (org-glance-config:refresh graph)
+           (org-glance-cache:refresh-async
+            graph (org-glance-graph--external-pending-p graph)))
        (error (message "org-glance: inventory reconciliation skipped: %S" err))))
    org-glance-graph:list))
 
@@ -1530,6 +1591,23 @@ INITIAL queues startup work without consuming the first post-open refresh."
                graph (lambda (db) (org-glance-cache--tag-candidates db tags)))
             (org-glance-cache:headlines graph))))
     (cl-remove-if-not (org-glance-filter:predicate spec) candidates)))
+
+(defun org-glance-cache:overview-rows (graph filter)
+  "Return (METADATA . DECLARATIONS) candidates in one committed GRAPH frame.
+FILTER preselects tags; the consumer resolves its per-Row state predicate."
+  (let ((org-glance-cache--context-receipts (make-hash-table :test #'eq))
+        (tags (org-glance-filter:tags (org-glance-filter:normalize-spec filter))))
+    (org-glance-cache--read-db
+     graph
+     (lambda (db)
+       (mapcar (lambda (metadata)
+                 (let ((declarations (gethash metadata org-glance-cache--context-receipts :missing)))
+                   (when (eq declarations :missing)
+                     (error "Overview context requires a complete cache census for %s"
+                            (org-glance-headline-metadata:id metadata)))
+                   (cons metadata declarations)))
+               (if tags (org-glance-cache--tag-candidates db tags)
+                 (org-glance-cache--read-projection db)))))))
 
 (cl-defun org-glance-cache--ordinary-headline (db id)
   "Return ordinary compatibility-WAL ID from DB, or nil."

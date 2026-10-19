@@ -5,6 +5,29 @@ Notable user-facing changes.  Versions date-based
 
 * Unreleased
 
+** Added
+
+- JSON Overview emits source-aware Org/Agenda headers from cached receipts and refuses incompatible exports.
+- JSON-present trees load shared settings, refresh valid replacements and expose revision-checked scalar writes through =org-glance-config-set-tree-setting=.
+
+** Changed
+
+- Native cache format 10 pins source TODO receipts and parsing configuration to a complete census; presentation edits retain warm admission.
+- JSON Material preserves native TODO cycles and refreshes context after reload.
+- JSON capture uses shared templates; new notification families remain local.
+
+** Fixed
+
+- Overview and Agenda exports bind one atomic SPEC manifest to immutable local files across concurrent publication and interruption.
+- Overview refresh rebuilds native TODO regexes and restores the selected Row.
+- Material saves, reverts and repetition snapshots preserve LF, CRLF and mixed source endings; new lines follow the first source ending.
+- Repetition cleanup preserves newline provenance in retained headers and pinned text.
+- Material refuses an ordinary source buffer with unsaved edits before taking ownership.
+- Local capture and duplication choose storage at write admission; failed capture finalization retains its draft file and buffer.
+- JSON storage admission case-folds configured and authored Unicode tags with the shared rule.
+
+- Snapshot observation and legacy adoption preserve CRLF bytes during digest verification.
+
 * 1.55.0.0.20261018.0
 
 ** Changed

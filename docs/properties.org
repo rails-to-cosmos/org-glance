@@ -36,10 +36,17 @@ Set in a headline's =:PROPERTIES:= drawer.
 
 * TODO configuration
 
-=<store>/config/system.org= supplies the graph-wide =#+TODO:= sequence.
+On the legacy path, =<store>/config/system.org= supplies the graph-wide =#+TODO:= sequence.
 Each applicable =config/tags/<tag>.org= adds a separate =#+TODO:= sequence after it.
 Overview comments before each sequence name every contributing config file.
 Overviews, captures, material buffers and state pickers read the same sequences.
+
+JSON-present trees resolve TODO context from shared settings and source
+declarations. Native Overview emits compatible resolved sequences from cached
+Row receipts; incompatible contexts require separate exports. Generated
+headers stay outside canonical Snapshot bytes. Source:
+=src/view/org-glance-overview.el:136=, base
+[[https://github.com/rails-to-cosmos/org-glance/commit/0174379][0174379]].
 
 * Tag-config files
 
