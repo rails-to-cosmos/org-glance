@@ -186,17 +186,29 @@ Unclaimed words are active."
 Spans are zero-based and half-open.  Opaque blocks are excluded.
 SETUPFILE is not followed: this observation owns only the supplied source."
   (with-temp-buffer
-    (insert text)
-    (setq-local tab-width 8)
-    (let ((major-mode 'org-mode) (case-fold-search t) declarations)
-      (goto-char (point-min))
-      (while (re-search-forward (org-make-options-regexp '("TODO" "SEQ_TODO" "TYP_TODO")) nil t)
-        (let ((element (org-element-at-point)))
-          (when (org-element-type-p element 'keyword)
-            (push (list (1- (line-beginning-position))
-                        (1- (line-beginning-position 2))
-                        (org-element-property :value element)) declarations))))
-      (nreverse declarations))))
+    (let* ((dos (string-match-p "\r\n" text))
+           (starts (when dos
+                     (let ((offset 0) (positions (list 0)))
+                       (while (string-match "\n" text offset)
+                         (setq offset (match-end 0))
+                         (push offset positions))
+                       (vconcat (nreverse positions)))))
+           (line 0) (previous 1))
+      (insert (if dos (replace-regexp-in-string "\r\n" "\n" text t t) text))
+      (setq-local tab-width 8)
+      (let ((major-mode 'org-mode) (case-fold-search t) declarations)
+	(goto-char (point-min))
+	(while (re-search-forward (org-make-options-regexp '("TODO" "SEQ_TODO" "TYP_TODO")) nil t)
+          (let ((element (org-element-at-point)))
+            (when starts
+              (cl-incf line (count-lines previous (line-beginning-position)))
+              (setq previous (line-beginning-position)))
+            (when (org-element-type-p element 'keyword)
+              (push (list (if starts (aref starts line) (1- (line-beginning-position)))
+                          (if starts (if (< (1+ line) (length starts)) (aref starts (1+ line)) (length text))
+                            (1- (line-beginning-position 2)))
+                          (org-element-property :value element)) declarations))))
+	(nreverse declarations)))))
 
 (defun org-glance-tag-config:declaration-keywords (declarations)
   "Resolve observed DECLARATIONS with explicit active meaning in source order."

@@ -265,7 +265,20 @@ re-review passes the focused gate, six concrete frozen reproductions and
 findings on GHC 9.6.7 / Emacs 31.1. Other supported pairs remain unverified;
 the fresh Haskell latency comparison is inconclusive. The older source-block
 and empty-directive
-parser limits remain pre-cutover compatibility work. Reader activation,
+parser limits are now repaired on the exercised pair in the
+[[file:../../glance/docs/reports/done/2026-10-18-json-settings-step-3-parser-compatibility.md][prerequisite slice]], with 65 shared vectors and 566 ERT cases passing.
+Independent review reruns all 175 focused and 566 ERT cases but finds two
+P2 regressions: repeated CRLF observations return incorrect coordinates and
+omit generated headers; opaque matching crosses a recursive container to hide
+a genuine declaration. The linked report retains minimal frozen/current/native
+reproductions and repair contracts. Both repairs now pass 176 focused cases,
+68 shared vectors, 567 ERT cases and the 700-source same-process batch with zero keyword
+differences or invalid spans. The fresh CRLF accumulator and bounded parser
+index have discriminating frozen regressions. Independent repair re-review
+passes both gates, all 700 original probes and 3,000 additional marker streams,
+with no remaining Step 3 findings on GHC 9.6.7 / Emacs 31.1. Fresh parser
+medians show no regression, and warm-cache counters are unchanged;
+other runtime verification remains pending. Reader activation,
 setting edits, live presentation integration and the live
 views-tree cutover remain pending; legacy configuration still owns application
 behavior. Source hashes and both-repository validation are in the linked

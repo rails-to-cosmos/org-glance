@@ -3,8 +3,8 @@
 
 * Status
 
-Partial: file protocol and preparation correctness independently verified on
-GHC 9.6.7 / Emacs 31.1. Application cutover remains
+Partial: file protocol, preparation and parser slices independently verified
+on GHC 9.6.7 / Emacs 31.1. Application cutover remains
 pending. The canonical cross-application decision and delivery ledger
 are in [[file:../../../glance/docs/proposals/partial/2026-10-18-settings-use-json-and-table-view.md][Glance's proposal]].
 
@@ -66,7 +66,7 @@ cases successfully. Another 38 cross-runtime probes found three P2 defects:
 [[file:../../../glance/docs/bugs/fixed/2026-10-18-json-settings-unicode-validation-disagrees.md][Unicode validation admits different shared files]].
 The linked report retains source hashes, exact outputs, repair contracts and
 fresh preparation measurements. An older
-[[file:../../../glance/docs/bugs/open/2026-10-18-empty-todo-directive-refuses-org-context.md][empty-directive parser limit]] also needs compatibility follow-up.
+[[file:../../../glance/docs/bugs/fixed/2026-10-18-empty-todo-directive-refuses-org-context.md][empty-directive parser limit]] also needs compatibility follow-up.
 Author repair verification passed 48 shared vectors, 13 focused
 Haskell/process cases, all 565 ERT cases and three regressions that fail on
 the frozen pre-repair modules. An exhaustive paired scalar check covers
@@ -108,8 +108,13 @@ column labels/order/hidden state, and sort directions through migration.
 
 * Remaining work
 
-1. Resolve the older source-block and empty-directive parser limits
-   before cutover.
+1. Verify the remaining supported runtime pairs before cutover. The
+   [[file:../../../glance/docs/reports/done/2026-10-18-json-settings-step-3-parser-compatibility.md][parser prerequisite slice]] is independently verified on GHC 9.6.7 / Emacs 31.1:
+   176 focused cases, 68 shared vectors, 567 ERT cases, all 700 original probes
+   and 3,000 additional marker streams pass. Frozen CRLF and all 15 recursive
+   boundary reproductions fail before repair and pass afterward. Fresh parser
+   medians show no regression; warm-cache work counters remain unchanged.
+   Application/browser/interop full gates remain author evidence in the report.
 2. Wire prepared values and context through real readers, native per-cycle
    workflows, compatible exports and Material save receipts. Validate remaining
    client presentation values and select private-cache dependencies.
