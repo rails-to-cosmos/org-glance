@@ -809,7 +809,8 @@ today, up from 50.
     the configured history depth limits the visible ancestry projection.
     Readable rejected structural Leaves remain searchable under exact
     =HEADLINE/VERSION= Row identities. A material save from one publishes a
-    child of every structural Leaf, making that edit current. Pinned by
+    child of every structural Leaf, making that edit current. Ancestry walks
+    are iterative and cycle-safe. Pinned by
     =rejected-snapshot-is-visible-and-an-edit-makes-it-current=.
 
 41. *Immutable family inventory is live search authority.*  The isolated
@@ -854,7 +855,8 @@ today, up from 50.
     requesting maintenance, or entering a census, History fold, cache
     transaction, or cooperative-yield mode. Local publication remains a
     synchronous commit boundary. Explicit cache refresh and inventory
-    reconciliation remain synchronous maintenance operations. Pinned by
+    reconciliation remain synchronous maintenance operations. Failed workers
+    consume the refresh interval before every automatic retry. Pinned by
     =graph-open-queues-cache-refresh-off-caller-thread=,
     =cache-refresh-async-uses-an-isolated-emacs-process=,
     =cache-refresh-batch-does-not-queue-another-worker=,
@@ -892,6 +894,7 @@ today, up from 50.
     connection and copies validated tables in one WAL transaction, preserving
     the live inode and open readers. Passive reads pin a compatible schema and
     run no maintenance; first-generation recovery reads remain empty until commit.
+    Derived edges require both endpoint Rows in the admitted projection.
     Pinned by =cache-recovery-publishes-one-complete-generation=,
     =cache-recovery-preserves-glance-projections=,
     =cache-recovery-refuses-a-concurrent-publication=,

@@ -280,13 +280,14 @@
   (let* ((id (org-glance-headline-metadata:id metadata))
          (src (caar (sqlite-select db "SELECT id FROM headline WHERE org_id=?"
                                    (vector id)))))
-    (when src (sqlite-execute db "DELETE FROM edge WHERE src=?" (vector src)))
-    (dolist (edge (org-glance-headline-metadata:relations metadata))
-      (when-let* ((dst (caar (sqlite-select db "SELECT id FROM headline WHERE org_id=?"
-                                            (vector (car edge))))))
-        (sqlite-execute
-         db "INSERT OR REPLACE INTO edge(src,dst,kind,via) VALUES(?,?,?,?)"
-         (vector src dst (cdr edge) "row"))))))
+    (when src
+      (sqlite-execute db "DELETE FROM edge WHERE src=?" (vector src))
+      (dolist (edge (org-glance-headline-metadata:relations metadata))
+        (when-let* ((dst (caar (sqlite-select db "SELECT id FROM headline WHERE org_id=?"
+                                              (vector (car edge))))))
+          (sqlite-execute
+           db "INSERT OR REPLACE INTO edge(src,dst,kind,via) VALUES(?,?,?,?)"
+           (vector src dst (cdr edge) "row")))))))
 
 (cl-defun org-glance-cache--event-envelope (version)
   "Return VERSION as a canonical shared schema-2 event envelope."
@@ -352,17 +353,22 @@
 
 (cl-defun org-glance-cache--revived-p (history current)
   "Return non-nil when CURRENT descends from a Tombstone in HISTORY."
-  (let ((by-id (make-hash-table :test #'equal)))
+  (let ((by-id (make-hash-table :test #'equal))
+        (seen (make-hash-table :test #'equal))
+        (pending (and current (list current)))
+        revived)
     (dolist (version history)
       (puthash (org-glance-version:id version) version by-id))
-    (cl-labels ((visit (id seen)
-                  (unless (member id seen)
-                    (when-let* ((version (gethash id by-id)))
-                      (or (eq 'tombstone (org-glance-version:kind version))
-                          (cl-some (lambda (parent)
-                                     (visit parent (cons id seen)))
-                                   (org-glance-version:parents version)))))))
-      (and current (visit current nil)))))
+    (while (and pending (not revived))
+      (let ((id (pop pending)))
+        (unless (gethash id seen)
+          (puthash id t seen)
+          (when-let* ((version (gethash id by-id)))
+            (if (eq 'tombstone (org-glance-version:kind version))
+                (setq revived t)
+              (dolist (parent (org-glance-version:parents version))
+                (push parent pending)))))))
+    revived))
 
 (cl-defstruct org-glance-cache--family-plan
   id inventory admitted fingerprint statements)
@@ -1341,6 +1347,10 @@ Return the number of families folded."
   (make-hash-table :test #'eq :weakness 'key)
   "Time of the latest queued cache refresh for each live graph.")
 
+(defvar org-glance-cache--refresh-failed-at
+  (make-hash-table :test #'eq :weakness 'key)
+  "Time of the latest failed cache refresh for each live graph.")
+
 (defcustom org-glance-cache-refresh-interval 60
   "Minimum seconds between automatic cache refresh jobs for one graph."
   :type 'number
@@ -1357,7 +1367,7 @@ Return the number of families folded."
 (cl-defun org-glance-cache--worker-command (graph)
   "Return the argv that reconciles GRAPH in an isolated batch Emacs."
   (org-glance--batch-worker-command
-   'org-glance-cache:refresh-batch
+   'org-glance-cache:refresh-worker
    (list (org-glance-graph:directory graph))))
 
 (cl-defun org-glance-cache--reconcile-now (graph)
@@ -1380,6 +1390,23 @@ Return the number of families folded."
     (prog1 (org-glance-cache--reconcile-now graph)
       (org-glance-graph:refresh-external graph))))
 
+(cl-defun org-glance-cache:refresh-worker (directory)
+  "Reconcile DIRECTORY in a batch worker and report a concise failure."
+  (condition-case err
+      (org-glance-cache:refresh-batch directory)
+    (error
+     (princ (format "org-glance: cache reconciliation failed: %s\n"
+                    (error-message-string err)))
+     (kill-emacs 1))))
+
+(cl-defun org-glance-cache--show-refresh-failure (buffer)
+  "Make BUFFER a visible diagnostic buffer and display it."
+  (when (buffer-live-p buffer)
+    (with-current-buffer buffer
+      (goto-char (point-min))
+      (special-mode))
+    (display-buffer buffer)))
+
 (cl-defun org-glance-cache--refresh-finished (graph process event)
   "Retire GRAPH's PROCESS and report its terminal EVENT."
   (when (memq (process-status process) '(exit signal failed))
@@ -1387,10 +1414,15 @@ Return the number of families folded."
       (remhash graph org-glance-cache--refresh-processes))
     (if (and (eq (process-status process) 'exit)
              (= 0 (process-exit-status process)))
-        (message "org-glance: cache reconciliation process complete")
-      (message "org-glance: cache reconciliation process failed; see %s: %s"
-               (buffer-name (process-buffer process))
-               (string-trim event)))))
+        (progn
+          (remhash graph org-glance-cache--refresh-failed-at)
+          (message "org-glance: cache reconciliation process complete"))
+      (let ((buffer (process-buffer process)))
+        (puthash graph (float-time) org-glance-cache--refresh-failed-at)
+        (org-glance-cache--show-refresh-failure buffer)
+        (message "org-glance: cache reconciliation process failed; see %s: %s"
+                 (if (buffer-live-p buffer) (buffer-name buffer) "diagnostics lost")
+                 (string-trim event))))))
 
 (cl-defun org-glance-cache:refresh-async (graph &optional initial)
   "Queue GRAPH's cache reconciliation in a batch Emacs when due.
@@ -1398,6 +1430,10 @@ INITIAL queues startup work without consuming the first post-open refresh."
   (let ((active (gethash graph org-glance-cache--refresh-processes))
         (now (float-time)))
     (unless (or (and (processp active) (process-live-p active))
+                (< (- now
+                      (gethash graph org-glance-cache--refresh-failed-at
+                               most-negative-fixnum))
+                   org-glance-cache-refresh-interval)
                 (and (not initial)
                      (< (- now
                            (gethash graph
@@ -1406,28 +1442,36 @@ INITIAL queues startup work without consuming the first post-open refresh."
                         org-glance-cache-refresh-interval)))
       (unless initial
         (puthash graph now org-glance-cache--refresh-requested-at))
-      (condition-case err
-          (let* ((buffer
-                  (get-buffer-create
-                   (format " *org-glance-cache-refresh:%s*"
-                           (sxhash-equal (org-glance-graph:directory graph)))))
-                 (_ (with-current-buffer buffer
-                      (let ((inhibit-read-only t)) (erase-buffer))))
-                 (process
-                  (make-process
-                   :name "org-glance-cache-refresh"
-                   :buffer buffer
-                   :command (org-glance-cache--worker-command graph)
-                   :connection-type 'pipe
-                   :coding 'utf-8-unix
-                   :noquery t
-                   :sentinel
-                   (lambda (process event)
-                     (org-glance-cache--refresh-finished
-                      graph process event)))))
-            (puthash graph process org-glance-cache--refresh-processes))
-        (error
-         (message "org-glance: cache reconciliation could not start: %S" err))))))
+      (let ((buffer
+             (get-buffer-create
+              (format "*org-glance cache reconciliation:%s*"
+                      (sxhash-equal (org-glance-graph:directory graph))))))
+        (with-current-buffer buffer
+          (let ((inhibit-read-only t)) (erase-buffer)))
+        (condition-case err
+            (let ((process
+                   (make-process
+                    :name "org-glance-cache-refresh"
+                    :buffer buffer
+                    :command (org-glance-cache--worker-command graph)
+                    :connection-type 'pipe
+                    :coding 'utf-8-unix
+                    :noquery t
+                    :sentinel
+                    (lambda (process event)
+                      (org-glance-cache--refresh-finished
+                       graph process event)))))
+              (puthash graph process org-glance-cache--refresh-processes)
+              (message "org-glance: cache reconciliation started; progress in %s"
+                       (buffer-name buffer)))
+          (error
+           (puthash graph (float-time) org-glance-cache--refresh-failed-at)
+           (with-current-buffer buffer
+             (insert (format "org-glance: cache reconciliation could not start: %s\n"
+                             (error-message-string err))))
+           (org-glance-cache--show-refresh-failure buffer)
+           (message "org-glance: cache reconciliation could not start; see %s"
+                    (buffer-name buffer))))))))
 
 (cl-defun org-glance-cache--refresh-on-open (graph)
   "Refresh GRAPH according to the current startup execution policy."

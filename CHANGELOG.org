@@ -5,6 +5,8 @@ Notable user-facing changes.  Versions date-based
 
 * Unreleased
 
+* 1.55.0.0.20261020.0
+
 ** Added
 
 - JSON Overview emits source-aware Org/Agenda headers from cached receipts and refuses incompatible exports.
@@ -18,6 +20,8 @@ Notable user-facing changes.  Versions date-based
 
 ** Fixed
 
+- Cache reconciliation skips relations without an admitted source Row, handles deep ancestry iteratively and displays a concise diagnostic buffer on worker failure.
+- Failed cache reconciliation waits for the refresh interval before any automatic retry.
 - Overview and Agenda exports bind one atomic SPEC manifest to immutable local files across concurrent publication and interruption.
 - Overview refresh rebuilds native TODO regexes and restores the selected Row.
 - Material saves, reverts and repetition snapshots preserve LF, CRLF and mixed source endings; new lines follow the first source ending.

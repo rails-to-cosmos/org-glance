@@ -163,6 +163,34 @@
                    (org-glance-headline-metadata:title
                     (org-glance-cache:metadata graph "a"))))))
 
+(ert-deftest org-glance-test:cache-edge-projection-skips-an-absent-source ()
+  "Skip derived edges whose source has no admitted cache Row."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-test:headline "target" "* Target"))
+    (let ((db (sqlite-open (org-glance-cache:path graph)))
+          (metadata (make-org-glance-headline-metadata
+                     :id "absent" :title "Absent" :tags []
+                     :relations '(("target" . "blocks")))))
+      (unwind-protect
+          (progn
+            (org-glance-cache--project-edges db metadata)
+            (should (equal '((0)) (sqlite-select db "SELECT count(*) FROM edge"))))
+        (sqlite-close db)))))
+
+(ert-deftest org-glance-test:cache-revival-walk-handles-deep-history ()
+  "Walk deep immutable ancestry without consuming Lisp evaluation depth."
+  (let* ((root "root")
+         (parent root)
+         (history (list (make-org-glance-version :id root :kind 'tombstone))))
+    (dotimes (index 2000)
+      (let ((id (format "child-%04d" index)))
+        (push (make-org-glance-version
+               :id id :kind 'snapshot :parents (list parent))
+              history)
+        (setq parent id)))
+    (should (org-glance-cache--revived-p history parent))))
+
 (ert-deftest org-glance-test:shared-cache-loss-rebuilds-without-touching-portable-files ()
   "A lost local cache rebuilds without writing or deleting portable files."
   (org-glance-test:with-graph graph
@@ -1181,6 +1209,78 @@
                 ((symbol-function 'process-exit-status) (lambda (_process) 0)))
         (org-glance-cache--refresh-finished graph process "finished\n"))
       (should-not (gethash graph org-glance-cache--refresh-processes)))))
+
+(ert-deftest org-glance-test:cache-refresh-failure-displays-diagnostics ()
+  "A failed reconciliation displays its visible diagnostic buffer."
+  (org-glance-test:with-graph graph
+    (let ((org-glance-cache--refresh-processes (make-hash-table :test #'eq))
+          (org-glance-cache--refresh-failed-at (make-hash-table :test #'eq))
+          (process 'fake-process)
+          (buffer (generate-new-buffer
+                   "*org-glance cache reconciliation:test*"))
+          displayed)
+      (unwind-protect
+          (progn
+            (with-current-buffer buffer (insert "failure details\n"))
+            (puthash graph process org-glance-cache--refresh-processes)
+            (cl-letf (((symbol-function 'process-status) (lambda (_) 'exit))
+                      ((symbol-function 'process-exit-status) (lambda (_) 1))
+                      ((symbol-function 'process-buffer) (lambda (_) buffer))
+                      ((symbol-function 'display-buffer)
+                       (lambda (shown &rest _) (setq displayed shown))))
+              (org-glance-cache--refresh-finished graph process "exited abnormally\n"))
+            (should (eq buffer displayed))
+            (should (eq 'special-mode (buffer-local-value 'major-mode buffer)))
+            (should (numberp
+                     (gethash graph org-glance-cache--refresh-failed-at)))
+            (should-not (gethash graph org-glance-cache--refresh-processes)))
+        (when (buffer-live-p buffer) (kill-buffer buffer))))))
+
+(ert-deftest org-glance-test:cache-refresh-failure-backs-off-external-hints ()
+  "A failed worker delays every automatic retry for the graph."
+  (org-glance-test:with-graph graph
+    (let ((org-glance-cache--refresh-processes (make-hash-table :test #'eq))
+          (org-glance-cache--refresh-requested-at (make-hash-table :test #'eq))
+          (org-glance-cache--refresh-failed-at (make-hash-table :test #'eq))
+          (org-glance-cache-refresh-interval 60))
+      (puthash graph (float-time) org-glance-cache--refresh-failed-at)
+      (cl-letf (((symbol-function 'make-process)
+                 (lambda (&rest _) (ert-fail "failure retry launched"))))
+        (org-glance-cache:refresh-async graph t))
+      (should-not (gethash graph org-glance-cache--refresh-processes)))))
+
+(ert-deftest org-glance-test:cache-refresh-worker-reports-concise-errors ()
+  "The batch entry point reports one concise error and exits unsuccessfully."
+  (let (exit-status)
+    (with-temp-buffer
+      (let ((standard-output (current-buffer)))
+        (cl-letf (((symbol-function 'org-glance-cache:refresh-batch)
+                   (lambda (_) (error "broken edge")))
+                  ((symbol-function 'kill-emacs)
+                   (lambda (status) (setq exit-status status))))
+          (org-glance-cache:refresh-worker "/graph")))
+      (should (= 1 exit-status))
+      (should (equal "org-glance: cache reconciliation failed: broken edge\n"
+                     (buffer-string))))))
+
+(ert-deftest org-glance-test:cache-refresh-launch-failure-displays-diagnostics ()
+  "A worker launch failure displays the same diagnostic buffer."
+  (org-glance-test:with-graph graph
+    (let ((org-glance-cache--refresh-processes (make-hash-table :test #'eq))
+          (org-glance-cache--refresh-requested-at (make-hash-table :test #'eq))
+          (org-glance-cache--refresh-failed-at (make-hash-table :test #'eq))
+          displayed)
+      (unwind-protect
+          (cl-letf (((symbol-function 'make-process)
+                     (lambda (&rest _) (error "cannot exec worker")))
+                    ((symbol-function 'display-buffer)
+                     (lambda (shown &rest _) (setq displayed shown))))
+            (org-glance-cache:refresh-async graph t)
+            (should (buffer-live-p displayed))
+            (with-current-buffer displayed
+              (should (s-contains? "cannot exec worker" (buffer-string)))
+              (should (eq 'special-mode major-mode))))
+        (when (buffer-live-p displayed) (kill-buffer displayed))))))
 
 (ert-deftest org-glance-test:cache-refresh-batch-runs-without-recursive-hooks ()
   "The batch worker recovers a missing generation exactly once."

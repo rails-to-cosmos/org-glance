@@ -20,6 +20,10 @@ startup to queue its own reconciliation. Cache-backed UI reads continue from
 the last committed SQLite projection while reconciliation runs. They never
 request a census, History fold, or cache transaction.
 
+Each launched worker announces its visible progress buffer. A failure displays
+that buffer with one concise error and delays every automatic retry until the
+refresh interval expires.
+
 An external relay fold remains a synchronous publication boundary.  Its
 bounded notification work and inventory reconciliation complete before the
 caller observes the relayed write.  Local family publication retains its
@@ -47,6 +51,9 @@ operations.
   committed SQLite query.
 - =startup-refresh-leaves-first-read-due= proves startup cannot hide a Git
   update behind the steady-state throttle.
+- =cache-refresh-failure-displays-diagnostics= and
+  =cache-refresh-worker-reports-concise-errors= pin worker failure reporting;
+  =cache-refresh-failure-backs-off-external-hints= pins retry throttling.
 - =inventory-tick-skips-a-proven-current-store= proves the timer does not repeat
   a proven census.
 - =explicit-refresh-detects-after-nonblocking-read= proves explicit maintenance
