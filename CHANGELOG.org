@@ -5,6 +5,10 @@ Notable user-facing changes.  Versions date-based
 
 * Unreleased
 
+** Fixed
+
+- Active-only legacy TODO cycles stay active in Material, Overview and capture headers.
+
 * 1.55.0.0.20261020.0
 
 ** Added

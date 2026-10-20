@@ -250,6 +250,11 @@ Depends on the integration protocol decision in phase 4.
 * Unscheduled backlog
 
 ** TODO Share JSON settings with Glance
+Legacy active-only TODO scopes now retain active meaning in native Material,
+Overview and capture headers. Generated presentation supplies the shared
+default inactive keywords; stored declarations and Snapshot bytes stay exact.
+The active-PLAN regression exercises native completion and saving. See the
+[[file:../../glance/docs/bugs/fixed/2026-10-18-single-keyword-cycle-differs-between-glance-and-org.md][cross-client discrepancy]] for repair evidence. The JSON migration remains partial.
 The [[file:proposals/2026-10-18-json-settings-share-one-file.partial.org][partial migration]] adds the strict file envelope and shared lock/revision
 transaction. Typed preparation, semantic fingerprints and canonical-body Org
 context are now independently reviewed in the [[file:../../glance/docs/reports/done/2026-10-18-json-settings-step-2-resolution-and-org-context.md][Step 2 report]]. The author gate

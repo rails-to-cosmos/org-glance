@@ -60,6 +60,31 @@ CONFIGS is an alist (TAG-STRING . CONTENTS); the cache resets around BODY."
   (should (null (org-glance-tag-config:done-keywords nil)))
   (should (null (org-glance-tag-config:done-keywords ""))))
 
+(ert-deftest org-glance-test:tag-config-active-only-cycle-stays-active ()
+  "Legacy active-only cycles retain their meaning in native Org presentation."
+  (dolist (cycle '("PLAN" "PLAN |" "PLAN(p!) |"))
+    (should-not (member "PLAN" (org-glance-tag-config:done-keywords cycle)))
+    (with-temp-buffer
+      (insert (org-glance-tag-config--preamble-lines (list (cons "TODO" cycle)))
+              "* PLAN Task\n")
+      (delay-mode-hooks (org-mode))
+      (should (member "PLAN" org-not-done-keywords))
+      (should-not (member "PLAN" org-done-keywords))))
+  (org-glance-test:with-graph graph
+    (org-glance-test:with-tag-config
+        (org-glance-test:one-config "book" "#+TODO: PLAN\n\n* Book\n")
+      (org-glance-test:capture graph (org-glance-test:org-with-id "* PLAN Task :book:" "active-only"))
+      (org-glance-test:with-material (buffer graph "active-only")
+        (should (member "PLAN" org-not-done-keywords))
+        (should-not (member "PLAN" org-done-keywords))
+        (org-glance-test:save)
+        (should-not (string-match-p "#\\+TODO:" (f-read-text buffer-file-name 'utf-8-unix)))
+        (goto-char (point-min))
+        (let ((org-inhibit-logging t)) (org-todo "DONE"))
+        (org-glance-test:save)
+        (should (string-prefix-p "* DONE Task" (f-read-text buffer-file-name 'utf-8-unix))))
+      (should (equal "#+TODO: PLAN\n\n* Book\n" (f-read-text (f-join dir "book.org") 'utf-8-unix))))))
+
 (ert-deftest org-glance-test:tag-config-render-from-config ()
   "Render keeps tag, skeleton and prompts, prepends `#+TODO:', yields one `%?'."
   (org-glance-test:with-tag-config (org-glance-test:one-config "book" org-glance-test:book-config)

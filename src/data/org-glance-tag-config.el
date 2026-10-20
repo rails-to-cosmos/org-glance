@@ -169,9 +169,18 @@ Nil means TAG uses the default capture template and system TODO cycle."
   (cl-check-type tag org-glance-tag)
   (gethash tag (org-glance-tag-config--by-tag graph)))
 
+(defun org-glance-tag-config--org-cycle (cycle)
+  "Project active-only CYCLE with the shared default inactive keywords.
+Org treats a sequence's final word as done even after a trailing separator."
+  (let* ((tokens (split-string cycle))
+         (separator (member "|" tokens)))
+    (if (and separator (cdr separator)) cycle
+      (string-join (append (remove "|" tokens) '("|")
+                           (cdr (org-glance-tag-config:resolve-keywords nil nil))) " "))))
+
 (cl-defun org-glance-tag-config:cycle->keywords (cycle)
   "Return `org-todo-keywords' sequences for newline-separated CYCLE strings."
-  (mapcar (lambda (line) (cons 'sequence (split-string line)))
+  (mapcar (lambda (line) (cons 'sequence (split-string (org-glance-tag-config--org-cycle line))))
           (split-string cycle "\n" t)))
 
 (cl-defun org-glance-tag-config:cycle->keywords-or (cycle default)
@@ -349,7 +358,7 @@ Use precomputed METAS when supplied."
                              source (org-glance-graph:store-path graph))
                           (abbreviate-file-name source))))
               (cdr group) "\n")
-             "\n#+TODO: " (car group) "\n"))
+             "\n#+TODO: " (org-glance-tag-config--org-cycle (car group)) "\n"))
           groups)))
     (org-glance-tag-config--preamble-lines
      (mapcar (lambda (cycle) (cons "TODO" cycle))
@@ -360,7 +369,10 @@ Use precomputed METAS when supplied."
 Blank values drop out."
   (let ((lines (cl-loop for (pragma . value) in pairs
                         when (org-glance--present-string? value)
-                        collect (concat "#+" pragma ": " value "\n"))))
+                        collect (concat "#+" pragma ": "
+                                        (if (equal pragma "TODO")
+                                            (org-glance-tag-config--org-cycle value) value)
+                                        "\n"))))
     (when lines (apply #'concat lines))))
 
 (defconst org-glance-tag-config--render-strip
