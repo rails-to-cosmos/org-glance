@@ -16,6 +16,7 @@
 (declare-function org-glance-config:current "org-glance-config")
 (declare-function org-glance-config:native-keywords "org-glance-config")
 (declare-function org-glance-settings:tags "org-glance-config")
+(declare-function org-glance-settings:visit "org-glance-settings" (graph &optional tag))
 (declare-function org-glance-config-file:path "org-glance-config-file")
 
 (defcustom org-glance-tag-config-dir nil
@@ -523,7 +524,14 @@ With TAG nil, prompt for it among live tags and existing configs."
   (interactive)
   (when (and (fboundp 'org-glance-config:current) (org-glance-initialized?)
              (org-glance-config:current org-glance-graph))
-    (user-error "config.json owns settings; compound tag settings tables are pending"))
+    (require 'org-glance-settings)
+    (let ((candidates (delete-dups
+                       (append (org-glance-tag-config--edit-candidates org-glance-graph)
+                               (mapcar #'car (org-glance-settings:tags
+                                              (org-glance-config:current org-glance-graph)))))))
+      (cl-return-from org-glance-tag-config-edit
+        (org-glance-settings:visit org-glance-graph
+                                   (or tag (completing-read "Configure tag: " candidates))))))
   (let* ((graph (and (org-glance-initialized?) org-glance-graph))
          (tag-str (or tag (completing-read "Configure tag: "
                                            (org-glance-tag-config--edit-candidates graph))))

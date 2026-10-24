@@ -233,3 +233,67 @@ Everything derived rebuilds from the org files, so these are safe to run at any 
 Conventions, invariants and the build/test commands: [[file:../AGENTS.md][AGENTS.md]].
 
 Design wiki, including the local-development setup: [[file:index.org][index.org]].
+
+* Shared JSON table layouts
+
+When =.org-glance/config.json= is present, tables read and write
+=clients.orgGlance.tableColumns=, =tableViews= and =tableRefs=. The existing
+column commands and =C-c C-c= use these collections automatically.
+=tableColumns= maps tag scopes to custom ={property, header}= columns and a
+=hidden= array of built-in column keys. =tableViews= maps filter identities to
+ordered column keys and sort records with =column=, =direction= (=asc=/=desc=),
+and =nulls= (=first=/=last=). =tableRefs= retains scoped columns, hidden keys,
+order, sort and an =applied= timestamp. Title stays mandatory.
+
+Each table pins the revision it opened. If another client saves settings, a
+stale layout save reports a conflict and retains the visible draft. Reopen the
+table to observe peer settings before applying a fresh edit. Explicit apply
+reports busy writers. Automatic saves retain their previous save baseline on
+failure and can retry. Unknown settings and peer-client fields survive writes.
+Nested extensions follow surviving property/column identities through edits and
+reordering. Duplicate identities are refused, and unchanged records retain
+exact bytes. Reference layouts still save only through explicit =C-c C-c= with
+a chosen scope.
+
+Trees without the shared JSON file retain legacy ELD layout storage during the
+coordinated migration. JSON activation prevents an already-open legacy table
+from writing a stale ELD layout. This implementation prepares persistence; it
+does not import or remove existing ELD files.
+
+
+* Shared JSON Settings tables
+
+For a tree with =.org-glance/config.json=, =M-x org-glance-settings= opens system
+Settings. The existing tag configuration command (=C= in the transient) opens
+the selected tag's Settings. Title and Storage edit through ordinary minibuffer
+input; Storage requires a listed choice. TODO cycles and Capture template open
+child tables. =+= and the final producer row add a cycle or line, =d= removes
+an item, and the Order cell moves it. Cycle cells retain keyword metadata;
+template Text and Ending cells preserve literal LF, CRLF, CR and final missing
+endings. Adding after an unterminated final line supplies a separator using
+the existing line-ending convention. Only the final line may have no ending.
+
+=R= removes the selected override; an empty child table remains an explicit
+empty override. =C-c C-c= or =C-x C-s= saves all fields in the scope through one
+shared JSON transaction. The six columns are Setting, Value, Area, Applies to,
+Source and State. Child Back restores the parent's filter, flags, layout and
+row/cell point. =q=, Escape and DEL return from a child; closing the root asks
+before discarding an unsaved draft. Reopening the same scope retains its draft. System scope and the tag named
+=system= use distinct buffers; existing-buffer reuse verifies the scope and
+canonical tree identity.
+
+Writes use the observed file revision and preserve peer scopes/clients. A
+stale save keeps the draft. =g= rereads and retains nonoverlapping edits;
+overlapping fields require an explicit =current= or =draft= choice. Cancelling
+that choice keeps the whole prior draft. Save explicitly after reconciliation.
+A failed live application retains the saved revision for retry. No settings
+are imported from legacy files by opening this editor. Trees without JSON
+retain their existing editor until coordinated cutover.
+
+
+The JSON workflow/layout writer APIs accept an observed absent file. Workflow
+callers pass =:expected nil= explicitly; layout callers retain the actual read
+snapshot with its nil revision. Missing observations are refused. If another
+client creates the file first, the shared transaction reports a conflict and
+preserves its bytes. This prepares first publication; fresh-root JSON defaults
+and legacy reader retirement remain part of coordinated cutover.

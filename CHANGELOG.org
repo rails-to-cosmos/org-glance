@@ -5,8 +5,22 @@ Notable user-facing changes.  Versions date-based
 
 * Unreleased
 
+** Added
+
+- =org-glance-settings= edits system TODO cycles and capture templates through table-view.
+- =C= opens JSON tag Settings with Title, Storage, ordered cycle and literal template child tables.
+- Settings retain drafts on stale writes; =g= reconciles peer fields with explicit current/draft choices.
+
+** Changed
+
+- Native JSON workflow/layout writer APIs accept an explicitly observed absent file and refuse concurrent first publication.
+
+- JSON-present tables save custom columns, hidden built-ins, order, sort and scoped reference layouts under =clients.orgGlance= in the shared file. Layout edits use observed revisions and preserve peer settings.
+- Explicit layout apply reports lock and revision conflicts; failed saves retain the visible layout for retry.
+
 ** Fixed
 
+- System Settings and the tag named =system= retain separate buffers, drafts and save targets.
 - Active-only legacy TODO cycles stay active in Material, Overview and capture headers.
 
 * 1.55.0.0.20261020.0

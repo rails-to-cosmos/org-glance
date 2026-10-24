@@ -59,6 +59,8 @@
   (load "test/test-material.el")
   (load "test/test-overview.el")
   (load "test/test-table.el")
+  (load "test/test-table-config.el")
+  (load "test/test-settings.el")
   (load "test/test-tags.el")
   (load "test/test-ui.el")
   (load "test/test-plugins.el")

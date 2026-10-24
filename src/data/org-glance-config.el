@@ -261,7 +261,7 @@ NEL, line/paragraph separators and format characters are excluded.")
         (unless (and (org-glance-config--tag name) (not (gethash name seen)))
           (org-glance-config--error "Invalid or ambiguous case-folded tag name"))
         (puthash name t seen)
-        (org-glance-config--known raw '("title" "template" "todoCycles" "storage"))
+        (org-glance-config--known raw (org-glance-config:workflow-fields name))
         (let ((tag-cycles (org-glance-config--cycles (org-glance-config--field raw "todoCycles" #'vectorp [])))
               (policy (org-glance-config--field raw "storage"
                                                 (lambda (v) (member v '("local" "portable"))))))
@@ -609,6 +609,47 @@ Cold errors signal.  Reload errors retain the last good settings and warn."
       (user-error "JSON saved but live application failed: %s"
                   (org-glance-graph:-config-error graph)))
     saved))
+
+(defun org-glance-config:workflow-fields (tag)
+  "Return the editable compound setting names for scope TAG, nil for system."
+  (if tag '("title" "todoCycles" "template" "storage")
+    '("todoCycles" "template")))
+
+(cl-defun org-glance-config:write-workflow (graph tag values &key (expected nil expected-p))
+  "Publish scope TAG's complete overrides VALUES at GRAPH revision EXPECTED.
+Return the saved snapshot; the caller applies it and retains its retry receipt."
+  (unless (and expected-p (or (null expected)
+                              (and (stringp expected) (> (length expected) 0))))
+    (user-error "Workflow settings require an observed configuration revision"))
+  (when tag
+    (unless (org-glance-config--tag tag)
+      (org-glance-config--error "Invalid workflow tag"))
+    (setq tag (org-glance-config--tag-name tag)))
+  (org-glance-config--object values)
+  (org-glance-config--known values (org-glance-config:workflow-fields tag))
+  (org-glance-config-file:write
+   (org-glance-graph:directory graph) :expected expected
+   :change
+   (lambda (object)
+     (let* ((tags (and tag (gethash "tags" object)))
+            (key (and tag (or (car (cl-find tag (and tags (org-glance-config--pairs tags))
+                                           :key (lambda (pair) (org-glance-config--tag-name (car pair)))
+                                           :test #'equal)) tag)))
+            (target (if tag (copy-hash-table (or (and tags (gethash key tags))
+                                               (make-hash-table :test 'equal))) object)))
+       (dolist (field (org-glance-config:workflow-fields tag))
+         (if (eq (gethash field values :missing) :missing) (remhash field target)
+           (puthash field (gethash field values) target)))
+       (when tag
+         (if (> (hash-table-count target) 0)
+             (progn
+               (unless tags (setq tags (make-hash-table :test 'equal)))
+               (puthash key target tags))
+           (when tags (remhash key tags)))
+         (if (and tags (> (hash-table-count tags) 0)) (puthash "tags" tags object)
+           (remhash "tags" object)))
+       (org-glance-config:decode (org-glance-config-file--make :object object))
+       object))))
 
 (defun org-glance-config-set-tree-setting (key json-value)
   "Set KEY to JSON-VALUE in the current tree's JSON configuration."

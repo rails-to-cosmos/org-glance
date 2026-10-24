@@ -18,6 +18,7 @@
 (require 'org-glance-property-index)
 (require 'org-glance-filter)
 (require 'org-glance-tag-config)
+(require 'org-glance-table-config)
 (require 'org-glance-material)
 (require 'org-glance-view)
 
@@ -344,19 +345,79 @@ Prompt for passwords, confirming new ones; plaintext cannot be re-keyed."
 
 ;;; Per-view persistence
 
+(defvar org-glance-table--reading-source nil
+  "Graph and JSON observation shared while constructing a table.")
+
+(defvar-local org-glance-table--settings-source nil
+  "Graph and JSON observation against which this table edits layouts.")
+
+(defun org-glance-table--observe-settings (graph)
+  "Observe GRAPH's configuration, refusing an invalid first JSON activation."
+  (org-glance-config:refresh graph)
+  (let ((snapshot (org-glance-config:snapshot graph)))
+    (when (and (null snapshot) (org-glance-graph:-config-error graph))
+      (user-error "%s" (org-glance-graph:-config-error graph)))
+    snapshot))
+
+(defun org-glance-table--json-snapshot (graph)
+  "Return GRAPH's observed JSON snapshot for the current layout operation."
+  (cond
+   ((eq graph (car-safe org-glance-table--reading-source))
+    (cdr org-glance-table--reading-source))
+   ((eq graph (car-safe org-glance-table--settings-source))
+    (cdr org-glance-table--settings-source))
+   (t (org-glance-table--observe-settings graph))))
+
+(cl-defun org-glance-table--layout-read (graph &key section file)
+  "Read GRAPH's layout SECTION, using legacy FILE before JSON activation."
+  (if-let* ((snapshot (org-glance-table--json-snapshot graph)))
+      (org-glance-table-config:entries snapshot :section section)
+    (org-glance--read-eld file)))
+
+(defun org-glance-table--write-json-layout (graph edits)
+  "Commit GRAPH's layout EDITS and retain their exact saved observation."
+  (let ((saved (org-glance-table-config:write
+                (org-glance-graph:directory graph)
+                :snapshot (org-glance-table--json-snapshot graph) :edits edits)))
+    (when (eq graph (car-safe org-glance-table--settings-source))
+      (setq org-glance-table--settings-source (cons graph saved)))
+    (when (eq graph (car-safe org-glance-table--reading-source))
+      (setq org-glance-table--reading-source (cons graph saved)))
+    (org-glance-config:refresh graph)
+    (when (org-glance-graph:-config-error graph)
+      (user-error "JSON saved at %s; live application failed: %s"
+                  (org-glance-config-file:revision saved)
+                  (org-glance-graph:-config-error graph)))
+    saved))
+
+(cl-defun org-glance-table--layout-write (graph &key section file key value)
+  "Write GRAPH's layout SECTION/KEY to VALUE or its legacy FILE."
+  (if (org-glance-table--json-snapshot graph)
+      (org-glance-table--write-json-layout graph (list (list section key value)))
+    (org-glance-config-file:with-lock
+     (org-glance-graph:directory graph)
+     (lambda ()
+       (let ((current (org-glance-config-file:read (org-glance-graph:directory graph))))
+         (when (org-glance-config-file:revision current)
+           (signal 'org-glance-config-conflict
+                   (list nil (org-glance-config-file:revision current))))
+         (org-glance--eld-alist-set file key value))))))
+
 (cl-defun org-glance-table--config-file (graph)
   "Path of GRAPH's table-view config store (may not exist)."
   (org-glance-graph:config-file graph "table-views.eld"))
 
 (cl-defun org-glance-table--config-get (graph spec)
   "Return GRAPH's saved config plist for SPEC (`:columns', `:sort'), or nil."
-  (org-glance--eld-alist-ref (org-glance-table--config-file graph)
-                             (org-glance-filter:identity spec)))
+  (cdr (assoc (org-glance-filter:identity spec)
+              (org-glance-table--layout-read
+               graph :section "tableViews" :file (org-glance-table--config-file graph)))))
 
 (cl-defun org-glance-table--config-put (graph spec config)
   "Persist CONFIG (a plist) for SPEC in GRAPH's config store."
-  (org-glance--eld-alist-set (org-glance-table--config-file graph)
-                             (org-glance-filter:identity spec) config))
+  (org-glance-table--layout-write
+   graph :section "tableViews" :file (org-glance-table--config-file graph)
+   :key (org-glance-filter:identity spec) :value config))
 
 (cl-defun org-glance-table--column-keys (columns)
   "Return COLUMNS' key strings, in order."
@@ -386,10 +447,9 @@ A single-row action asks it whether a changed headline still belongs.")
 (defvar-local org-glance-table--context nil
   "Relation-view context plist (`:anchor' ID `:dir' `relations'), or nil.")
 
-(cl-defun org-glance-table--current-config ()
-  "Return this buffer's view config (:columns KEYS :sort SORT-KEYS).
-Cheap enough for `post-command-hook'; see `org-glance-table--layout-snapshot'."
-  (let ((layout (table-view-layout)))
+(cl-defun org-glance-table--current-config (&optional layout)
+  "Return this buffer's config from LAYOUT or its current live layout."
+  (let ((layout (or layout (table-view-layout))))
     (list :columns (org-glance-table--column-keys (plist-get layout :columns))
           :sort (plist-get layout :sort))))
 
@@ -399,13 +459,16 @@ Guarded on a registered view: the \"all\" filter has a nil spec.  A persistent
 view saves on the spot; a transient one saves nothing (invariant
 17); a reference view nudges toward `C-c C-c' once per change."
   (when org-glance-view--graph
-    (let ((cur (org-glance-table--current-config)))
+    (let* ((layout (table-view-layout))
+           (cur (org-glance-table--current-config layout)))
       (unless (equal cur org-glance-table--config-snapshot)
         (cond
          ((not (org-glance-filter:transient? org-glance-table--spec))
-          (setq org-glance-table--config-snapshot cur)
           (with-demoted-errors "org-glance: table config save failed: %S"
-            (org-glance-table--config-put org-glance-view--graph org-glance-table--spec cur)))
+            (if (org-glance-table--json-snapshot org-glance-view--graph)
+                (org-glance-table--save-json-layout org-glance-view--graph layout)
+              (org-glance-table--config-put org-glance-view--graph org-glance-table--spec cur)
+              (setq org-glance-table--config-snapshot cur))))
          (org-glance-table--context
           (setq org-glance-table--config-snapshot cur)
           (message "Layout modified — C-c C-c to apply it to a scope")))))))
@@ -539,16 +602,17 @@ Keying on tags alone shares a tag's columns across all its views."
 (cl-defun org-glance-table--schema-entry (graph filter)
   "Return GRAPH's saved schema plist for FILTER's tags, or nil.
 `:columns' lists custom (PROP . HEADER) pairs, `:hidden' removed built-ins."
-  (org-glance--eld-alist-ref (org-glance-table--schema-file graph)
-                             (org-glance-table--schema-key filter)))
+  (cdr (assoc (org-glance-table--schema-key filter)
+              (org-glance-table--layout-read
+               graph :section "tableColumns" :file (org-glance-table--schema-file graph)))))
 
 (cl-defun org-glance-table--schema-put (graph filter &key columns hidden)
   "Persist FILTER's per-tag schema in GRAPH: custom COLUMNS and HIDDEN keys.
 COLUMNS is a (PROP . HEADER) list; an all-empty schema drops the entry."
-  (org-glance--eld-alist-set
-   (org-glance-table--schema-file graph)
-   (org-glance-table--schema-key filter)
-   (and (or columns hidden) (list :columns columns :hidden hidden))))
+  (org-glance-table--layout-write
+   graph :section "tableColumns" :file (org-glance-table--schema-file graph)
+   :key (org-glance-table--schema-key filter)
+   :value (and (or columns hidden) (list :columns columns :hidden hidden))))
 
 (cl-defun org-glance-table--compose-columns (graph base hidden pairs)
   "Return BASE minus HIDDEN keys, plus GRAPH's custom columns for PAIRS.
@@ -571,11 +635,13 @@ PAIRS is a (NAME . HEADER) list; Title is never hidden (invariant 15)."
 Runs on `table-view-schema-changed-hook'; transient views skip (invariant 17)."
   (when (and org-glance-view--graph
              (not (org-glance-filter:transient? org-glance-table--spec)))
-    (let ((snap (org-glance-table--layout-snapshot)))
-      (with-demoted-errors "org-glance: table schema save failed: %S"
-        (org-glance-table--schema-put org-glance-view--graph org-glance-table--spec
-                                      :columns (plist-get snap :columns)
-                                      :hidden (plist-get snap :hidden))))))
+    (with-demoted-errors "org-glance: table schema save failed: %S"
+      (if (org-glance-table--json-snapshot org-glance-view--graph)
+          (org-glance-table--save-json-layout org-glance-view--graph)
+        (let ((snap (org-glance-table--layout-snapshot)))
+          (org-glance-table--schema-put org-glance-view--graph org-glance-table--spec
+                                        :columns (plist-get snap :columns)
+                                        :hidden (plist-get snap :hidden)))))))
 
 ;;; Scoped reference layouts (invariants 17-18)
 
@@ -612,7 +678,8 @@ The single source of pair order: anchor tag first."
 (cl-defun org-glance-table--refs-resolve (graph context)
   "Return GRAPH's scoped layout entry for CONTEXT, or nil (invariant 18).
 The anchor's own entry wins, else the latest `:applied' matching tag pair."
-  (let ((all (org-glance--read-eld (org-glance-table--refs-file graph))))
+  (let ((all (org-glance-table--layout-read
+              graph :section "tableRefs" :file (org-glance-table--refs-file graph))))
     (or (cdr (assoc (org-glance-table--refs-key-id context) all))
         (when (cl-some (lambda (e) (string-prefix-p "pair:relations:" (car e))) all)
           (let* ((tags (org-glance-table--refs-tags graph context))
@@ -629,12 +696,12 @@ The anchor's own entry wins, else the latest `:applied' matching tag pair."
                                       (plist-get entry :columns))
    (plist-get entry :order)))
 
-(cl-defun org-glance-table--layout-snapshot ()
-  "Return this buffer's full layout as one persistable plist, unstamped.
+(cl-defun org-glance-table--layout-snapshot (&optional layout)
+  "Return LAYOUT or this buffer's live layout as an unstamped plist.
 `:columns' custom (PROP . HEADER) pairs, `:hidden' built-in keys missing from
 the view (`Relation' counts in a relation view), `:order' every live key,
 `:sort' the sort chain.  Scoped entries store it whole."
-  (let* ((layout (table-view-layout))
+  (let* ((layout (or layout (table-view-layout)))
          (live (plist-get layout :columns))
          (live-keys (org-glance-table--column-keys live))
          (built-in (if org-glance-table--context
@@ -650,6 +717,19 @@ the view (`Relation' counts in a relation view), `:order' every live key,
           :order live-keys
           :sort (plist-get layout :sort))))
 
+(defun org-glance-table--save-json-layout (graph &optional layout)
+  "Save GRAPH's LAYOUT or current layout in one JSON transaction."
+  (let* ((layout (or layout (table-view-layout)))
+         (snapshot (org-glance-table--layout-snapshot layout))
+         (columns (plist-get snapshot :columns))
+         (hidden (plist-get snapshot :hidden))
+         (config (org-glance-table--current-config layout)))
+    (org-glance-table--write-json-layout
+     graph (list (list "tableColumns" (org-glance-table--schema-key org-glance-table--spec)
+                       (and (or columns hidden) (list :columns columns :hidden hidden)))
+                 (list "tableViews" (org-glance-filter:identity org-glance-table--spec) config)))
+    (setq org-glance-table--config-snapshot config)))
+
 (cl-defun org-glance-table:apply-layout ()
   "Save this table's layout (`C-c C-c').
 A reference view prompts for a scope, its anchor or a tag pair (invariant 18); a
@@ -661,8 +741,15 @@ persistent view saves config and schema now; other views signal `user-error'."
    ((org-glance-filter:transient? org-glance-table--spec)
     (user-error "This view's layout cannot be persisted"))
    (t
-    (org-glance-table--persist-schema)
-    (org-glance-table--persist-config)
+    (if (org-glance-table--json-snapshot org-glance-view--graph)
+        (org-glance-table--save-json-layout org-glance-view--graph)
+      (let ((layout (org-glance-table--layout-snapshot))
+            (config (org-glance-table--current-config)))
+        (org-glance-table--schema-put org-glance-view--graph org-glance-table--spec
+                                     :columns (plist-get layout :columns)
+                                     :hidden (plist-get layout :hidden))
+        (org-glance-table--config-put org-glance-view--graph org-glance-table--spec config)
+        (setq org-glance-table--config-snapshot config)))
     (message "Layout saved for %s"
              (org-glance-filter:describe org-glance-table--spec)))))
 
@@ -682,10 +769,10 @@ persistent view saves config and schema now; other views signal `user-error'."
                           (org-glance-table--refs-tag-pairs (car tags) (cdr tags)))))
            (choice (completing-read "Apply this layout to: "
                                     (mapcar #'car candidates) nil t)))
-      (org-glance--eld-alist-set
-       (org-glance-table--refs-file graph)
-       (cdr (assoc choice candidates))
-       (plist-put (org-glance-table--layout-snapshot) :applied (float-time)))
+      (org-glance-table--layout-write
+       graph :section "tableRefs" :file (org-glance-table--refs-file graph)
+       :key (cdr (assoc choice candidates))
+       :value (plist-put (org-glance-table--layout-snapshot) :applied (float-time)))
       (message "Layout applied to %s" choice))))
 
 (cl-defun org-glance-table--act-delete (graph id)
@@ -843,6 +930,8 @@ CONTEXT, a (:anchor ID :dir relations) plist, makes it a relation view with the
 scoped layout (invariant 18) and the `Relation' column."
   (let* ((from-view (and org-glance-view--graph t))   ; re-navigation from within a view?
          (spec (org-glance-filter:normalize-spec filter))
+         (org-glance-table--reading-source
+          (cons graph (org-glance-table--observe-settings graph)))
          (saved (org-glance-table--config-get graph spec))   ; restored column order + sort
          (ref-entry (and context (org-glance-table--refs-resolve graph context)))
          ;; Bound BEFORE `keep?' and the badge split, so both read one done-set.
@@ -873,7 +962,8 @@ scoped layout (invariant 18) and the `Relation' column."
                (org-glance-table--handlers graph spec)
                fill-fn)))
     (with-current-buffer buf
-      (setq org-glance-table--context context)
+      (setq org-glance-table--settings-source org-glance-table--reading-source
+            org-glance-table--context context)
       (local-set-key (kbd "C-c C-c") #'org-glance-table:apply-layout)
       (setq org-glance-table--keep-fn keep?
             org-glance-table--spec spec

@@ -77,7 +77,8 @@ argument in [[file:proposals][docs/proposals/]].
 
    JSON configuration transactions serialize with Glance through
    =.org-glance/config.json.lock= and compare exact-byte SHA-256 revisions.
-   Existing legacy configuration writers remain outside that protocol until
+   Legacy table-layout writers share this lock and refuse publication after
+   JSON activation. Other legacy configuration writers await
    the coordinated JSON cutover; see
    [[file:proposals/2026-10-18-json-settings-share-one-file.partial.org][the partial migration]].
 
@@ -210,11 +211,12 @@ argument in [[file:proposals][docs/proposals/]].
     only human-readable label; a schema file could blank every view of a tag.
 
 16. *Per-tag column schema: hidden is a denylist; candidates are user keys.*  The
-    per-tag =:hidden= set records REMOVED built-ins (=table-columns.eld=), never an
+    per-tag =:hidden= set records REMOVED built-ins (=tableColumns= in JSON;
+    =table-columns.eld= before activation), never an
     allowlist of the visible set, so a built-in shipped later still appears; =C-c +=
     candidate keys exclude =ORG_GLANCE_*= bookkeeping and org's synthesised =CATEGORY=
     (=org-glance-property-index--candidate-key?=).  Column order + sort persist
-    separately, per filter (=table-views.eld=).  Violation: a version upgrade's new
+    separately, per filter (=tableViews= in JSON; =table-views.eld= before activation).  Violation: a version upgrade's new
     column is invisible to anyone with a saved schema; internal keys pollute the column
     prompt.
 
@@ -226,7 +228,8 @@ argument in [[file:proposals][docs/proposals/]].
     ":none:" entry).  Judged by the single predicate =org-glance-filter:transient?=.
     Sole exception, EXPLICIT: =C-c C-c= in a reference table
     (=org-glance-table:apply-layout=) saves the layout under a user-chosen scope key
-    (anchor id or tag pair, per direction) in =table-refs.eld= — never under the filter
+    (anchor id or tag pair, per direction) in =tableRefs= in JSON
+    (=table-refs.eld= before activation) — never under the filter
     identity, one entry per deliberate apply.  Violation: one cache dir / config entry
     per visited headline (=:id-any= identities embed the target snapshot, one per
     link-set version), with no pruning pass to reclaim them.
@@ -236,14 +239,16 @@ argument in [[file:proposals][docs/proposals/]].
     the filter, which has lost it.  Resolution (=org-glance-table--refs-resolve=): the
     anchor's own entry beats tag pairs; among pairs the latest =:applied= stamp wins.  A
     scoped entry REPLACES the whole column set built from base columns, never merging
-    with =table-columns.eld=; a scope-less relation view renders plain defaults, never
+    with the per-tag schema; a scope-less relation view renders plain defaults, never
     the shared untagged ":none:" entry.  A relation table lists BOTH directions in one
     view (=org-glance-table--related-ids=), so pair keys read anchor tag > row tag —
     scope, never edge direction — single-sourced in
     =org-glance-table--refs-tag-pairs=; the mirrored pair is a DIFFERENT scope.  Pair
-    tags are sorted, distinct, downcased (mirrors inv 13).  =table-refs.eld= is written
-    only on explicit =C-c C-c=, so a git conflict drops one side with no self-healing
-    rewrite.  Violation: saved layouts that never match on restore, cross-scope leaks,
+    tags are sorted, distinct, downcased (mirrors inv 13). Scoped layouts are written
+    only on explicit =C-c C-c=. JSON layout edits pin the view's observed revision;
+    a conflict retains the draft and refuses publication. A schema change publishes
+    its schema and per-filter order/sort together. Saved receipts advance before
+    live refresh, and the save baseline advances after successful application.  Violation: saved layouts that never match on restore, cross-scope leaks,
     nondeterministic pair resolution.
 
 19. *The table is a pure projection; every mutation routes through the material layer.*

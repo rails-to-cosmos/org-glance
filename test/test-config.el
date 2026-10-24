@@ -640,37 +640,38 @@
 
 (ert-deftest org-glance-config-test-overview-killed-publisher-cannot-change-held-export ()
   (load (expand-file-name "test/fixtures/overview-export-peer.el" default-directory) nil t)
-  (dolist (filter '(nil (:tags ("book"))))
-    (dolist (kind '(presentation family))
-      (org-glance-test:with-graph graph
-        (org-glance-config-test--publish graph
-         "{\"format\":1,\"todoCycles\":[{\"active\":[\"PLAN(p)\"]}]}")
-        (org-glance-config-test--snapshot graph "export-row"
-          (org-glance-test:org-with-id "* PLAN Original :book:" "export-row"))
-        (let* ((root (org-glance-graph:directory graph))
-               (held (org-glance-overview:cached-file graph filter))
-               (bytes (f-read-text held 'utf-8))
-               (spec (org-glance-overview--spec-sidecar held))
-               (receipt (f-read-text spec 'utf-8))
-               (buffer (generate-new-buffer " *interrupted-overview*"))
-               (load-path (cons (expand-file-name "test/fixtures" default-directory) load-path))
-               (process (make-process :name "interrupted-overview" :buffer buffer :noquery t
-                         :command (org-glance--batch-worker-command
-                                   'org-glance-test-overview-interrupt-peer
-                                   (list root (list 'quote filter) (list 'quote kind))))))
-          (unwind-protect
-              (progn
-                (org-glance-test-overview-wait root "publisher-paused")
-                (delete-process process)
-                (should (equal receipt (f-read-text spec 'utf-8)))
-                (should (equal bytes (f-read-text held 'utf-8)))
-                (org-glance-config:refresh graph)
-                (let ((file (org-glance-overview:cached-file graph filter)))
-                  (should (string-search (if (eq kind 'presentation) "PLAN(q)" "Updated")
-                                         (f-read-text file 'utf-8)))
-                  (should (equal bytes (f-read-text held 'utf-8)))))
-            (when (process-live-p process) (delete-process process))
-            (kill-buffer buffer)))))))
+  (cl-letf (((symbol-function 'org-glance-cache--inventory-tick) #'ignore))
+    (dolist (filter '(nil (:tags ("book"))))
+      (dolist (kind '(presentation family))
+	(org-glance-test:with-graph graph
+				    (org-glance-config-test--publish graph
+								     "{\"format\":1,\"todoCycles\":[{\"active\":[\"PLAN(p)\"]}]}")
+				    (org-glance-config-test--snapshot graph "export-row"
+								      (org-glance-test:org-with-id "* PLAN Original :book:" "export-row"))
+				    (let* ((root (org-glance-graph:directory graph))
+					   (held (org-glance-overview:cached-file graph filter))
+					   (bytes (f-read-text held 'utf-8))
+					   (spec (org-glance-overview--spec-sidecar held))
+					   (receipt (f-read-text spec 'utf-8))
+					   (buffer (generate-new-buffer " *interrupted-overview*"))
+					   (load-path (cons (expand-file-name "test/fixtures" default-directory) load-path))
+					   (process (make-process :name "interrupted-overview" :buffer buffer :noquery t
+								  :command (org-glance--batch-worker-command
+									    'org-glance-test-overview-interrupt-peer
+									    (list root (list 'quote filter) (list 'quote kind))))))
+				      (unwind-protect
+					  (progn
+					    (org-glance-test-overview-wait root "publisher-paused")
+					    (delete-process process)
+					    (should (equal receipt (f-read-text spec 'utf-8)))
+					    (should (equal bytes (f-read-text held 'utf-8)))
+					    (org-glance-config:refresh graph)
+					    (let ((file (org-glance-overview:cached-file graph filter)))
+					      (should (string-search (if (eq kind 'presentation) "PLAN(q)" "Updated")
+								     (f-read-text file 'utf-8)))
+					      (should (equal bytes (f-read-text held 'utf-8)))))
+					(when (process-live-p process) (delete-process process))
+					(kill-buffer buffer))))))))
 
 (ert-deftest org-glance-config-test-shared-settings-vectors ()
   (let ((path (getenv "GLANCE_CONFIG_SETTINGS_VECTORS")))
