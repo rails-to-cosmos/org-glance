@@ -532,31 +532,42 @@ TAGS may be a function reading the current buffer's tag names."
   (when-let* ((observation (org-glance-graph:-config graph)))
     (org-glance-config--observation-presentation observation)))
 
-(defun org-glance-config:refresh (graph)
+(defun org-glance-config--prepare (snapshot &optional validated)
+  "Prepare SNAPSHOT once for revision-aware publication."
+  (let* ((settings (or validated (org-glance-config:decode snapshot)))
+         (fingerprints (org-glance-config:fingerprints settings)))
+    (org-glance-config--observe
+     :snapshot snapshot :settings settings
+     :presentation (nth 3 fingerprints)
+     :key (secure-hash 'sha256 (prin1-to-string (cl-subseq fingerprints 0 2))))))
+
+(defun org-glance-config:refresh (graph &optional saved)
   "Observe GRAPH's JSON configuration and publish a valid coherent reload.
-Cold errors signal.  Reload errors retain the last good settings and warn."
+Cold errors signal.  Reload errors retain the last good settings and warn.
+SAVED is a private (snapshot . validated-settings) receipt, reused only after
+reading and matching its exact byte revision."
   (let ((previous (org-glance-graph:-config graph))
         (old-key (unless (eq :unread (org-glance-graph:-config graph))
                    (org-glance-config:cache-key graph))))
     (condition-case err
-        (let* ((snapshot (org-glance-config-file:read (org-glance-graph:directory graph)))
+        (let* ((snapshot (if saved
+                             (org-glance-config-file:read
+                              (org-glance-graph:directory graph) (car saved))
+                           (org-glance-config-file:read
+                            (org-glance-graph:directory graph))))
                (unchanged (and (not (eq previous :unread))
                                (equal (and previous (org-glance-config-file:revision
                                                      (org-glance-config--observation-snapshot previous)))
                                       (org-glance-config-file:revision snapshot))))
-               (settings (if unchanged
-                             (and previous (org-glance-config--observation-settings previous))
-                           (and (org-glance-config-file:revision snapshot)
-                                (org-glance-config:decode snapshot))))
-               (next (if unchanged previous
-                       (and settings
-                         (let ((fingerprints (org-glance-config:fingerprints settings)))
-                          (org-glance-config--observe
-                           :snapshot snapshot :settings settings
-                           :presentation (nth 3 fingerprints)
-                           :key (secure-hash 'sha256
-                                             (prin1-to-string
-                                              (cl-subseq fingerprints 0 2)))))))))
+               (next (cond
+                      (unchanged previous)
+                      ((and saved
+                            (equal (org-glance-config-file:revision snapshot)
+                                   (org-glance-config-file:revision (car saved))))
+                       (org-glance-config--prepare snapshot (cdr saved)))
+                      ((org-glance-config-file:revision snapshot)
+                       (org-glance-config--prepare snapshot))))
+               (settings (and next (org-glance-config--observation-settings next))))
           (unless (and (not (eq previous :unread))
                        (equal (and previous (org-glance-config-file:revision
                                              (org-glance-config--observation-snapshot previous)))

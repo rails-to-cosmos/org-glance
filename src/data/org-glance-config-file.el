@@ -115,13 +115,18 @@
       (signal 'org-glance-config-unsafe (list path)))
     path))
 
-(defun org-glance-config-file--read (path)
+(defun org-glance-config-file--read (path &optional observed)
   "Read PATH as one config snapshot; absence supplies the format envelope."
   (condition-case err
       (with-temp-buffer
         (set-buffer-multibyte nil)
         (insert-file-contents-literally path)
-        (org-glance-config-file:decode (buffer-string)))
+        (let ((bytes (buffer-string)))
+          (if (and observed (org-glance-config-file:revision observed)
+                   (equal (secure-hash 'sha256 bytes)
+                          (org-glance-config-file:revision observed)))
+              observed
+            (org-glance-config-file:decode bytes))))
     (file-missing
      (if (file-exists-p path)
          (signal (car err) (cdr err))
@@ -129,9 +134,10 @@
          (puthash "format" 1 object)
          (org-glance-config-file--make :revision nil :object object))))))
 
-(defun org-glance-config-file:read (root)
-  "Read ROOT's JSON configuration without creating files or acquiring a lock."
-  (org-glance-config-file--read (org-glance-config-file--path root nil)))
+(defun org-glance-config-file:read (root &optional observed)
+  "Read ROOT's JSON configuration without creating files or acquiring a lock.
+Reuse validated OBSERVED only when its exact byte revision still matches."
+  (org-glance-config-file--read (org-glance-config-file--path root nil) observed))
 
 (defun org-glance-config-file:with-lock (root action)
   "Run ACTION under ROOT's shared mkdir lock, refusing an existing owner."

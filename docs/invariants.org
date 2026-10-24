@@ -78,7 +78,9 @@ argument in [[file:proposals][docs/proposals/]].
    JSON configuration transactions serialize with Glance through
    =.org-glance/config.json.lock= and compare exact-byte SHA-256 revisions.
    Legacy table-layout writers share this lock and refuse publication after
-   JSON activation. Other legacy configuration writers await
+   JSON activation. Layout refresh reuses validated settings only after an exact
+   current-byte digest match; saved receipts survive failed application.
+   Other legacy configuration writers await
    the coordinated JSON cutover; see
    [[file:proposals/2026-10-18-json-settings-share-one-file.partial.org][the partial migration]].
 

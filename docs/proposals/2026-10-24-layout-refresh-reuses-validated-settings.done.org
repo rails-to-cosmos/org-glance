@@ -1,0 +1,27 @@
+#+TITLE: Layout refresh reuses validated settings
+
+* Status
+Done for the first bounded native save-pipeline slice. The
+[[file:../../../glance/docs/reports/done/2026-10-24-configuration-save-preparation-01-independent-review.md][independent review]] passes31fresh checks and the measured work boundary. The shared JSON cutover and its
+cumulative cost decision remain separate.
+
+* Contract
+A layout save retains its exact saved snapshot and validated settings. Refresh
+reads the current bytes and verifies their complete digest before reuse. A later
+writer's revision follows ordinary decoding. Semantic fingerprints are computed
+once inside refresh's existing error boundary; exact no-ops reuse the published
+observation. A failed refresh preserves the saved revision for explicit retry.
+
+The public layout writer keeps its snapshot return value and keyword arguments.
+Its private positional helper carries the validated receipt without repeated
+keyword parsing. Path checks, mkdir locking, atomic publication and sync behavior
+remain unchanged. Generic mutable callback ownership and preparing outside the
+lock remain later slices.
+
+* Evidence
+Thirty focused and 636 full ERT contracts pass, including shared vectors. An old
+owner control fails the work-count regression. Changed/no-op/conflict paired
+measurements, longer no-op samples, GC pauses and zero / 3,000 operation memory
+controls are retained in the sibling Glance author handoff. Byte indentation
+normalization preserves every read Lisp form. No installation or live migration
+occurred. Existing unrelated proposal/roadmap drafts remain outside this slice.

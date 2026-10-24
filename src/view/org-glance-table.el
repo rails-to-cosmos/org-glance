@@ -376,14 +376,15 @@ Prompt for passwords, confirming new ones; plaintext cannot be re-keyed."
 
 (defun org-glance-table--write-json-layout (graph edits)
   "Commit GRAPH's layout EDITS and retain their exact saved observation."
-  (let ((saved (org-glance-table-config:write
-                (org-glance-graph:directory graph)
-                :snapshot (org-glance-table--json-snapshot graph) :edits edits)))
+  (let* ((receipt (org-glance-table-config--write
+                   (org-glance-graph:directory graph)
+                   (org-glance-table--json-snapshot graph) edits))
+         (saved (car receipt)))
     (when (eq graph (car-safe org-glance-table--settings-source))
       (setq org-glance-table--settings-source (cons graph saved)))
     (when (eq graph (car-safe org-glance-table--reading-source))
       (setq org-glance-table--reading-source (cons graph saved)))
-    (org-glance-config:refresh graph)
+    (org-glance-config:refresh graph receipt)
     (when (org-glance-graph:-config-error graph)
       (user-error "JSON saved at %s; live application failed: %s"
                   (org-glance-config-file:revision saved)

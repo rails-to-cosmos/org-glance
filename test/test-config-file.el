@@ -263,3 +263,18 @@
 
 (provide 'test-config-file)
 ;;; test-config-file.el ends here
+
+(ert-deftest org-glance-config-file-test-observed-read-refuses-same-size-corruption ()
+  (org-glance-config-test--with-root
+    (let ((path (org-glance-config-file:path root)))
+      (make-directory (file-name-directory path))
+      (with-temp-file path (insert "{\"format\":1}"))
+      (let ((observed (org-glance-config-file:read root)))
+        (with-temp-file path (insert "{\"format\":2}"))
+        (should-error (org-glance-config-file:read root observed)
+                      :type 'org-glance-config-error)
+        (should (= 1 (gethash "format" (org-glance-config-file:object observed))))
+        (with-temp-file path (insert "{\"format\":1}"))
+        (should (equal (org-glance-config-file:revision observed)
+                       (org-glance-config-file:revision
+                        (org-glance-config-file:read root observed))))))))

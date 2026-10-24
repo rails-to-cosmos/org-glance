@@ -180,35 +180,42 @@
   encoded)
 
 (cl-defun org-glance-table-config:write (root &key snapshot edits)
-  "Apply native layout EDITS in ROOT at observed SNAPSHOT's revision.
+  "Apply layout EDITS and return the exact saved snapshot."
+  (car (org-glance-table-config--write root snapshot edits)))
+
+(defun org-glance-table-config--write (root snapshot edits)
+  "Return (SNAPSHOT . SETTINGS) after validated layout EDITS in ROOT.
 Each edit is (SECTION KEY VALUE); nil VALUE removes that override."
   (unless (org-glance-config-file-p snapshot)
     (user-error "Native layouts require an observed configuration snapshot"))
-  (org-glance-config-file:write
-   root :expected (org-glance-config-file:revision snapshot)
-   :change
-   (lambda (object)
-     (dolist (edit edits)
-       (pcase-let ((`(,section ,key ,value) edit))
-         (unless (stringp key) (org-glance-config--error "Layout key must be a string"))
-         (org-glance-table-config--fields section)
-         (if (null value)
-             (remhash key (org-glance-table-config--collection object section))
-           (let ((parent object))
-             (dolist (name (list "clients" "orgGlance" section))
-               (let ((child (gethash name parent :missing)))
-                 (when (eq child :missing)
-                   (setq child (make-hash-table :test 'equal))
-                   (puthash name child parent))
-                 (setq parent (org-glance-config--object child))))
-             (puthash key (org-glance-table-config--merge
-                           section (org-glance-table-config:encode section value)
-                           (gethash key parent)) parent)))))
-     (let ((candidate (org-glance-config-file--make :object object)))
-       (dolist (collection org-glance-table-config--collections)
-         (org-glance-table-config:entries candidate :section (car collection)))
-       (org-glance-config:decode candidate))
-     object)))
+  (let* (settings
+         (saved
+          (org-glance-config-file:write
+           root :expected (org-glance-config-file:revision snapshot)
+           :change
+           (lambda (object)
+             (dolist (edit edits)
+               (pcase-let ((`(,section ,key ,value) edit))
+                 (unless (stringp key) (org-glance-config--error "Layout key must be a string"))
+                 (org-glance-table-config--fields section)
+                 (if (null value)
+                     (remhash key (org-glance-table-config--collection object section))
+                   (let ((parent object))
+                     (dolist (name (list "clients" "orgGlance" section))
+                       (let ((child (gethash name parent :missing)))
+                         (when (eq child :missing)
+                           (setq child (make-hash-table :test 'equal))
+                           (puthash name child parent))
+                         (setq parent (org-glance-config--object child))))
+                     (puthash key (org-glance-table-config--merge
+                                   section (org-glance-table-config:encode section value)
+                                   (gethash key parent)) parent)))))
+             (let ((candidate (org-glance-config-file--make :object object)))
+               (dolist (collection org-glance-table-config--collections)
+                 (org-glance-table-config:entries candidate :section (car collection)))
+               (setq settings (org-glance-config:decode candidate)))
+             object))))
+    (cons saved settings)))
 
 (provide 'org-glance-table-config)
 ;;; org-glance-table-config.el ends here
