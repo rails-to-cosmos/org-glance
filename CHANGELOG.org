@@ -5,6 +5,10 @@ Notable user-facing changes.  Versions date-based
 
 * Unreleased
 
+** Changed
+
+- JSON configuration UTF-8 validation uses an indexed character scan to reduce allocation.
+
 * 1.55.0.0.20261025.0
 
 ** Added

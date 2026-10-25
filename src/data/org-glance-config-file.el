@@ -65,7 +65,7 @@
 (defun org-glance-config-file:decode (bytes)
   "Decode UTF-8 BYTES, rejecting duplicate keys and unsupported envelopes."
   (let ((text (decode-coding-string bytes 'utf-8-unix)))
-    (when (cl-some (lambda (char) (> char #x10ffff)) text)
+    (when (cl-loop for char across text thereis (> char #x10ffff))
       (signal 'org-glance-config-error '("config.json is not valid UTF-8")))
     (cl-labels
         ((convert (value depth)
