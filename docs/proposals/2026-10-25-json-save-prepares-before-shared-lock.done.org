@@ -1,0 +1,27 @@
+#+TITLE: Prepare JSON saves before the shared lock
+#+DATE: 2026-10-25
+#+STATUS: done
+
+* Contract
+The writer pins exact source bytes and the expected SHA-256 revision, then runs
+the callback, envelope validation, encoding and strict decoding before acquiring
+=config.json.lock=. Known busy and stale requests refuse before the callback.
+The locked transaction rechecks path safety and the exact current revision for
+changed, no-op and absent-file saves. A peer change refuses publication without
+retry or rebase; the callback may already have run. Malformed current bytes keep
+their syntax error precedence. Atomic replacement, file fsync, permissions and
+cancellation cleanup retain the existing owner and lock through publication.
+
+* Owners
+[[https://github.com/rails-to-cosmos/org-glance/blob/4f785b17c875d1476822af64248cf5aa5be2e925/src/data/org-glance-config-file.el][Baseline file transaction owner]]; candidate in
+=src/data/org-glance-config-file.el=, with focused boundaries in
+=test/test-config-file.el=. The serialized before-image remains the callback
+mutation guard. The rejected generic-copy experiment remains deferred.
+
+* Validation gate
+Require compiled focused/full/shared-vector tests, cross-client process checks,
+old-writer controls, paired changed/no-op/stale costs, larger configurations,
+lock-tenure work and real competing-process admission. Record allocation object
+counters, CPU/RSS and maximum measured-loop GC pause with generation/scope limits.
+Independent review and the Glance save-pipeline proposal own the commit gate.
+Live migration, installation and cumulative Stage6A acceptance remain pending.

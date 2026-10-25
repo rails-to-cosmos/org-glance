@@ -115,24 +115,37 @@
       (signal 'org-glance-config-unsafe (list path)))
     path))
 
-(defun org-glance-config-file--read (path &optional observed)
-  "Read PATH as one config snapshot; absence supplies the format envelope."
+(defun org-glance-config-file--bytes (path)
+  "Read PATH's exact bytes, returning nil for an absent file."
   (condition-case err
       (with-temp-buffer
         (set-buffer-multibyte nil)
         (insert-file-contents-literally path)
-        (let ((bytes (buffer-string)))
-          (if (and observed (org-glance-config-file:revision observed)
-                   (equal (secure-hash 'sha256 bytes)
-                          (org-glance-config-file:revision observed)))
-              observed
-            (org-glance-config-file:decode bytes))))
+        (buffer-string))
     (file-missing
-     (if (file-exists-p path)
-         (signal (car err) (cdr err))
-       (let ((object (make-hash-table :test 'equal)))
-         (puthash "format" 1 object)
-         (org-glance-config-file--make :revision nil :object object))))))
+     (when (file-exists-p path) (signal (car err) (cdr err)))
+     nil)))
+
+(defun org-glance-config-file--read (path &optional observed)
+  "Read PATH as one config snapshot; absence supplies the format envelope."
+  (let ((bytes (org-glance-config-file--bytes path)))
+    (cond
+     ((null bytes)
+      (let ((object (make-hash-table :test 'equal)))
+        (puthash "format" 1 object)
+        (org-glance-config-file--make :revision nil :object object)))
+     ((and observed (org-glance-config-file:revision observed)
+           (equal (secure-hash 'sha256 bytes)
+                  (org-glance-config-file:revision observed))) observed)
+     (t (org-glance-config-file:decode bytes)))))
+
+(defun org-glance-config-file--check-revision (path expected)
+  "Check PATH's current bytes against EXPECTED, preserving malformed-file errors."
+  (let* ((bytes (org-glance-config-file--bytes path))
+         (revision (and bytes (secure-hash 'sha256 bytes))))
+    (unless (equal revision expected)
+      (when bytes (org-glance-config-file:decode bytes))
+      (signal 'org-glance-config-conflict (list expected revision)))))
 
 (defun org-glance-config-file:read (root &optional observed)
   "Read ROOT's JSON configuration without creating files or acquiring a lock.
@@ -192,33 +205,47 @@ Reuse validated OBSERVED only when its exact byte revision still matches."
                (org-glance-config-file--decimal (json-serialize right)))))
    (t (equal left right))))
 
+(defun org-glance-config-file--prepare (current change)
+  "Return CURRENT's validated CHANGE as a (snapshot . optional-bytes) pair."
+  (let* ((revision (org-glance-config-file:revision current))
+         (before (org-glance-config-file--serialize
+                  (org-glance-config-file:object current)))
+         (fields (org-glance-config-file--envelope
+                  (funcall change (org-glance-config-file:object current))))
+         (bytes (org-glance-config-file--serialize fields)))
+    (if (and revision (equal before bytes))
+        (cons current nil)
+      (let ((candidate (org-glance-config-file:decode bytes))
+            (original (json-parse-string before
+                       :null-object :null :false-object :false)))
+        (if (and revision (org-glance-config-file--equal
+                           original (org-glance-config-file:object candidate)))
+            (progn (setf (org-glance-config-file:object current) original)
+                   (cons current nil))
+          (cons candidate bytes))))))
+
 (cl-defun org-glance-config-file:write (root &key expected change)
-  "Apply CHANGE under ROOT's lock only when its revision equals EXPECTED.
-CHANGE receives the complete object and must return a validated candidate."
-  (org-glance-config-file:with-lock
-   root
-   (lambda ()
-     (let* ((path (org-glance-config-file--path root nil))
-            (current (org-glance-config-file--read path))
-            (revision (org-glance-config-file:revision current)))
-       (unless (equal revision expected)
-         (signal 'org-glance-config-conflict (list expected revision)))
-       (let* ((before (org-glance-config-file--serialize
-                       (org-glance-config-file:object current)))
-              (fields (org-glance-config-file--envelope
-                       (funcall change (org-glance-config-file:object current))))
-              (bytes (org-glance-config-file--serialize fields)))
-         (if (and revision (equal before bytes))
-             current
-           (let ((candidate (org-glance-config-file:decode bytes))
-                 (original (json-parse-string before
-                            :null-object :null :false-object :false)))
-             (if (and revision (org-glance-config-file--equal
-                                original (org-glance-config-file:object candidate)))
-                 (progn (setf (org-glance-config-file:object current) original) current)
+  "Prepare CHANGE, then publish under ROOT's lock when EXPECTED still matches.
+CHANGE receives the private observed object and returns a validated candidate.
+A later peer or lock owner may refuse publication after CHANGE has run."
+  (let* ((path (org-glance-config-file--path root nil))
+         (lock (concat path ".lock")))
+    (when (or (file-exists-p lock) (file-symlink-p lock))
+      (signal 'org-glance-config-busy (list lock)))
+    (let* ((current (org-glance-config-file--read path))
+           (revision (org-glance-config-file:revision current)))
+      (unless (equal revision expected)
+        (signal 'org-glance-config-conflict (list expected revision)))
+      (let ((prepared (org-glance-config-file--prepare current change)))
+        (org-glance-config-file:with-lock
+         root
+         (lambda ()
+           (let ((target (org-glance-config-file--path root nil)))
+             (org-glance-config-file--check-revision target revision)
+             (when (cdr prepared)
                (org-glance-config-file--path root nil)
-               (org-glance-config-file--publish path bytes)
-               candidate))))))))
+               (org-glance-config-file--publish target (cdr prepared)))
+             (car prepared))))))))
 
 (provide 'org-glance-config-file)
 ;;; org-glance-config-file.el ends here

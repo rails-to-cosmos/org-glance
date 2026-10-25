@@ -13,6 +13,7 @@ Notable user-facing changes.  Versions date-based
 
 ** Changed
 
+- JSON configuration writes prepare before acquiring =config.json.lock= and refuse intervening peer edits without retrying the callback.
 - Native JSON workflow/layout writer APIs accept an explicitly observed absent file and refuse concurrent first publication.
 
 - JSON-present tables save custom columns, hidden built-ins, order, sort and scoped reference layouts under =clients.orgGlance= in the shared file. Layout edits use observed revisions and preserve peer settings.

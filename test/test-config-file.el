@@ -278,3 +278,169 @@
         (should (equal (org-glance-config-file:revision observed)
                        (org-glance-config-file:revision
                         (org-glance-config-file:read root observed))))))))
+
+(ert-deftest org-glance-config-file-test-prepares-before-lock-and-rechecks-bytes ()
+  (org-glance-config-test--with-root
+    (let ((snapshot (org-glance-config-file:read root))
+          (serialize (symbol-function 'org-glance-config-file--serialize))
+          (decode (symbol-function 'org-glance-config-file:decode))
+          (publish (symbol-function 'org-glance-config-file--publish))
+          (lock (concat (org-glance-config-file:path root) ".lock"))
+          (encodes 0) (publications 0))
+      (cl-letf (((symbol-function 'org-glance-config-file--serialize)
+                 (lambda (object)
+                   (should-not (file-exists-p lock))
+                   (cl-incf encodes)
+                   (funcall serialize object)))
+                ((symbol-function 'org-glance-config-file:decode)
+                 (lambda (bytes)
+                   (should-not (file-exists-p lock))
+                   (funcall decode bytes)))
+                ((symbol-function 'org-glance-config-file--publish)
+                 (lambda (path bytes)
+                   (should (file-directory-p lock))
+                   (cl-incf publications)
+                   (funcall publish path bytes))))
+        (dolist (value '("first" "second" "second"))
+          (setq snapshot
+                (org-glance-config-file:write
+                 root :expected (org-glance-config-file:revision snapshot)
+                 :change (lambda (object)
+                           (should-not (file-exists-p lock))
+                           (puthash "value" value object)
+                           object))))
+        (should (= encodes 6))
+        (should (= publications 2)))
+      (should-not (file-exists-p lock)))))
+
+(ert-deftest org-glance-config-file-test-peer-during-preparation-refuses-every-publication ()
+  (dolist (present '(nil t))
+    (dolist (changed '(nil t))
+      (org-glance-config-test--with-root
+        (when present (org-glance-config-file:write root :change #'identity))
+        (let* ((before (org-glance-config-file:read root))
+               (revision (org-glance-config-file:revision before))
+               (calls 0) peer)
+          (should-error
+           (org-glance-config-file:write
+            root :expected revision
+            :change (lambda (object)
+                      (cl-incf calls)
+                      (setq peer (org-glance-config-file:write
+                                  root :expected revision
+                                  :change (org-glance-config-test--put "peer" t)))
+                      (when changed (puthash "outer" t object))
+                      object))
+           :type 'org-glance-config-conflict)
+          (should (= calls 1))
+          (let ((after (org-glance-config-file:read root)))
+            (should (equal (org-glance-config-file:revision peer)
+                           (org-glance-config-file:revision after)))
+            (should (eq t (gethash "peer" (org-glance-config-file:object after))))
+            (should-not (gethash "outer" (org-glance-config-file:object after))))
+          (should-not (file-exists-p (concat (org-glance-config-file:path root)
+                                            ".lock"))))))))
+
+(ert-deftest org-glance-config-file-test-malformed-peer-keeps-syntax-precedence ()
+  (org-glance-config-test--with-root
+    (let* ((before (org-glance-config-file:write root :change #'identity))
+           (path (org-glance-config-file:path root)))
+      (should
+       (eq 'org-glance-config-error
+           (car (should-error
+                 (org-glance-config-file:write
+                  root :expected (org-glance-config-file:revision before)
+                  :change (lambda (object)
+                            (with-temp-file path (insert "{bad"))
+                            object))))))
+      (with-temp-buffer
+        (insert-file-contents-literally path)
+        (should (equal "{bad" (buffer-string))))
+      (should-not (file-exists-p (concat path ".lock"))))))
+
+(ert-deftest org-glance-config-file-test-deletion-during-preparation-refuses-publication ()
+  (dolist (changed '(nil t))
+    (org-glance-config-test--with-root
+      (let* ((before (org-glance-config-file:write root :change #'identity))
+             (path (org-glance-config-file:path root)))
+        (should-error
+         (org-glance-config-file:write
+          root :expected (org-glance-config-file:revision before)
+          :change (lambda (object)
+                    (delete-file path)
+                    (when changed (puthash "outer" t object))
+                    object))
+         :type 'org-glance-config-conflict)
+        (should-not (file-exists-p path))
+        (should-not (file-exists-p (concat path ".lock")))))))
+
+(ert-deftest org-glance-config-file-test-known-refusal-precedes-callback ()
+  (org-glance-config-test--with-root
+    (org-glance-config-file:write root :change #'identity)
+    (let* ((lock (concat (org-glance-config-file:path root) ".lock"))
+           (change (lambda (_) (ert-fail "Refused write ran its callback"))))
+      (should-error (org-glance-config-file:write root :change change)
+                    :type 'org-glance-config-conflict)
+      (make-symbolic-link "absent-lock-target" lock)
+      (should-error (org-glance-config-file:write root :change change)
+                    :type 'org-glance-config-busy)
+      (should (file-symlink-p lock))
+      (delete-file lock))))
+
+(ert-deftest org-glance-config-file-test-path-replacement-after-preparation-is-refused ()
+  (org-glance-config-test--with-root
+    (let* ((before (org-glance-config-file:write root :change #'identity))
+           (path (org-glance-config-file:path root))
+           (target (expand-file-name "untouched" root)))
+      (with-temp-file target (insert "keep"))
+      (should-error
+       (org-glance-config-file:write
+        root :expected (org-glance-config-file:revision before)
+        :change (lambda (object)
+                  (delete-file path)
+                  (make-symbolic-link target path)
+                  object))
+       :type 'org-glance-config-unsafe)
+      (should (file-symlink-p path))
+      (with-temp-buffer (insert-file-contents-literally target)
+                        (should (equal "keep" (buffer-string))))
+      (should-not (file-exists-p (concat path ".lock"))))))
+
+(ert-deftest org-glance-config-file-test-late-lock-owner-is-retained ()
+  (org-glance-config-test--with-root
+    (let* ((before (org-glance-config-file:write root :change #'identity))
+           (revision (org-glance-config-file:revision before))
+           (lock (concat (org-glance-config-file:path root) ".lock")))
+      (should-error
+       (org-glance-config-file:write
+        root :expected revision
+        :change (lambda (object) (make-directory lock) object))
+       :type 'org-glance-config-busy)
+      (should (file-directory-p lock))
+      (should (equal revision (org-glance-config-file:revision
+                               (org-glance-config-file:read root))))
+      (delete-directory lock))))
+
+(ert-deftest org-glance-config-file-test-quit-cleans-preparation-and-publication ()
+  (dolist (phase '(prepare publish))
+    (org-glance-config-test--with-root
+      (let* ((before (org-glance-config-file:write root :change #'identity))
+             (revision (org-glance-config-file:revision before))
+             (write (symbol-function 'write-region)))
+        (should
+         (eq 'quit
+             (condition-case nil
+                 (cl-letf (((symbol-function 'write-region)
+                            (lambda (&rest args)
+                              (if (eq phase 'publish) (signal 'quit nil)
+                                (apply write args)))))
+                   (org-glance-config-file:write
+                    root :expected revision
+                    :change (lambda (object)
+                              (when (eq phase 'prepare) (signal 'quit nil))
+                              (puthash "changed" t object) object)))
+               (quit 'quit))))
+        (should (equal revision (org-glance-config-file:revision
+                                 (org-glance-config-file:read root))))
+        (should (equal '("." ".." "config.json")
+                       (directory-files (expand-file-name ".org-glance" root))))))))

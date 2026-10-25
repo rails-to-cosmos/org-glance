@@ -77,6 +77,8 @@ argument in [[file:proposals][docs/proposals/]].
 
    JSON configuration transactions serialize with Glance through
    =.org-glance/config.json.lock= and compare exact-byte SHA-256 revisions.
+   JSON edits prepare once before acquisition; locked path/revision admission
+   precedes publication and exact no-op return, with exclusion through rename.
    Legacy table-layout writers share this lock and refuse publication after
    JSON activation. Layout refresh reuses validated settings only after an exact
    current-byte digest match; saved receipts survive failed application.
