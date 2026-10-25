@@ -1,6 +1,8 @@
 #+TITLE: org-glance
 #+AUTHOR: Dmitry Akatov
 
+Local package installation: [[file:docs/component-install.org][component build and migration]].
+
 org-glance is a metadata layer, query engine, and keyboard-driven Emacs UI for
 [[https://orgmode.org/][Org]] headlines. Org files remain the source of truth; indexes and views are
 derived and rebuildable.

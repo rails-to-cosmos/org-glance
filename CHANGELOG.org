@@ -5,6 +5,14 @@ Notable user-facing changes.  Versions date-based
 
 * Unreleased
 
+** Added
+
+- =make package=, =make install-emacs=, and =make check-emacs= use declared releases and =packages.json=.
+
+** Changed
+
+- Eask derives versions, dependencies, and packaged files from the component definition.
+
 * 1.55.0.0.20261025.0
 
 ** Added

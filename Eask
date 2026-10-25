@@ -1,10 +1,25 @@
-(package "org-glance" "1.55.0.0.20261025.0" "Org-mode projections")
+(require 'package)
+(require 'json)
+
+(let ((desc (with-temp-buffer
+              (insert-file-contents "org-glance.el")
+              (package-buffer-info))))
+  (package (symbol-name (package-desc-name desc))
+           (package-version-join (package-desc-version desc))
+           (package-desc-summary desc))
+  (dolist (requirement (package-desc-reqs desc))
+    (depends-on (symbol-name (car requirement))
+                (package-version-join (cadr requirement)))))
 
 (website-url "https://github.com/rails-to-cosmos/org-glance")
 (keywords "org-mode" "outlines" "data" "database" "store" "projections")
 
 (package-file "org-glance.el")
-(files "*.el" "src/data/*.el" "src/view/*.el")
+(let* ((json-object-type 'alist)
+       (json-key-type 'string)
+       (json-array-type 'list)
+       (spec (car (json-read-file "packages.json"))))
+  (apply #'files (mapcar #'car (cdr (assoc "files" spec)))))
 (load-paths "./src/data" "./src/view")
 
 (script "test" "echo \"Error: no test specified\" && exit 1")
@@ -13,14 +28,6 @@
 (source "melpa")
 (source "rails-to-cosmos" "https://rails-to-cosmos.github.io/elpa/")
 
-(depends-on "emacs" "29.1")
-(depends-on "org")
-(depends-on "aes")
-(depends-on "dash")
-(depends-on "f")
-(depends-on "s")
-(depends-on "transient")
-(depends-on "table-view")
 ;; Dev-only: `eask lint package' / `eask lint regexps' (make lint); never in
 ;; the shipped Package-Requires.  Plugins (e.g. `org-glance-llm') are
 ;; separate packages with their own repos -- core depends on none of them.
