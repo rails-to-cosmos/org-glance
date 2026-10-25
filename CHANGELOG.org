@@ -5,6 +5,8 @@ Notable user-facing changes.  Versions date-based
 
 * Unreleased
 
+* 1.55.0.0.20261025.0
+
 ** Added
 
 - =org-glance-settings= edits system TODO cycles and capture templates through table-view.
