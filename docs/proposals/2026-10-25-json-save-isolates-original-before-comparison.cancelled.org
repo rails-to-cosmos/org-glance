@@ -1,0 +1,35 @@
+#+TITLE: JSON save isolates originals before semantic comparison
+
+* Status
+Cancelled for this measured generic-copy candidate: correctness passes, but
+object work and no-op collections increase without demonstrated overhead benefit.
+The independent review recommends deferral and restoring the existing writer. Base [[https://github.com/rails-to-cosmos/org-glance/commit/a4da58d][a4da58d]]. Shared cutover and other Stage6A gates remain separate.
+
+* Contract
+The generic JSON writer retains its validated decoded original and gives edit
+callbacks a recursive copy of hashes, keys, arrays and strings. Equivalent
+ordinary decoded JSON returns the original snapshot before document encoding.
+Absent files still publish their first envelope. Changed candidates serialize
+once and pass the existing strict decoder before publication. A final semantic
+comparison preserves exact bytes when serialization normalizes alternate native
+representations. Duplicate keys, unsupported depths and cycles remain refused.
+
+Shared mkdir locking, byte-revision admission, safe paths, atomic publication,
+file sync and cancellation cleanup retain their existing owners. Preparation
+outside the lock follows as a separately measured slice. No live configuration
+or installed client changes in this work.
+
+* Evidence
+The sibling Glance author/reviewer reports retain exact source identities,
+focused/full ERT results, baseline negative controls and paired changed/no-op/
+stale measurements with object counters, GC pauses and process resources.
+Byte allocation and GC generation are unavailable through the ordinary native
+collectors and must remain explicitly unmeasured.
+
+* Disposition
+The candidate and evidence remain frozen in the sibling Glance
+[[file:../../../glance/docs/reports/done/2026-10-25-configuration-save-native-noop-01-independent-review.md][independent review]]. Production, tests and invariants are restored to a4da58d.
+The existing serialized before-image preserves persisted bytes on callback
+failure. Internal snapshot isolation was an additional proposed guarantee;
+its deferral does not weaken that persisted-byte contract. Outside-lock
+preparation proceeds separately without this recursive-copy implementation.
