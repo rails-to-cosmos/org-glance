@@ -111,6 +111,11 @@ Clicking the link opens the roaster; the graph indexes it as a typed edge, and t
 - roasted by [[glance:0e904834][Manhattan Coffee Roasters]]
 #+end_src
 
+Descriptive references display the target's current state and title, such as
+=DONE Buy tickets=. The saved link description stays intact for editing and
+export. Targets without a state show their title alone; missing targets keep
+their saved label. Graph commits invalidate displayed labels for refontification.
+
 and =C-c += in the table now offers a =Roasted by= column with the target titles:
 
 #+begin_example
@@ -128,7 +133,7 @@ In a materialized buffer:
 
 The =LOGBOOK= also shows live relation entries.  Plain links use =Refers to=
 and =Referred by=; typed links capitalize the kind, such as =Blocked by
-[[glance:abc][Other headline]] at [2026-01-01 Thu 12:00]=.  The timestamp is
+[[glance:abc][TODO Other headline]] at [2026-01-01 Thu 12:00]=.  The timestamp is
 the current source snapshot's creation time.  These entries refresh from the
 graph on open, revert and save.  They are a material-buffer projection and stay
 out of the stored headline.

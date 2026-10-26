@@ -798,6 +798,7 @@ today, up from 50.
     Material open obtains incoming links from =edge_dst= and resolves only the
     participating source Rows; it never enumerates the full headline projection.
     Pinned by =material-relations-actualize-in-logbook=.
+    Reference display uses current target state and title; authored link bytes persist.
 
 39. *Immutable version metadata is shared with Glance.*  New writes use schema 2
     with explicit =Snapshot= or =Tombstone= events. Schema 1 remains readable and

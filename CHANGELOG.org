@@ -5,12 +5,15 @@ Notable user-facing changes.  Versions date-based
 
 * Unreleased
 
+* 1.55.0.0.20261026.0
+
 ** Added
 
 - =make package=, =make install-emacs=, and =make check-emacs= use declared releases and =packages.json=.
 
 ** Changed
 
+- =glance:= references and material LOGBOOK relations display current target states and titles.
 - JSON configuration UTF-8 validation uses an indexed character scan to reduce allocation.
 - Eask derives versions, dependencies, and packaged files from the component definition.
 

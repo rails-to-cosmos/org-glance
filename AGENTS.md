@@ -192,6 +192,7 @@ evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
     before-save hook removes them, preserving authored blob content alone. Plain
     edges use `Refers to` / `Referred by`; typed edges capitalize `<type>`; each
     entry carries its current source snapshot creation time, except legacy roots.
+    Reference display uses current target state and title; authored link bytes persist.
 39. Immutable headline-version metadata carries a UUIDv7 id, logical headline id,
     kind, sorted parents, SHA-256 content digest, UTC creation time, and producer.
     Its compact JSON field order and trailing newline are canonical across Glance and

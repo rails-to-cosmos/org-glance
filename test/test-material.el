@@ -147,21 +147,21 @@ a save persists to the graph and survives re-materializing."
                                 "[[glance:a?kind=reviewed-by][Alpha]]"))
     (org-glance-test:with-material (buffer graph "b")
       (should (s-contains?
-               ":LOGBOOK:\n- Referred by [[glance:a][Alpha]]\n:END:"
+               ":LOGBOOK:\n- Referred by [[glance:a][TODO Alpha]]\n:END:"
                (replace-regexp-in-string
                 " at \\[[^]]+\\]" "" (buffer-string))))
       (should (string-match-p
-               "- Referred by \\[\\[glance:a\\]\\[Alpha\\]\\] at \\[[-0-9]+ [[:alpha:]]+ [0-9:]+\\]"
+               "- Referred by \\[\\[glance:a\\]\\[TODO Alpha\\]\\] at \\[[-0-9]+ [[:alpha:]]+ [0-9:]+\\]"
                (buffer-string)))
       (should-not (buffer-modified-p)))
     (org-glance-test:with-material (buffer graph "a")
       (let ((shown (buffer-string)))
         (should (s-contains? "- Kept" shown))
-        (should (s-contains? "- Refers to [[glance:b][Bee]]" shown))
+        (should (s-contains? "- Refers to [[glance:b][TODO Bee]]" shown))
         (should (s-contains?
-                 "- Blocked by [[glance:c?kind=blocked-by][Cee]]" shown))
-        (should (s-contains? "- Referred by [[glance:d][Delta]]" shown))
-        (should (s-contains? "- Reviewed by [[glance:e][Echo]]" shown))
+                 "- Blocked by [[glance:c?kind=blocked-by][TODO Cee]]" shown))
+        (should (s-contains? "- Referred by [[glance:d][TODO Delta]]" shown))
+        (should (s-contains? "- Reviewed by [[glance:e][TODO Echo]]" shown))
         (should (string-match-p
                  "\\] at \\[[-0-9]+ [[:alpha:]]+ [0-9:]+\\]" shown))
         (should-not (buffer-modified-p)))
@@ -179,12 +179,12 @@ a save persists to the graph and survives re-materializing."
           (org-glance-test:save))
         (should
          (s-contains?
-          (concat "- Refers to [[glance:d][Delta]] at "
+          (concat "- Refers to [[glance:d][TODO Delta]] at "
                   (funcall original "[%Y-%m-%d %a %H:%M]"
                            (date-to-time created)))
           (buffer-string))))
-      (should-not (s-contains? "- Refers to [[glance:b][Bee]]" (buffer-string)))
-      (should (s-contains? "- Refers to [[glance:d][Delta]]" (buffer-string)))
+      (should-not (s-contains? "- Refers to [[glance:b][TODO Bee]]" (buffer-string)))
+      (should (s-contains? "- Refers to [[glance:d][TODO Delta]]" (buffer-string)))
       (should-not (buffer-modified-p)))
     (let ((blob (org-glance-graph:get-content graph "a")))
       (should (s-contains? "- Kept" blob))

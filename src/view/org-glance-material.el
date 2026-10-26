@@ -118,6 +118,52 @@ Set it with `org-glance-material:set-project-dir' (`C-c d').")
 (defvar-local org-glance-material--encrypted nil
   "Non-nil when this materialized buffer's stored blob is encrypted.")
 
+(defvar-local org-glance-material--reference-graph nil
+  "Graph whose metadata supplies this buffer's reference display.")
+
+(cl-defun org-glance-material--reference-label (metadata)
+  "Return METADATA's current state and rendered title."
+  (string-join
+   (delq nil (list (let ((state (org-glance-headline-metadata:state metadata)))
+                     (unless (string-empty-p (or state "")) state))
+                   (org-glance--title-clean
+                    (org-glance-headline-metadata:title metadata))))
+   " "))
+
+(cl-defun org-glance-material:activate-reference (start end path bracketp)
+  "Display PATH's current state and title between START and END.
+BRACKETP enables projection in descriptive links; source bytes stay intact."
+  (save-match-data
+    (with-demoted-errors "org-glance: reference display failed: %S"
+      (when (and bracketp org-link-descriptive)
+        (unless (memq 'display font-lock-extra-managed-props)
+          (setq-local font-lock-extra-managed-props
+                      (cons 'display font-lock-extra-managed-props)))
+        (when-let* ((graph (or org-glance-material--graph
+                              org-glance-view--graph org-glance-graph))
+                    (_ (setq org-glance-material--reference-graph graph))
+                    (meta (org-glance-cache:headline
+                           graph (car (split-string path "[?]"))))
+                    ((org-glance-headline-metadata? meta)))
+          (save-excursion
+            (goto-char start)
+            (when (looking-at org-link-bracket-re)
+              (put-text-property
+               (or (match-beginning 2) (+ start 2))
+               (or (match-end 2) (- end 2))
+               'display (org-glance-material--reference-label meta)))))))))
+
+(cl-defun org-glance-material--references-committed (graph _changed)
+  "Invalidate reference display properties in GRAPH's open Org buffers."
+  (dolist (buffer (buffer-list))
+    (with-current-buffer buffer
+      (when (and font-lock-mode
+                 (eq graph org-glance-material--reference-graph))
+        (font-lock-flush)))))
+
+(add-hook 'org-glance-graph-after-commit-functions
+          #'org-glance-material--references-committed)
+
 (cl-defun org-glance-material--ensure ()
   "Signal a `user-error' unless the current buffer is a materialized headline."
   (unless (and org-glance-material--graph org-glance-material--id)
@@ -658,7 +704,7 @@ KIND supplies its relation label and STAMP names the source snapshot time."
              (org-glance--edge->link-path id (and (eq direction 'out) kind))
              (let ((meta (org-glance-cache:headline graph id)))
                (if (org-glance-headline-metadata? meta)
-                   (org-glance-headline-metadata:title meta)
+                   (org-glance-material--reference-label meta)
                  id)))
             (and stamp (concat " at " stamp))
             "\n")))

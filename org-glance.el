@@ -6,7 +6,7 @@
 
 ;; Author: Dmitry Akatov <dmitry.akatov@protonmail.com>
 ;; Created: 29 September, 2018
-;; Version: 1.55.0.0.20261025.0
+;; Version: 1.55.0.0.20261026.0
 ;; Package-Requires: ((emacs "29.1") (org) (aes) (dash) (f) (s) (transient) (table-view "0"))
 ;; Keywords: org-mode, outlines, data, database, store, projections
 ;; Homepage: https://github.com/rails-to-cosmos/org-glance
@@ -443,17 +443,20 @@ Never migrate or prompt; `M-x org-glance-migrate' converts."
 (org-link-set-parameters
  org-glance-link-edge-type
  :follow #'org-glance-link:material
+ :activate-func #'org-glance-material:activate-reference
  :face 'org-glance-link-materialize-face
  :complete #'org-glance-link:complete-material)
 
 (org-link-set-parameters
  "org-glance-material"
  :follow #'org-glance-link:material
+ :activate-func #'org-glance-material:activate-reference
  :face 'org-glance-link-materialize-face)
 
 (org-link-set-parameters
  "org-glance-visit"
  :follow #'org-glance-link:material
+ :activate-func #'org-glance-material:activate-reference
  :face 'org-glance-link-materialize-face)
 
 (org-link-set-parameters

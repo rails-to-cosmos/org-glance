@@ -421,5 +421,54 @@ Cells join target titles with commas; a gone target shows its id."
   (should (equal '("x" . "roasted-by")
                  (org-glance--link-edge "org-glance-material" "x?kind=roasted by"))))
 
+(ert-deftest org-glance-test:references-display-current-metadata ()
+  "Project current labels through every reference alias without changing bytes."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-test:headline "target" "* TODO Target 🧭")
+      (org-glance-test:headline "source" "* Source [[glance:target][old heading]]"
+        "[[glance:target?kind=blocked-by][old label]]"
+        "[[org-glance-material:target][custom label]]"
+        "[[org-glance-visit:target]]"
+        "[[glance:missing][Missing]]"))
+    (org-glance-test:with-material (_buffer graph "source")
+      (let ((before (buffer-string))
+            (blob (org-glance-graph:get-content graph "source")))
+        (dolist (title '("* TODO Target 🧭" "* DONE Renamed" "* Stateless"))
+          (org-glance-graph:add graph
+            (org-glance-test:headline "target" title))
+          (cl-letf (((symbol-function 'org-glance-graph:get-content)
+                     (lambda (&rest _) (ert-fail "reference blob read")))
+                    ((symbol-function 'org-glance-cache:headlines)
+                     (lambda (&rest _) (ert-fail "reference graph scan"))))
+            (font-lock-ensure))
+          (goto-char (point-min))
+          (let ((seen 0))
+            (while (re-search-forward org-link-bracket-re nil t)
+              (let ((target (match-string-no-properties 1))
+                    (at (or (match-beginning 2) (+ 2 (match-beginning 0)))))
+                (if (string-match-p "missing" target)
+                    (should-not (get-text-property at 'display))
+                  (cl-incf seen)
+                  (should (equal (substring title 2)
+                                 (get-text-property at 'display))))))
+            (should (= seen 6)))
+          (should (equal before (buffer-string)))
+          (should (equal blob (org-glance-graph:get-content graph "source")))
+          (should-not (buffer-modified-p)))
+        (let ((org-link-descriptive nil))
+          (font-lock-flush)
+          (font-lock-ensure)
+          (should-not (text-property-not-all
+                       (point-min) (point-max) 'display nil)))
+        (goto-char (point-max))
+        (insert "\nAuthored addition\n")
+        (org-glance-test:save)
+        (let ((saved (org-glance-graph:get-content graph "source")))
+          (should (s-contains? "[old label]" saved))
+          (should (s-contains? "[old heading]" saved))
+          (should (s-contains? "Authored addition" saved))
+          (should-not (s-contains? "Stateless" saved)))))))
+
 (provide 'test-relations)
 ;;; test-relations.el ends here
