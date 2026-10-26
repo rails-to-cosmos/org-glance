@@ -252,3 +252,21 @@ attribution and unresolved maximum-pause/p95 limits. The current full native
 suite passes 645 cases; shared format 1 remains unchanged. Actual publication,
 installed-client coordination, fresh-root defaults, cumulative Stage6A cost
 acceptance and legacy retirement remain pending.
+
+
+* Layout-save allocation repair, 2026-10-26
+
+The [[file:../../../glance/docs/reports/partial/2026-10-26-native-layout-save-gc-01-author.md][profile/design handoff]] and [[file:../../../glance/docs/reports/done/2026-10-26-native-layout-save-gc-01-review.md][independent review]] accept the bounded empty-state/parser-conversion candidate.
+Resolved empty state lists skip done-keyword derivation; the strict decoder
+converts its private parser vectors in place and uses direct duplicate-key
+presence checks. The shared JSON transaction and accepted language are preserved.
+Full646 native tests pass on the frozen candidate. Small-action p95 improves
+24.506→1.091ms and collections60→30 per900 saves; larger aggregate CPU and
+allocation improve. Mixed RSS/hook maxima and the separate forced-final pauses
+retain their published limits; universal footprint/pause preservation is
+unestablished. Cumulative Stage6A acceptance, cutover and installation remain open.
+
+The [[file:../../../glance/docs/reports/partial/2026-10-26-native-layout-save-gc-03-warning-only-author.md][warning-only correction]] and its [[file:../../../glance/docs/reports/done/2026-10-26-native-layout-save-gc-03-warning-only-review.md][independent pass]] remove the decoder's unused
+final-counter warning. All25 codec definitions retain equal executable bytecode
+and documentation; the reviewed timings carry forward. The actual checkout
+passes109 focused cases and a warning-free fresh26-source compile.

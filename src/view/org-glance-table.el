@@ -74,9 +74,9 @@ foreground, then `org-glance-table-default-state-color'."
     (graph &optional (states nil states-supplied-p))
   "Split GRAPH's states into sorted (ACTIVE . DONE) lists.
 Read `org-done-keywords', bound per tag by `org-glance-table:visit'."
-  (let ((states (if states-supplied-p states
-                  (org-glance-graph:states graph)))
-        (done-kw (org-glance--done-keywords)))
+  (let* ((states (if states-supplied-p states
+                   (org-glance-graph:states graph)))
+        (done-kw (and states (org-glance--done-keywords))))
     (cons (cl-remove-if     (lambda (s) (member s done-kw)) states)
           (cl-remove-if-not (lambda (s) (member s done-kw)) states))))
 

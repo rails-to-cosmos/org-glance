@@ -5,6 +5,10 @@ Notable user-facing changes.  Versions date-based
 
 * Unreleased
 
+** Fixed
+
+- Layout saves skip empty-state keyword derivation and temporary JSON conversion copies.
+
 * 1.55.0.0.20261026.0
 
 ** Added

@@ -76,14 +76,14 @@
              (let ((table (make-hash-table :test 'equal)))
                (dolist (pair value)
                  (let ((key (symbol-name (car pair))))
-                   (when (gethash key table)
+                   (unless (eq (gethash key table :missing) :missing)
                      (signal 'org-glance-config-error
                              (list (concat "duplicate config.json key: " key))))
-                   (puthash key (cons t (convert (cdr pair) (1+ depth))) table)))
-               (maphash (lambda (key item) (puthash key (cdr item) table)) table)
+                   (puthash key (convert (cdr pair) (1+ depth)) table)))
                table))
             ((vectorp value)
-             (vconcat (mapcar (lambda (item) (convert item (1+ depth))) value)))
+             (dotimes (index (length value) (progn (ignore index) value))
+               (aset value index (convert (aref value index) (1+ depth)))))
             (t value))))
       (let* ((parsed (condition-case err
                          (json-parse-string text :object-type 'alist

@@ -614,7 +614,7 @@ relies on `org-add-log-note' switching buffers for real."
           (when (buffer-live-p buffer) (kill-buffer buffer)))))))
 
 (ert-deftest org-glance-test:table-layout-snapshot-skips-state-palette ()
-  "Saving ordinary and relation layouts needs no graph state palette."
+  "Saving ordinary and relation layouts needs no state or keyword lookup."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "a" "* TODO A"))
     (dolist (context '(nil (:anchor "a" :dir relations)))
@@ -633,7 +633,10 @@ relies on `org-add-log-note' switching buffers for real."
                (layout (list :columns live :sort '(("title" . t)))))
           (cl-letf (((symbol-function 'org-glance-graph:states)
                      (lambda (&rest _)
-                       (ert-fail "Layout snapshot read graph states"))))
+                       (ert-fail "Layout snapshot read graph states")))
+                    ((symbol-function 'org-glance--done-keywords)
+                     (lambda ()
+                       (ert-fail "Layout snapshot derived done keywords"))))
             (should
              (equal (org-glance-table--layout-snapshot layout)
                     (list :columns '(("AUTHOR" . "Writer"))
