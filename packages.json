@@ -1,0 +1,7 @@
+[
+  {"main": "org-glance.el", "files": {
+    "*.el": ".",
+    "src/data/*.el": ".",
+    "src/view/*.el": "."
+  }}
+]

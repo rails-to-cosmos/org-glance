@@ -57,7 +57,7 @@ clean:
 # ELPA style, e.g. 0.1.0.0.20260709.0).  `make major|minor|patch|build' bumps
 # that base component, resets the lower base components, stamps today's date and
 # resets REV; `make rev' bumps REV for another release the same day.  The version
-# is written to both the Eask spec and the org-glance.el header.
+# is written to the package header; Eask derives its metadata from it.
 .PHONY: major minor patch build rev bump-version
 major: BUMP := major
 minor: BUMP := minor
@@ -68,8 +68,8 @@ major minor patch build rev: bump-version
 
 bump-version:
 	@set -e; \
-	cur=`sed -n 's/^(package "org-glance" "\([0-9.]*\)".*/\1/p' Eask`; \
-	test -n "$$cur" || { echo "error: could not read version from Eask"; exit 1; }; \
+	cur=`sed -n 's/^;; Version: *\([0-9.]*\).*/\1/p' org-glance.el`; \
+	test -n "$$cur" || { echo "error: could not read version from package header"; exit 1; }; \
 	set -- `echo "$$cur" | tr '.' ' '`; \
 	maj=$${1:-0}; min=$${2:-0}; pat=$${3:-0}; bld=$${4:-0}; olddate=$${5:-0}; rev=$${6:-0}; \
 	today=`date +%Y%m%d`; \
@@ -82,8 +82,6 @@ bump-version:
 	  *) echo "usage: make major|minor|patch|build|rev"; exit 1 ;; \
 	esac; \
 	new="$$maj.$$min.$$pat.$$bld.$$today.$$rev"; \
-	ORG_GLANCE_OLD_VERSION="$$cur" ORG_GLANCE_NEW_VERSION="$$new" perl -pi -e \
-	  's/^(\(package "org-glance" ")\Q$$ENV{ORG_GLANCE_OLD_VERSION}\E(".*)/$$1.$$ENV{ORG_GLANCE_NEW_VERSION}.$$2/e' Eask; \
 	ORG_GLANCE_NEW_VERSION="$$new" perl -pi -e \
 	  's/^(;; Version: )[0-9][0-9.]*/$$1.$$ENV{ORG_GLANCE_NEW_VERSION}/e' org-glance.el; \
 	echo "org-glance: $$cur -> $$new"
@@ -116,3 +114,6 @@ podman-shell: podman-build
 
 podman-clean:
 	-$(PODMAN) rmi $(IMAGE)
+
+ELPA_TOOLS ?= $(abspath ../elpa)
+-include $(ELPA_TOOLS)/package.mk

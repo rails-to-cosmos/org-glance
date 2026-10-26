@@ -1,0 +1,20 @@
+#+TITLE: Component package installation
+
+=org-glance.el= owns the version and dependencies. =packages.json= selects and
+flattens packaged files. Eask derives its metadata from these sources. The sibling
+=elpa= checkout supplies =package.mk= and the shared artifact builder.
+
+#+begin_src sh
+make package
+make install-emacs
+make check-emacs
+make install-emacs DEV=1 EMACS_CONFIG=/path/to/test-profile
+#+end_src
+
+Override =ELPA_TOOLS= when the ELPA checkout lives elsewhere and =EMACS= to select
+the executable. Normal installs require a clean checkout; =DEV=1= permits working
+changes and same-version replacements. Publication uses the same artifact and
+rejects changed contents under a published version. Timestamp installations are
+backed up before migration to releases. Restart Emacs after updates.
+
+The migration contract lives in [[file:../../elpa/README.md][the ELPA tooling documentation]].

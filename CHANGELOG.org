@@ -5,9 +5,18 @@ Notable user-facing changes.  Versions date-based
 
 * Unreleased
 
+** Added
+
+- =make package=, =make install-emacs=, and =make check-emacs= use declared releases and =packages.json=.
+
 ** Changed
 
 - JSON configuration UTF-8 validation uses an indexed character scan to reduce allocation.
+- Eask derives versions, dependencies, and packaged files from the component definition.
+
+** Fixed
+
+- Table layout saves skip graph state lookup when collecting built-in column keys.
 
 * 1.55.0.0.20261025.0
 
@@ -27,7 +36,6 @@ Notable user-facing changes.  Versions date-based
 
 ** Fixed
 
-- Table layout saves skip graph state lookup when collecting built-in column keys.
 - System Settings and the tag named =system= retain separate buffers, drafts and save targets.
 - Active-only legacy TODO cycles stay active in Material, Overview and capture headers.
 
