@@ -56,6 +56,31 @@ for late manifests and artifact reuse; selected old definitions fail the concurr
 repair-scope findings remain. Compound/client tables, later workflows and live
 migration remain pending.
 Author gates pass 597 native, 116 focused Haskell/process and 40 interop tests.
+The next [[file:../../../glance/docs/reports/partial/2026-10-19-json-settings-step-7-workflow-tables.md][Glance workflow-table slice]] implements atomic scoped edits, resets,
+explicit conflicts and literal templates. Final Glance author gates pass 2,390
+application tests, 197 browser cases, 40 interop cases and 53 performance contracts.
+Reviewer checks pass 102 focused tests, seven workflow cases and 53 performance
+contracts, but reproduce two Glance UI gaps: ordinary edits discard filter/flag
+state and deletion flags are invisible. Re-review verifies both repairs with
+212 focused tests, nine workflow cases, five original probes and 53 performance
+contracts, but reproduces a new Glance reset/flag regression: old flags delete
+newly created replacement items. Reset now retires those flags. Re-review
+passes 212 focused tests, ten workflow cases, five original probes and the reset
+reproduction, with failure on the preceding repair. No retained findings remain
+in the bounded Glance slice; the wider migration remains partial.
+Format 1 and native production code are unchanged; this
+slice does not complete native workflow/UI or preference migration.
+
+The [[file:../../../glance/docs/reports/partial/2026-10-23-agent-stage-06a-iteration-06-author.md][Stage 6A layout candidate]] connects native column schemas, per-filter order/sort
+and scoped reference layouts to shared JSON transactions. It pins each table's
+observed revision, publishes schema/order together and preserves peer fields.
+The initial ten focused regressions and 614 ERT cases passed. Independent
+review found nested-extension loss; its repair preserves surviving identities,
+refuses ambiguous duplicates and passes all 616 ERT cases plus the original
+reviewer probes. The [[file:../../../glance/docs/reports/done/2026-10-23-agent-stage-06a-reviewer-08.md][repair re-review]] passes scoped correctness; performance
+gates remain pending.
+Legacy files and installed clients remain
+unchanged; coordinated migration and legacy-owner removal are still required.
 
 * Delivered foundation
 
@@ -192,3 +217,38 @@ The file-protocol slice and Step 2 preparation correctness are independently
 verified on GHC 9.6.7 / Emacs 31.1. Supported-runtime compatibility and
 application cutover remain pending; fresh Haskell latency comparison is
 inconclusive.
+
+
+* Stage 6A compound Settings preparation, 2026-10-23
+
+The native Settings candidate adds system/tag scope drafts, cycle and literal
+line tables, reset, one revision-checked scope publication, explicit rebase
+choices and saved-but-unapplied retry. Fourteen focused editor/writer contracts
+pass. The independent review found a system/tag-system buffer collision; its
+identity repair is independently verified in [[file:../../../glance/docs/reports/done/2026-10-23-agent-stage-06a-reviewer-12.md][review12]], with all 630 native cases passing. Combined performance acceptance remains pending.
+No installed client, legacy file or live tree was migrated. The earlier native
+layout repair retains its scoped review; its cost gate remains open.
+
+
+* Stage6A first-publication writer preparation, 2026-10-24
+Native workflow writers distinguish omitted expectations from explicit nil;
+layout writers accept an actual absence snapshot. Both preserve the shared
+lock/CAS and refuse stale first publication. Two new filesystem contracts pass.
+The full632-case suite has630 passes and2 missing-fixture skips; those two vector
+contracts pass separately with explicit fixture paths. Fresh-root default
+activation, actual migration, performance acceptance and independent review
+remain pending. See [[file:../../../glance/docs/reports/partial/2026-10-24-agent-stage-06a-iteration-19-author.md][the Glance author handoff]] for exact candidate/evidence once published.
+
+The balanced existing-file writer comparison retains identical object counters and100 reads/publications/typed decodes per100writes. CPU/tails/GC remain mixed, including a higher maximum workflow pause; no combined cost is accepted. Exact raw measurements and corrections belong to S6A19 in the linked author handoff.
+
+The [[file:../../../glance/docs/reports/done/2026-10-24-agent-stage-06a-reviewer-20.md][independent writer review]] passes scoped preparation, including both old-code failure controls,28 native editor/layout cases and two shared-vector contracts. Fresh-root activation, actual migration, legacy retirement and cumulative cost acceptance remain pending.
+
+* Current native save preparation checkpoint, 2026-10-26
+
+Native =6ffb460= and =e52f973= adopt the indexed UTF-8 scan and key-only layout
+snapshots after scoped correctness and performance review. Their
+[[file:../../../glance/docs/reports/done/2026-10-26-native-layout-key-snapshot-06-commit-receipt.md][commit receipt]] retains exact identities, ordinary-GC evidence, the RSS
+attribution and unresolved maximum-pause/p95 limits. The current full native
+suite passes 645 cases; shared format 1 remains unchanged. Actual publication,
+installed-client coordination, fresh-root defaults, cumulative Stage6A cost
+acceptance and legacy retirement remain pending.

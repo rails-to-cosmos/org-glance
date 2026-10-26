@@ -250,6 +250,22 @@ Depends on the integration protocol decision in phase 4.
 * Unscheduled backlog
 
 ** TODO Share JSON settings with Glance
+Current native preparation includes revision-aware refresh reuse, outside-lock
+encoding, indexed UTF-8 validation and key-only layout snapshots. The
+[[file:../../glance/docs/reports/done/2026-10-26-native-layout-key-snapshot-06-commit-receipt.md][committed source and performance receipt]] records scoped review and open GC-tail
+limits; the latest full native run passes 645 tests. These delivered writer and
+layout repairs leave actual-root publication, cumulative cost acceptance and
+legacy retirement pending.
+Writer APIs now prepare first JSON publication from an explicit absence
+observation. The native suite passes630 cases with2 shared-vector prerequisites
+skipped; those two pass separately with explicit fixtures. Fresh-root activation,
+actual cutover and combined performance acceptance remain pending. The
+[[file:../../glance/docs/reports/done/2026-10-24-agent-stage-06a-reviewer-20.md][independent writer review]] passes scoped preparation. The final writer comparison preserves exact allocation/read/
+publication counts with mixed CPU/tails/GC; see S6A19 in Glance performance records. See [[file:../../glance/docs/reports/partial/2026-10-24-agent-stage-06a-iteration-19-author.md][the writer handoff]] when published.
+The Stage 6A native Settings candidate adds scope drafts, cycle/template child
+tables, atomic writes and explicit concurrent-edit reconciliation. Fourteen focused
+contracts pass. The [[file:../../glance/docs/reports/done/2026-10-23-agent-stage-06a-reviewer-12.md][system/tag-system repair]] passes independent review and all 630 native cases;
+combined performance acceptance remains pending. Glance editor/SDK retirement now passes scoped review; live migration and legacy reader retirement stay open.
 Legacy active-only TODO scopes now retain active meaning in native Material,
 Overview and capture headers. Generated presentation supplies the shared
 default inactive keywords; stored declarations and Snapshot bytes stay exact.
@@ -297,6 +313,11 @@ Independent repair re-review passes all 588 native cases, the original probe
 and both single-copy failure controls; no repair-scope findings remain.
 Isolated opening latency attribution remains pending; measured cleanup cost
 is separate from that follow-up.
+The [[file:../../glance/docs/reports/partial/2026-10-23-agent-stage-06a-iteration-06-author.md][Stage 6A layout candidate]] persists native schemas, view order/sort and scoped
+reference layouts in shared JSON. All 614 ERT cases passed. The independent
+review found nested-extension loss; its repair preserves surviving identities
+and refuses ambiguous duplicates. Twelve focused tests, all 616 native cases and the original reviewer probes pass; the [[file:../../glance/docs/reports/done/2026-10-23-agent-stage-06a-reviewer-08.md][repair re-review]] passes correctness. Performance attribution and actual-tree
+migration remain pending.
 The [[file:../../glance/docs/reports/partial/2026-10-19-json-settings-step-6-native-overview-context.md][native Overview slice]] implements metadata-only source receipts, per-Row
 state filtering, standalone Org/Agenda headers and mixed-context refusal.
 Semantic receipts invalidate presentation/family changes; refresh restores
@@ -306,7 +327,20 @@ native processes. The author repair binds immutable local exports to one atomic
 manifest. Independent repair re-review passes 597 native cases, 52 focused
 Overview cases and two late-manifest/artifact-reuse probes; selected old
 definitions fail the concurrency regression. No repair-scope findings remain.
-The regex repair is independently verified. Compound/client settings remain pending.
+The regex repair is independently verified. Compound/client settings remain pending. Glance now implements the
+[[file:../../glance/docs/reports/partial/2026-10-19-json-settings-step-7-workflow-tables.md][bounded workflow tables]] for TODO cycles, tag settings and capture templates;
+final Glance author gates pass 2,390 application tests, 197 browser cases,
+40 interop cases and 53 performance contracts. Reviewer checks pass 102 focused
+tests, seven workflow cases and all 53 performance contracts, but reproduce
+ordinary-edit filter/flag loss and invisible deletion flags in Glance. Re-review
+verifies both repairs with 212 focused tests, nine workflow cases, five original
+probes and 53 performance contracts, but exposes a new reset/flag regression:
+old deletion flags attach to replacement items. Reset now retires the removed
+list's flags. Re-review passes 212 focused tests, ten workflow cases, five
+original probes and the reset reproduction, with failure on the preceding
+repair. No retained findings remain in this bounded Glance slice; the wider
+migration remains partial. Shared format 1 and
+native production code are unchanged; native workflow completion stays open.
 Author gates pass 597 native, 116 focused Haskell/process and 40 interop tests.
 Independent review passes 580 ERT cases and the
 focused cross-application gates, but reproduces P1 ordinary local capture
