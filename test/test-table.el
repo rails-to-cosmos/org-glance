@@ -613,6 +613,34 @@ relies on `org-add-log-note' switching buffers for real."
               (should (= 1 (length table-view--rows))))
           (when (buffer-live-p buffer) (kill-buffer buffer)))))))
 
+(ert-deftest org-glance-test:table-layout-snapshot-skips-state-palette ()
+  "Saving ordinary and relation layouts needs no graph state palette."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "a" "* TODO A"))
+    (dolist (context '(nil (:anchor "a" :dir relations)))
+      (with-temp-buffer
+        (let* ((org-glance-view--graph graph)
+               (org-glance-table--context context)
+               (columns (if context
+                            (org-glance-table--context-columns graph context)
+                          (org-glance-table--base-columns graph)))
+               (live (append
+                      (cl-remove-if
+                       (lambda (column)
+                         (member (alist-get 'key column) '("tags" "relation")))
+                       columns)
+                      '(((key . "AUTHOR") (prop . "AUTHOR") (header . "Writer")))))
+               (layout (list :columns live :sort '(("title" . t)))))
+          (cl-letf (((symbol-function 'org-glance-graph:states)
+                     (lambda (&rest _)
+                       (ert-fail "Layout snapshot read graph states"))))
+            (should
+             (equal (org-glance-table--layout-snapshot layout)
+                    (list :columns '(("AUTHOR" . "Writer"))
+                          :hidden (if context '("tags" "relation") '("tags"))
+                          :order (org-glance-table--column-keys live)
+                          :sort '(("title" . t)))))))))))
+
 (ert-deftest org-glance-test:table-add-property-column-shows-drawer-value ()
   "An added property column displays each headline's drawer property."
   (org-glance-test:with-graph graph

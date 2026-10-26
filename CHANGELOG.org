@@ -27,6 +27,7 @@ Notable user-facing changes.  Versions date-based
 
 ** Fixed
 
+- Table layout saves skip graph state lookup when collecting built-in column keys.
 - System Settings and the tag named =system= retain separate buffers, drafts and save targets.
 - Active-only legacy TODO cycles stay active in Material, Overview and capture headers.
 

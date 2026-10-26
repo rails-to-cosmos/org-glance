@@ -543,9 +543,12 @@ Relation tables only; see `org-glance-table--relation-cell'."
     (value-fn . ,(lambda (id _row)
                    (org-glance-table--relation-cell graph anchor id)))))
 
-(cl-defun org-glance-table--context-columns (graph context)
+(cl-defun org-glance-table--context-columns
+    (graph context &optional (states nil states-supplied-p))
   "Return GRAPH's base columns plus `Relation' for relation view CONTEXT."
-  (append (org-glance-table--base-columns graph)
+  (append (if states-supplied-p
+              (org-glance-table--base-columns graph states)
+            (org-glance-table--base-columns graph))
           (list (org-glance-table--relation-column
                  graph (plist-get context :anchor)))))
 
@@ -707,8 +710,8 @@ the view (`Relation' counts in a relation view), `:order' every live key,
          (live-keys (org-glance-table--column-keys live))
          (built-in (if org-glance-table--context
                        (org-glance-table--context-columns org-glance-view--graph
-                                                          org-glance-table--context)
-                     (org-glance-table--base-columns org-glance-view--graph))))
+                                                          org-glance-table--context nil)
+                     (org-glance-table--base-columns org-glance-view--graph nil))))
     (list :columns (cl-loop for c in live
                             when (alist-get 'prop c)
                             collect (cons (alist-get 'prop c) (alist-get 'header c)))
