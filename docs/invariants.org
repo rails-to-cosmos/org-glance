@@ -928,6 +928,13 @@ today, up from 50.
     by =local-family-is-searchable-and-keeps-its-authority= and
     =duplicate-storage-authority-is-refused=.
 
+* Confidential extraction
+
+42. Property extraction decrypts scratch content before selection; every value uses an expiring confidential clipboard and bypasses the kill ring, PRIMARY, messages and helper arguments; expiry preserves a newer owner.
+
+- [[file:../test/test-clipboard.el][Extraction contracts]]: warm ordinary table extraction performs zero blob reads and zero blob parses.
+- [[file:proposals/2026-10-27-confidential-extraction.done.org][Clipboard adapters]]: clipboard-manager hints require cooperation; X11 and Wayland expiry uses Emacs timers.
+
 * Known hazards
 
 Costs the code ships WITH, deliberately.  Each was reproduced with a probe and each

@@ -80,7 +80,7 @@
       (org-glance-test:headline "a" "* TODO A" "- author: Tolkien"))
     (let (killed)
       (org-glance-test:offering (offered (caar offered))
-        (cl-letf (((symbol-function 'kill-new) (lambda (v &rest _) (setq killed v))))
+        (cl-letf (((symbol-function 'org-glance-clipboard:copy) (lambda (v) (setq killed v))))
           (org-glance-table--act-extract graph "a")))
       (should (equal "Tolkien" killed)))))
 

@@ -209,6 +209,9 @@ evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
     are wake-up hints. One operation derives History, payload integrity, parsing,
     and projection from one observation and re-observes only after mutation. A
     writer commits its family projection before success.
+42. Property extraction decrypts scratch content before selection and copies through
+    an expiring confidential clipboard; values bypass the kill ring, PRIMARY,
+    messages and helper arguments, and expiry preserves a newer clipboard owner.
 
 ## Known hazards
 

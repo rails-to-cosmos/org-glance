@@ -84,6 +84,11 @@ it with the index's =:body= map lets extract offer/read a property without
 re-parsing the blob (fallback: parse).  Secondary to the column feature, but the
 same index serves it -- and opens a future "extract across the filtered set".
 
+Table extraction uses the body index for ordinary headlines.  Encrypted
+headlines decrypt a scratch copy before selection; plaintext stays outside
+the property index.  Both paths use the
+[[file:2026-10-27-confidential-extraction.done.org][confidential clipboard adapter]].
+
 * Alternatives (rejected)
 
 - *A =properties= field in the WAL record.*  Bloats the append-only log with

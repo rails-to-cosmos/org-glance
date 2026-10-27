@@ -166,6 +166,29 @@ On disk it is ciphertext, and a materialized headline opens THAT WAY -- no passw
 | decrypted, outside any block | seal it back, forgetting the password   |
 | plaintext headline           | encrypt the whole body as one block     |
 
+** Extracting properties
+
+=e= in a table or overview, =C-c e= in a material buffer, and
+=M-x org-glance-extract= copy a body =KEY: value= property.  Ordinary and
+encrypted properties use the same confidential clipboard path.  Sealed
+content prompts for its password before the property picker opens; extraction
+decrypts a scratch copy and preserves the live buffer and stored content.
+
+Values bypass the kill ring and message log.  Clipboard expiry defaults to
+15 seconds; =org-glance-clipboard-ttl= accepts positive integers.  Expiry
+preserves clipboard content copied afterward.
+
+- Wayland requires =wl-clipboard= 2.3 or newer and uses =--sensitive=.
+- Graphical X11 offers =x-kde-passwordManagerHint= and leaves PRIMARY alone.
+- macOS uses AppKit through the system JXA interpreter, with confidential
+  and transient markers plus =currentHostOnly= to prevent Handoff sharing.
+- Unsupported sessions and failed helpers refuse copying.
+
+Clipboard managers must honor confidentiality hints.  Expiry cannot remove
+copies already collected by another application.  Ordinary =M-w= and =C-w=
+retain their usual Emacs behavior.  Password-cache expiry and
+=org-glance-material:lock= leave decrypted buffer text visible.
+
 ** Repeating headlines
 
 A headline with a repeater (=SCHEDULED: <… +1d>=) stays ONE headline.  With =org-glance-repeat-history-depth= set (N newest, =t= = all, per-headline =:ORG_GLANCE_REPEAT_HISTORY_DEPTH:= wins), each completion snapshots the done state before org resets it; the table's =Rep= column marks repeaters, and =l= (=C-c h= in the buffer) opens any past occurrence read-only.
@@ -180,6 +203,7 @@ A headline with a repeater (=SCHEDULED: <… +1d>=) stays ONE headline.  With =o
 | =org-glance-view-fill-frame=            | =t=                             | views take the whole frame; =nil= keeps your windows                                         |
 | =org-glance-repeat-history-depth=       | =0=                             | occurrence snapshots kept: N / =t= = all / =0= = off                                           |
 | =org-glance-material-password-ttl=      | =300=                           | seconds a crypt password stays cached; =0= = forever                                         |
+| =org-glance-clipboard-ttl=              | =15=                            | seconds an extracted property remains on the clipboard                                      |
 | =org-glance-material-hidden-properties= | id + hash                     | drawer keys kept out of material buffers, written back on save                            |
 | =org-glance-table-state-colors=         | tokyo-night-ish               | per-state badge colours (falls back to =org-todo-keyword-faces=, then =…-default-state-color=) |
 | =org-glance-plugins=                    | =nil=                           | plugins to load at init (e.g. =(llm)=); =I= enables one, =U= disables                            |

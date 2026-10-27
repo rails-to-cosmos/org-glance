@@ -5,6 +5,12 @@ Notable user-facing changes.  Versions date-based
 
 * Unreleased
 
+* 1.55.1.0.20261027.0
+
+** Changed
+
+- =org-glance-extract=, table/overview =e= and material =C-c e= copy ordinary and encrypted properties through an expiring confidential clipboard, bypassing the kill ring and value messages.
+
 ** Fixed
 
 - Layout saves skip empty-state keyword derivation and temporary JSON conversion copies.

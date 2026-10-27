@@ -1,0 +1,66 @@
+#+TITLE: Confidential property extraction
+#+DATE: 2026-10-27
+
+* Contract
+
+Existing extract commands retain their names and keys.  Every body =KEY: value=
+property uses the same confidential copy operation, including ordinary text.
+The selected value remains the helper API's return value.
+
+Sealed content prompts before property selection and decrypts only in a
+temporary Org buffer.  Material extraction reads current edits without
+modifying the source buffer.  The table retains its property-index path for
+ordinary headlines and opens encrypted content explicitly.
+
+* Clipboard adapters
+
+[[file:../../src/view/org-glance-clipboard.el][org-glance-clipboard]] bypasses the
+kill ring, PRIMARY and value-bearing messages.  The default lifetime is 15
+seconds and must remain positive.  Failed adapters refuse copying.
+
+- [[file:../../src/view/org-glance-clipboard-linux-x.el][Linux X11]]: a conditional =x-kde-passwordManagerHint: secret= target; expiry checks
+  terminal ownership and the identical local selection object, using any
+  surviving frame on that terminal.
+- [[file:../../src/view/org-glance-clipboard-linux-wayland.el][Linux Wayland]]: =wl-copy --foreground --sensitive=, supplied through stdin; expiry
+  terminates that source process, leaving a newer owner alone.
+- [[file:../../src/view/org-glance-clipboard-osx.el][macOS]]: a system JXA process reads stdin and creates one AppKit pasteboard
+  item with =ConcealedType= and =TransientType=.  =currentHostOnly= disables
+  Handoff sharing.  The helper expires independently of Emacs and clears
+  only its saved pasteboard change count.
+
+The adapters avoid secret-bearing process arguments, environment variables,
+temporary files and output buffers.  Helper diagnostics are discarded.
+The common module loads the selected platform adapter on demand and owns
+the clipboard API, expiry setting and shared process transport.
+
+* Limits
+
+Confidentiality markers require clipboard-manager cooperation.  An application
+can collect plaintext during its availability window.  X11 permits broad
+client access; expiry cannot recall collected data.  Emacs timer delays can
+extend X11 and Wayland availability.  Ordinary copy commands and third-party
+packages retain their existing behavior.  Password-cache expiry leaves
+decrypted material text visible.
+
+[[file:2026-10-27-windows-confidential-clipboard.proposed.org][Windows support]]
+is deferred pending a native clipboard helper and Windows verification.
+
+* Evidence
+
+[[file:../../test/test-clipboard.el][Extraction tests]] cover plaintext retention,
+password ordering, wrong passwords, encrypted table extraction, preservation
+of unsaved material edits, selection ownership, helper transport and failures.
+The warm table contract requires zero blob reads and parses.
+
+Run the focused artifacts with:
+
+#+begin_src sh
+eask emacs --batch -l test/test-helpers.el -l test/test-clipboard.el -f ert-run-tests-batch-and-exit
+#+end_src
+
+* Sources
+
+- [[https://github.com/bugaevc/wl-clipboard/releases][wl-clipboard 2.3 confidentiality hint]]
+- [[https://nspasteboard.org/][Pasteboard confidentiality conventions]]
+- [[https://developer.apple.com/documentation/appkit/nspasteboard/contentsoptions/currenthostonly][AppKit currentHostOnly]]
+- [[https://developer.apple.com/documentation/appkit/nspasteboard/changecount][AppKit ownership generation]]

@@ -23,6 +23,7 @@
 (require 'org-glance-config)
 (require 'org-glance-datetime-mode)
 (require 'org-glance-view)
+(require 'org-glance-clipboard)
 
 (require 'org-glance-core)
 
@@ -1389,20 +1390,36 @@ The transient's `-d' switch decrypts it on open; otherwise it opens sealed."
    (org-glance-material--pick-headline "Open: " #'org-glance-headline-metadata:linked?)))
 
 (cl-defun org-glance-material:extract-pairs (pairs &optional key)
-  "Copy the value of KEY in alist PAIRS to the kill ring; return it.
+  "Copy the value of KEY in alist PAIRS confidentially; return it.
 Nil KEY prompts for one.  Signal a `user-error' on empty PAIRS."
   (unless pairs (user-error "No key-value pairs in headline"))
   (let* ((key (or key (completing-read "Extract: " pairs nil t)))
-         (value (alist-get key pairs nil nil #'string=)))
-    (kill-new value)
-    (message "Copied: %s" value)
+         (pair (assoc-string key pairs))
+         (value (cdr pair)))
+    (unless pair (user-error "Unknown property"))
+    (org-glance-clipboard:copy value)
+    (message "Property copied; clipboard expires in %s seconds"
+             org-glance-clipboard-ttl)
     value))
 
 (cl-defun org-glance-material:extract (headline &optional key)
-  "Copy the body `KEY: value' of HEADLINE to the kill ring; return the value.
-Nil KEY prompts for one."
+  "Copy a property of HEADLINE confidentially; return its value.
+Decrypt sealed content before selecting KEY; nil KEY prompts for one."
   (cl-check-type headline org-glance-headline)
-  (org-glance-material:extract-pairs (org-glance-headline:properties headline) key))
+  (org-glance-headline:with-contents headline
+    (org-glance-material--extract-buffer key)))
+
+(defun org-glance-material--extract-buffer (&optional key)
+  "Decrypt scratch contents and copy property KEY, prompting when nil."
+  (when (org-glance-headline--buffer-encrypted?)
+    (let ((password (read-passwd "Headline password: ")))
+      (unwind-protect
+          (progn
+            (org-glance-headline--crypt-upgrade-legacy)
+            (org-glance--crypt-unseal-blocks password))
+        (clear-string password))))
+  (org-glance-material:extract-pairs
+   (org-glance-headline--buffer-properties) key))
 
 (cl-defun org-glance-material:set-interval (&optional remove)
   "Set this headline's date interval (`C-c i'); with REMOVE (`C-u'), drop it.
@@ -1445,13 +1462,12 @@ Replaces the buffer's first active range outside crypt blocks, or inserts one."
 
 (cl-defun org-glance-material:extract-here ()
   "Copy a body `KEY: value' pair from this materialized headline (`C-c e').
-Reads the live buffer, decrypted crypt blocks included."
+Read live edits; decrypt sealed blocks in a scratch buffer before selection."
   (interactive)
   (org-glance-material--ensure)
-  (org-glance-material:extract-pairs
-   (org-glance-headline:with-contents
-       (buffer-substring-no-properties (point-min) (point-max))
-     (org-glance-headline--buffer-properties))))
+  (org-glance-headline:with-contents
+      (buffer-substring-no-properties (point-min) (point-max))
+    (org-glance-material--extract-buffer)))
 
 ;;;###autoload
 (cl-defun org-glance-extract ()

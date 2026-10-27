@@ -250,7 +250,12 @@ The `/' filter and narrowing survive."
   (when id (org-glance-material:open-link (org-glance-view:live-headline graph id))))
 
 (cl-defun org-glance-table--act-extract (graph id)
-  (when id (org-glance-material:extract-pairs (org-glance-property-index:body graph id))))
+  (when id
+    (if (org-glance-headline-metadata:encrypted?
+         (org-glance-view:live-metadata graph id))
+        (org-glance-material:extract (org-glance-view:live-headline graph id))
+      (org-glance-material:extract-pairs
+       (org-glance-property-index:body graph id)))))
 
 (cl-defun org-glance-table--act-todo (graph id)
   "Advance ID's TODO state in GRAPH like `C-c C-t', then update its row.

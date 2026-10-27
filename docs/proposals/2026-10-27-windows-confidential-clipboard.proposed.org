@@ -1,0 +1,32 @@
+#+TITLE: Windows confidential clipboard adapter
+#+DATE: 2026-10-27
+
+* Status
+
+Deferred: native Windows integration and verification exceed the current
+Linux/macOS release.  Unsupported Windows sessions refuse extraction.
+
+* Contract
+
+Add =org-glance-clipboard-windows.el= behind the existing clipboard API.
+Supply plaintext through stdin, retain the positive expiry setting, and
+preserve the kill-ring, message and process-argument exclusions.
+
+Use a native helper to publish Unicode text alongside the registered
+=ExcludeClipboardContentFromMonitorProcessing= format, or zero DWORDs for
+both =CanIncludeInClipboardHistory= and =CanUploadToCloudClipboard=.
+Publish the exclusions with the text and clear only the helper's own
+clipboard generation after expiry.
+
+* Verification
+
+- Preserve Unicode, newlines and empty values.
+- Verify the registered exclusion formats on a Windows runner.
+- Check expiry, replacement by another application and repeated extraction.
+- Refuse failed publication without retaining or displaying plaintext.
+
+* Sources
+
+- [[https://learn.microsoft.com/en-us/windows/win32/dataxchg/clipboard-formats][Win32 history and cloud clipboard formats]]
+- [[https://www.gnu.org/software/emacs/manual/html_node/elisp/Other-Selections.html][Emacs Windows selection limits]]
+- [[file:2026-10-27-confidential-extraction.done.org][Current adapters and extraction contract]]

@@ -64,6 +64,7 @@
   (load "test/test-relations.el")
   (load "test/test-migrate.el")
   (load "test/test-material.el")
+  (load "test/test-clipboard.el")
   (load "test/test-overview.el")
   (load "test/test-table.el")
   (load "test/test-table-config.el")

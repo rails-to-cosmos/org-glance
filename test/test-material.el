@@ -258,10 +258,12 @@ a save persists to the graph and survives re-materializing."
     (should-error (org-glance-material:open-link headline) :type 'user-error)))
 
 (ert-deftest org-glance-test:extract-helper ()
-  "Extracting a known key copies its value to the kill ring."
-  (let ((headline (org-glance-test:headline "e1" "* foo" "- key: val")))
-    (should (string= "val" (org-glance-material:extract headline "key")))
-    (should (string= "val" (current-kill 0)))))
+  "Extracting a known key copies its value through the confidential backend."
+  (let ((headline (org-glance-test:headline "e1" "* foo" "- key: val")) copied)
+    (cl-letf (((symbol-function 'org-glance-clipboard:copy)
+               (lambda (value) (setq copied value))))
+      (should (string= "val" (org-glance-material:extract headline "key")))
+      (should (string= "val" copied)))))
 
 (ert-deftest org-glance-test:extract-none ()
   "Extracting from a headline with no key-value pairs errors."
@@ -272,7 +274,8 @@ a save persists to the graph and survives re-materializing."
   "The command selects a headline from the graph then extracts a pair."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "e1" "* foo" "- key: val"))
-    (cl-letf (((symbol-function 'completing-read)
+    (cl-letf (((symbol-function 'org-glance-clipboard:copy) #'ignore)
+              ((symbol-function 'completing-read)
                (lambda (_p coll &rest _) (if (assoc "key" coll) "key" (caar coll)))))
       (let ((org-glance-graph graph))
         (should (string= "val" (org-glance-extract)))))))
@@ -297,7 +300,8 @@ a save persists to the graph and survives re-materializing."
                              (org-glance-test:headline "K" "* foo" "- k: v")
                              (org-glance-test:headline "N" "* bar" "no pairs"))
     (let ((org-glance-graph graph))
-      (cl-letf (((symbol-function 'completing-read)
+      (cl-letf (((symbol-function 'org-glance-clipboard:copy) #'ignore)
+              ((symbol-function 'completing-read)
                  (lambda (_p coll &rest _)
                    (if (assoc "k" coll) "k"
                      (progn (should (= 1 (length coll))) (caar coll))))))
@@ -1126,16 +1130,19 @@ state and tags kept, ORG_GLANCE_ID replaced, source untouched."
       (should-not (s-contains? "Wrike" content)))))
 
 (ert-deftest org-glance-test:material-extract-here ()
-  "`C-c e' in a material buffer copies a body KEY: value to the kill ring."
+  "`C-c e' in a material buffer copies a body KEY: value confidentially."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
       (org-glance-test:headline "a" "* TODO A" "- author: Tolkien"))
     (org-glance-test:with-material (buf graph "a")
       (should (eq (key-binding (kbd "C-c e")) #'org-glance-material:extract-here))
-      (org-glance-test:offering (offered (caar offered))
-        (org-glance-material:extract-here)
-        (should (assoc "author" offered)))
-      (should (equal "Tolkien" (current-kill 0))))))
+      (let (copied)
+        (cl-letf (((symbol-function 'org-glance-clipboard:copy)
+                   (lambda (value) (setq copied value))))
+          (org-glance-test:offering (offered (caar offered))
+            (org-glance-material:extract-here)
+            (should (assoc "author" offered)))
+          (should (equal "Tolkien" copied)))))))
 
 (ert-deftest org-glance-test:material-open-reuses-live-buffer ()
   "Re-materializing returns the live buffer, never re-prompting for a password."
