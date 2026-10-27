@@ -930,11 +930,14 @@ today, up from 50.
 
 * Confidential extraction
 
-47. Extraction requires acknowledged clipboard publication; Linux helpers serve locked anonymous memory under sleep-inclusive deadlines, and macOS publisher/guardian cleanup preserves newer owners; extraction and confidential paste bypass the kill ring.
+47. Extraction requires acknowledged publication; Linux locks source payloads and enforces sleep-inclusive deadlines; X11 sends payloads directly through XCB's raw socket API; macOS expires text with ownership-conditional AppKit writes; extraction and confidential paste bypass the kill ring.
 
 - [[file:../test/test-clipboard.el][Extraction contracts]]: warm ordinary table extraction performs zero blob reads and zero blob parses.
 - [[file:../test/test-clipboard-native.py][Native clipboard contracts]]: stopped Emacs does not extend Linux leases; stopped helpers reject late reads; expired X11 replies retire ownership before client retries; helper termination removes the source; replacement owners survive cleanup; Wayland file writes are refused by an audit hook.
 - [[file:../test/test-clipboard.el][Paste contracts]]: ordinary yank retains an extracted value after clipboard expiry; confidential paste preserves the existing kill ring.
+- [[file:../test/test-clipboard-native.py][Xlib memory probe]]: the raw vector references locked source memory directly and the Xlib output buffer contains no payload after response/flush; requires a C compiler and Xlib development headers.
+- [[file:../test/test-clipboard-osx-cleanup.js][macOS cleanup model]]: production cleanup preserves replacements before the final check and during the write under AppKit's conditional-write contract; [[file:../test/clipboard-osx-cleanup-native.js][the native race probe]] injects a separate process at those boundaries and requires macOS.
+- [[file:../test/bench-clipboard.py][X11 latency comparison]]: Xvfb, 30 alternating batches of 50 reads against [[https://github.com/rails-to-cosmos/org-glance/commit/9ea4ae0][9ea4ae0]], median 0.1353 → 0.1280 ms, batch p95 0.1806 → 0.2049 ms; paired mean difference +0.00736 ms, 95% paired-bootstrap interval −0.00608 to +0.02135 ms.
 - [[file:proposals/2026-10-27-confidential-clipboard-lifecycle.done.org][Clipboard lifecycle]]: clipboard-manager hints require cooperation; destination copies, macOS pasteboard caching, and host memory persistence remain outside the lease.
 
 * Test execution

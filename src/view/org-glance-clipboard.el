@@ -101,7 +101,9 @@ The shared clipboard does not authenticate the source of the text."
 (defun org-glance-clipboard:copy (value)
   "Copy VALUE confidentially, bypassing the kill ring and PRIMARY selection.
 Expire after `org-glance-clipboard-ttl' seconds; refuse unsupported backends.
-Confidentiality hints depend on clipboard-manager cooperation."
+Confidentiality hints depend on clipboard-manager cooperation.
+X11 sends directly from locked memory; macOS expires text through an
+ownership-conditional write."
   (unless (and (integerp org-glance-clipboard-ttl)
                (> org-glance-clipboard-ttl 0))
     (user-error "Clipboard expiry must be a positive number of seconds"))

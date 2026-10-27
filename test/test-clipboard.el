@@ -10,6 +10,31 @@
 (defconst org-glance-test--clipboard-directory
   (file-name-directory (or load-file-name buffer-file-name)))
 
+(ert-deftest org-glance-test:clipboard-mac-cleanup-race-model ()
+  "Preserve concurrent copies under AppKit's conditional-write contract."
+  (skip-unless (executable-find "node"))
+  (with-temp-buffer
+    (insert org-glance-clipboard-osx--prelude)
+    (should (zerop (call-process-region
+                    (point-min) (point-max) (executable-find "node") nil t nil
+                    (expand-file-name "test-clipboard-osx-cleanup.js"
+                                      org-glance-test--clipboard-directory))))))
+
+(ert-deftest org-glance-test:clipboard-mac-native-cleanup-race ()
+  "Preserve a native replacement between cleanup's final check and write."
+  (skip-unless (eq system-type 'darwin))
+  (let ((script (with-temp-buffer
+                  (insert org-glance-clipboard-osx--prelude)
+                  (insert-file-contents
+                   (expand-file-name "clipboard-osx-cleanup-native.js"
+                                     org-glance-test--clipboard-directory))
+                  (buffer-string))))
+    (with-temp-buffer
+      (should (zerop (call-process
+                      "/usr/bin/osascript" nil t nil "-l" "JavaScript" "-e" script
+                      (format "org.glance.test.%s" (random most-positive-fixnum)))))
+      (should (equal "ok" (string-trim (buffer-string)))))))
+
 (ert-deftest org-glance-test:clipboard-native-linux-lifecycle ()
   "Run the Linux protocol, storage and process-lifetime contracts."
   (skip-unless (eq system-type 'gnu/linux))

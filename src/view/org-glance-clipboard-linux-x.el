@@ -8,7 +8,8 @@
 (require 'org-glance-clipboard)
 
 (defun org-glance-clipboard-linux-x:copy (value)
-  "Offer VALUE through the independent X11 memory helper."
+  "Offer VALUE through the independent X11 helper with locked source memory.
+Send payloads through XCB's raw socket API, bypassing Xlib's output buffer."
   (org-glance-clipboard--linux-copy value "x11"))
 
 (provide 'org-glance-clipboard-linux-x)

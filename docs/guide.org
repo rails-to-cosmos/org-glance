@@ -177,18 +177,26 @@ decrypts a scratch copy and preserves the live buffer and stored content.
 Extraction bypasses the kill ring and message log, and reports success only
 after the helper acknowledges publication.  The lease defaults to 15 seconds;
 =org-glance-clipboard-ttl= accepts positive integers.  Helpers enforce their
-deadlines independently of Emacs and preserve subsequent clipboard owners.
+deadlines independently of Emacs.  Linux cleanup retires its own source;
+macOS uses ownership-conditional writes to preserve replacements.
 
-- Linux requires Python 3 and permission to lock the payload's memory.  The
-  helpers use anonymous memory, disable core dumps, and refuse storage fallback.
+- Linux requires Python 3 and permission to lock the source payload buffer.
+  Helpers allocate that buffer anonymously, disable core dumps, and refuse
+  payload-file storage fallback.
 - Wayland requires =ext-data-control-v1= or =wlr-data-control= support from the
   compositor; unsupported compositors refuse copying.  The helper serves
   transfer pipes directly and advertises =x-kde-passwordManagerHint=.
-- Graphical X11 requires =libX11=; a separate process owns CLIPBOARD and leaves
-  PRIMARY alone.  Linux helpers reject reads after their sleep-inclusive deadline.
+- Graphical X11 requires =libX11=, =libX11-xcb= and =libxcb=; a separate process
+  owns CLIPBOARD and leaves PRIMARY alone.  Payloads travel directly from locked
+  memory through XCB's raw socket API.  Xlib handles control messages and never
+  receives the payload.  Linux helpers reject reads after their sleep-inclusive
+  deadline.
 - macOS uses two system JXA processes: a publisher and a cleanup guardian.
   Confidential/transient markers and =currentHostOnly= discourage history and
   prevent Handoff sharing.  Either process cleans up if its counterpart exits.
+  Cleanup checks the lease token and generation, then replaces only the text
+  with an empty string using AppKit's ownership-conditional write.  AppKit
+  refuses that write if ownership changes; the nonsecret lease metadata remains.
 
 Use =M-x org-glance-clipboard:paste=, or =C-c y= in a material buffer, to paste
 without importing text into the kill ring.  Ordinary =C-y= can import the

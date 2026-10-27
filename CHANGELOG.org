@@ -5,13 +5,17 @@ Notable user-facing changes.  Versions date-based
 
 * Unreleased
 
+* 1.55.1.0.20261027.1
+
 ** Added
 
 - =org-glance-clipboard:paste= and material =C-c y= insert clipboard text without importing it into the kill ring.
 
 ** Fixed
 
-- =org-glance-extract= requires publication acknowledgment and uses independent clipboard deadlines; Linux helpers keep payloads in locked anonymous memory, and macOS adds a cleanup guardian.
+- =org-glance-extract= requires publication acknowledgment and uses independent clipboard deadlines; Linux helpers lock source payload buffers, and macOS adds a cleanup guardian.
+- =org-glance-clipboard-linux-x= sends locked payloads directly through XCB, eliminating Xlib transport copies.
+- =org-glance-clipboard-osx= expires text through ownership-conditional writes that preserve concurrent replacements.
 
 * 1.55.1.0.20261027.0
 

@@ -25,10 +25,13 @@ function owned(board, token) {
 }
 function clearOwned(board, token) {
   var generation = board.changeCount;
-  if (owned(board, token) && board.changeCount === generation) board.clearContents;
+  if (owned(board, token) && board.changeCount === generation)
+    return board.setStringForType('', $.NSPasteboardTypeString);
+  return false;
 }
 "
-  "Shared JXA lease operations using Darwin's sleep-inclusive continuous clock.")
+  "Shared JXA lease operations with a sleep-inclusive clock.
+Expire text with an ownership-conditional write, preserving replacements.")
 
 (defconst org-glance-clipboard-osx--publisher
   (concat org-glance-clipboard-osx--prelude
@@ -53,7 +56,7 @@ function clearOwned(board, token) {
       $.NSThread.sleepForTimeInterval(.02);
   } finally { clearOwned(board, token); }
 }")
-  "Publish one pasteboard lease and clear it if the guardian exits or time expires.")
+  "Publish a text lease and expire it if the guardian exits or time expires.")
 
 (defconst org-glance-clipboard-osx--script
   (concat org-glance-clipboard-osx--prelude
@@ -83,10 +86,11 @@ function clearOwned(board, token) {
     if (task.isRunning) task.terminate;
   }
 }")
-  "Acknowledge the published lease and clear it if its publisher exits.")
+  "Acknowledge the published lease and expire its text if the publisher exits.")
 
 (defun org-glance-clipboard-osx:copy (value)
-  "Copy VALUE through a macOS publisher supervised by an independent guardian."
+  "Copy VALUE through a macOS publisher supervised by an independent guardian.
+Cleanup replaces leased text through AppKit's ownership-conditional write."
   (org-glance-clipboard--send
    value (list "/usr/bin/osascript" "-l" "JavaScript" "-e"
                org-glance-clipboard-osx--script

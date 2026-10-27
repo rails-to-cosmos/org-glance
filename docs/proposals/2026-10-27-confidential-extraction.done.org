@@ -19,16 +19,19 @@ API and acknowledged process transport; platform adapters load on demand.
 The default lease is 15 seconds and must remain positive.
 
 - [[file:../../src/view/org-glance-clipboard-linux-x.el][Linux X11]] starts an
-  independent Xlib selection owner backed by locked anonymous memory.
+  independent Xlib selection owner with a locked anonymous source buffer;
+  XCB's raw socket interface sends payloads directly from that buffer.
 - [[file:../../src/view/org-glance-clipboard-linux-wayland.el][Linux Wayland]]
   starts a memory-only data-control client.  Publication requires the compositor
   to report the helper's unique offer as selected.
 - [[file:../../src/view/org-glance-clipboard-osx.el][macOS]] starts a JXA publisher
-  and guardian.  Both check a sleep-inclusive clock and preserve subsequent
-  pasteboard owners.  Either can clear the lease after its counterpart exits.
+  and guardian.  Both check a sleep-inclusive clock and expire leased text
+  through an ownership-conditional AppKit write.  A concurrent replacement
+  causes the write to fail; nonsecret lease metadata remains.  Either process
+  can expire the text after its counterpart exits.
 
 Linux helpers check their deadlines before each transfer, disable core dumps,
-refuse failed memory locking, and create no payload files.  Helpers receive
+refuse failed source-buffer locking, and create no payload files.  Helpers receive
 plaintext through stdin and suppress diagnostics.  Confidentiality hints are
 published with the content; macOS also requests =currentHostOnly=.
 
@@ -39,7 +42,8 @@ paste command inserts directly; destination undo and save policies still apply.
 Clipboard history tools must honor confidentiality hints.  Previously delivered
 copies remain outside the lease, including copies materialized by macOS's
 pasteboard server.  Stopping both macOS helpers can delay cleanup.  Host memory
-persistence policy governs Emacs and other applications.
+persistence policy governs Emacs and other applications.  Native macOS tests
+for expiry, helper termination and concurrent replacements require a Mac.
 
 The shared clipboard does not authenticate the eventual destination value.
 Destination-specific transfer can avoid that substitution boundary.

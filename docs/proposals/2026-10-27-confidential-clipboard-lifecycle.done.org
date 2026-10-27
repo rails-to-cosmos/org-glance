@@ -10,9 +10,14 @@ passed plaintext to =wl-copy= through stdin, considered a process alive at
 spools into a temporary file.  Ordinary Emacs yank can also retain a copied
 value after clipboard expiry.
 
+The [[https://github.com/rails-to-cosmos/org-glance/commit/9ea4ae0][first hardening pass]]
+left a plaintext copy in Xlib's output buffer and used a macOS check followed
+by unconditional pasteboard clearing.  The transport-copy and cleanup-race
+regressions reproduced both failures before the fixes below.
+
 * Implementation
 
-Linux uses packaged Python helpers with locked anonymous payload memory and
+Linux uses packaged Python helpers with locked anonymous source payload memory and
 core dumps disabled.  The Wayland helper implements =ext-data-control-v1= and
 =wlr-data-control= directly, writes only to transfer pipes or sockets, and
 acknowledges the compositor's selection echo.  Unsupported compositors refuse
@@ -21,6 +26,15 @@ X server round trip.  Both advertise confidentiality hints and close their
 own source on expiry or termination, preserving replacement owners.
 X11 destroys its owner window before rejecting expired requests, so a client's
 fallback conversion cannot target a source that is about to disconnect.
+
+Xlib handles X11 control traffic; secret properties bypass =XChangeProperty=.
+The helper takes the connection's write side with =xcb_take_socket= and passes
+the locked payload address directly to =xcb_writev=.  Only headers and zero
+padding use ordinary memory.  The first raw request is =GetInputFocus=, as
+XCB requires for sequence-wrap tracking; its reply is discarded.  Standard
+and BIG-REQUESTS property lengths are supported.  The property and selection
+notification share one vectored write.  Missing =libX11-xcb= or
+=libxcb= refuses publication.
 
 Every Linux read checks =CLOCK_BOOTTIME=; suspended time counts toward expiry.
 Pending requests after a stopped helper resumes receive no plaintext.  Transfer
@@ -31,8 +45,12 @@ allocation, memory-lock and transfer-size failures refuse publication.
 macOS uses a publisher and a separate guardian.  Both check Darwin's
 =CLOCK_MONOTONIC_RAW=, which uses =mach_continuous_time=.  The publisher observes
 its parent, and the guardian observes its child.  Their cleanup checks the
-lease token and pasteboard generation before clearing.  Published confidential,
-transient and local-host metadata remain in effect.
+lease token and pasteboard generation, then expires only the text through
+=setString:forType:= with an empty string.  AppKit documents that this write
+fails when ownership changes.  Cleanup never calls =clearContents=; a copy
+arriving between the check and write therefore reaches the conditional-write
+guard.  Nonsecret lease, confidentiality, transient and local-host metadata
+remain in place.
 
 The confidential paste command reads clipboard text directly and inserts it
 without importing it into the kill ring.  Destination undo/save policies apply.
@@ -43,11 +61,13 @@ A macOS pasteboard value already materialized in the OS can outlive stopped
 or simultaneously terminated helpers.  Independent cleanup reduces that risk;
 it cannot impose a hard read deadline on the pasteboard server.  Clipboard
 history tools and recipients can retain values already delivered to them.
-Emacs and recipient memory remain subject to host swap and hibernation policy.
+Emacs, the display/pasteboard server and recipient memory remain subject to
+host swap and hibernation policy.  Locking the helper's payload cannot protect
+copies outside that process.
 
-Clipboard ownership checks preserve replacement data; they do not authenticate
-what a receiving application eventually pastes.  A destination-specific channel
-is required to avoid malicious clipboard replacement.
+The shared clipboard does not authenticate what a receiving application
+eventually pastes.  A destination-specific channel is required to avoid
+malicious clipboard replacement.
 
 * Verification
 
@@ -55,6 +75,15 @@ is required to avoid malicious clipboard replacement.
 failure and extraction followed by ordinary and confidential paste.  macOS
 native artifacts cover expiry, either helper's termination and newer ownership;
 these require a Mac and are skipped on Linux.
+
+The [[file:../../test/test-clipboard-osx-cleanup.js][cleanup model]] executes the
+production JXA cleanup function under AppKit's documented conditional-write
+contract.  It checks preservation before and after the final ownership read
+and during the write.  It requires Node.js and supplies no native macOS race
+evidence.  The [[file:../../test/clipboard-osx-cleanup-native.js][native race probe]]
+uses the actual AppKit object and injects a separate process's replacement at
+the final-read and write boundaries.  It verifies that cleanup reports failure
+and leaves the replacement intact.  This probe requires macOS and is skipped here.
 
 [[file:../../test/test-clipboard-native.py][Linux native contracts]] use an
 isolated Xvfb server and a Wayland protocol fixture.  They cover Unicode,
@@ -65,8 +94,24 @@ before the client can retry.  Suspend/resume is modeled by a sleep-inclusive clo
 jump; the tests never suspend the host.  The Wayland fixture exercises both
 protocols but does not replace compositor-specific integration testing.
 
+The Xlib memory probe calls the production Python response path and inspects
+the native output buffer through a small C accessor compiled against Xlib's
+headers.  It verifies that no payload remains there after response/flush and
+that the raw vector points directly at the locked source allocation.  Payload
+size cases cover empty, padded, output-buffer-sized and BIG-REQUESTS transfers
+with repeated reads.  Real-compositor and native macOS validation remain open.
+
+[[file:../../test/bench-clipboard.py][The X11 benchmark]] alternates baseline and
+current helpers on an isolated Xvfb server, measuring conversion plus property
+readback without launching a paste client for each sample.  Local measurements
+are recorded in [[file:../invariants.org::*Confidential extraction][the clipboard contracts]].
+The paired interval includes zero; the sample does not establish a latency
+regression.  These measurements cover local X11 only.  Native macOS latency
+and desktop/compositor comparisons remain unmeasured.
+
 #+begin_src sh
 ORG_GLANCE_TEST_XVFB=/path/to/Xvfb python3 -B test/test-clipboard-native.py -v
+ORG_GLANCE_TEST_XVFB=/path/to/Xvfb python3 -B test/bench-clipboard.py --baseline 9ea4ae0
 eask emacs --batch -l test/test-helpers.el -l test/test-clipboard.el -f ert-run-tests-batch-and-exit
 #+end_src
 
@@ -75,3 +120,6 @@ eask emacs --batch -l test/test-helpers.el -l test/test-clipboard.el -f ert-run-
 - [[https://github.com/swaywm/wlr-protocols/blob/master/unstable/wlr-data-control-unstable-v1.xml][wlr data control]]
 - [[https://gitlab.freedesktop.org/wayland/wayland-protocols/-/blob/main/staging/ext-data-control/ext-data-control-v1.xml][ext data control]]
 - [[https://github.com/apple-oss-distributions/Libc/blob/main/gen/clock_gettime.c][Darwin continuous clock implementation]]
+- [[https://github.com/mirror/libX11/blob/master/src/ChProp.c#L55][Xlib property transport]]
+- [[https://xcb.freedesktop.org/manual/group__XCB__Ext.html][XCB raw socket API]]
+- [[https://developer.apple.com/documentation/appkit/nspasteboard/setstring(_:fortype:)][AppKit ownership-conditional text writes]]

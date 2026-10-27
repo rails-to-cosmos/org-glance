@@ -1,9 +1,10 @@
 """Exercise helper ownership, anonymous storage and deadlines across processes."""
 
-from ctypes import byref
+from ctypes import CDLL, byref, c_size_t, c_void_p, string_at
 import os
 from pathlib import Path
 import resource
+import re
 import select
 import shutil
 import signal
@@ -283,6 +284,73 @@ class X11(Native):
         self.assertEqual(self.read_selection('primary'), b'primary stays')
         process.wait(timeout=3)
         self.assertEqual(self.read_selection(), b'')
+
+    def test_raw_payload_sizes_and_repeated_reads(self):
+        for size in (0, 1, 3, 4, 16385, 262145):
+            with self.subTest(size=size):
+                value = (b'credential\n' * (size // 11 + 1))[:size]
+                process = self.start('x11', value, ttl=3, env=self.environment)
+                self.ready(process)
+                for target in ('UTF8_STRING', 'text/plain', 'TEXT'):
+                    self.assertEqual(self.read_selection(target=target), value)
+                self.stop(process)
+
+    def test_xlib_transport_never_copies_payload(self):
+        compiler = shutil.which('cc')
+        if not compiler:
+            self.skipTest('A C compiler and Xlib development headers are required')
+        with tempfile.TemporaryDirectory() as directory:
+            library = Path(directory) / 'xlib-buffer.so'
+            build = subprocess.run(
+                [compiler, '-shared', '-fPIC', '-Wall', '-Wextra', '-Werror',
+                 str(ROOT / 'test/clipboard-x11-buffer-probe.c'), '-o', str(library)],
+                capture_output=True, text=True)
+            if build.returncode and 'Xlibint.h: No such file' in build.stderr:
+                self.skipTest('Xlib development headers are required')
+            self.assertEqual(build.returncode, 0, build.stderr)
+            probe = CDLL(str(library))
+            probe.org_glance_test_xlib_buffer.argtypes = [c_void_p]
+            probe.org_glance_test_xlib_buffer.restype = c_void_p
+            probe.org_glance_test_xlib_buffer_size.argtypes = [c_void_p]
+            probe.org_glance_test_xlib_buffer_size.restype = c_size_t
+            with patch.dict(os.environ, self.environment):
+                clipboard = Clipboard('fixture')
+            self.addCleanup(clipboard.close)
+            value = b'synthetic-xlib-transport-credential'
+            secret = Secret(len(value))
+            self.addCleanup(secret.close)
+            secret.memory[:] = value
+            target = clipboard.atoms['UTF8_STRING']
+            writev = clipboard.xcb.xcb_writev
+
+            def direct_write(connection, vectors, count, requests):
+                self.assertEqual(vectors[1].base, secret.address)
+                self.assertEqual(vectors[1].size, secret.size)
+                return writev(connection, vectors, count, requests)
+
+            with patch.object(clipboard.xcb, 'xcb_writev', side_effect=direct_write) as send:
+                clipboard.respond(Request(30, 0, 0, clipboard.display, clipboard.window,
+                                          clipboard.window, clipboard.atoms['CLIPBOARD'],
+                                          target, target, 0), secret, Deadline(10))
+                send.assert_called_once()
+            clipboard.x.XSync(clipboard.display, 0)
+            address = probe.org_glance_test_xlib_buffer(clipboard.display)
+            size = probe.org_glance_test_xlib_buffer_size(clipboard.display)
+            self.assertGreater(size, len(value))
+            self.assertNotIn(value, string_at(address, size))
+
+            def locked_kib(pointer):
+                selected = False
+                for line in Path('/proc/self/smaps').read_text().splitlines():
+                    mapping = re.match(r'([0-9a-f]+)-([0-9a-f]+) ', line)
+                    if mapping:
+                        selected = int(mapping[1], 16) <= pointer < int(mapping[2], 16)
+                    elif selected and line.startswith('Locked:'):
+                        return int(line.split()[1])
+                self.fail('No mapping found for the clipboard buffer')
+
+            self.assertGreater(locked_kib(secret.address), 0)
+            self.assertEqual(locked_kib(address), 0)
 
     def test_stopped_helper_rejects_late_read(self):
         process = self.start('x11', b'credential', ttl=.3, env=self.environment)

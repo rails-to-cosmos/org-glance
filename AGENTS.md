@@ -210,11 +210,12 @@ evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
     and projection from one observation and re-observes only after mutation. A
     writer commits its family projection before success.
 47. Extraction decrypts scratch content before selection and requires acknowledged
-    clipboard publication; Linux helpers serve locked anonymous memory under
-    sleep-inclusive deadlines, and macOS publisher/guardian cleanup preserves
-    newer owners. Extracted values bypass the kill ring, PRIMARY, messages and
-    helper arguments; confidential paste bypasses the kill ring. Ordinary paste
-    and destination undo/save policies can retain plaintext.
+    clipboard publication; Linux locks source payload buffers and enforces
+    sleep-inclusive deadlines; X11 sends payloads directly through XCB's raw
+    socket API. Linux cleanup preserves newer owners; macOS expires text with
+    ownership-conditional AppKit writes. Extracted values bypass the kill ring,
+    PRIMARY, messages and helper arguments; confidential paste bypasses the kill
+    ring. Ordinary paste and destination undo/save policies can retain plaintext.
 
 ## Known hazards
 
