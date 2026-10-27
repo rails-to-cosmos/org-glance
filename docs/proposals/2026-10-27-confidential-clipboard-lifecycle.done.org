@@ -1,0 +1,77 @@
+#+TITLE: Confidential clipboard lifecycle
+#+DATE: 2026-10-27
+
+* Failures
+
+The [[https://github.com/rails-to-cosmos/org-glance/commit/772981f][initial release]]
+passed plaintext to =wl-copy= through stdin, considered a process alive at
+50 ms successful, and expired Linux ownership through Emacs timers.  The
+[[https://github.com/bugaevc/wl-clipboard/blob/v2.3.0/src/wl-copy.c#L248][wl-copy stdin path]]
+spools into a temporary file.  Ordinary Emacs yank can also retain a copied
+value after clipboard expiry.
+
+* Implementation
+
+Linux uses packaged Python helpers with locked anonymous payload memory and
+core dumps disabled.  The Wayland helper implements =ext-data-control-v1= and
+=wlr-data-control= directly, writes only to transfer pipes or sockets, and
+acknowledges the compositor's selection echo.  Unsupported compositors refuse
+publication.  The X11 helper acknowledges its selection ownership after an
+X server round trip.  Both advertise confidentiality hints and close their
+own source on expiry or termination, preserving replacement owners.
+X11 destroys its owner window before rejecting expired requests, so a client's
+fallback conversion cannot target a source that is about to disconnect.
+
+Every Linux read checks =CLOCK_BOOTTIME=; suspended time counts toward expiry.
+Pending requests after a stopped helper resumes receive no plaintext.  Transfer
+buffers already delivered to consumers remain outside the lease.  The payload
+limit is 16 MiB, subject to the process memory-lock limit and X11 request size;
+allocation, memory-lock and transfer-size failures refuse publication.
+
+macOS uses a publisher and a separate guardian.  Both check Darwin's
+=CLOCK_MONOTONIC_RAW=, which uses =mach_continuous_time=.  The publisher observes
+its parent, and the guardian observes its child.  Their cleanup checks the
+lease token and pasteboard generation before clearing.  Published confidential,
+transient and local-host metadata remain in effect.
+
+The confidential paste command reads clipboard text directly and inserts it
+without importing it into the kill ring.  Destination undo/save policies apply.
+
+* Limits
+
+A macOS pasteboard value already materialized in the OS can outlive stopped
+or simultaneously terminated helpers.  Independent cleanup reduces that risk;
+it cannot impose a hard read deadline on the pasteboard server.  Clipboard
+history tools and recipients can retain values already delivered to them.
+Emacs and recipient memory remain subject to host swap and hibernation policy.
+
+Clipboard ownership checks preserve replacement data; they do not authenticate
+what a receiving application eventually pastes.  A destination-specific channel
+is required to avoid malicious clipboard replacement.
+
+* Verification
+
+[[file:../../test/test-clipboard.el][ERT contracts]] reproduce delayed startup
+failure and extraction followed by ordinary and confidential paste.  macOS
+native artifacts cover expiry, either helper's termination and newer ownership;
+these require a Mac and are skipped on Linux.
+
+[[file:../../test/test-clipboard-native.py][Linux native contracts]] use an
+isolated Xvfb server and a Wayland protocol fixture.  They cover Unicode,
+confidentiality hints, refused filesystem writes, failed memory locking,
+publication acknowledgment, stopped Emacs, stopped helpers, helper termination
+and replacement owners.  An expired X11 response also retires selection ownership
+before the client can retry.  Suspend/resume is modeled by a sleep-inclusive clock
+jump; the tests never suspend the host.  The Wayland fixture exercises both
+protocols but does not replace compositor-specific integration testing.
+
+#+begin_src sh
+ORG_GLANCE_TEST_XVFB=/path/to/Xvfb python3 -B test/test-clipboard-native.py -v
+eask emacs --batch -l test/test-helpers.el -l test/test-clipboard.el -f ert-run-tests-batch-and-exit
+#+end_src
+
+* Sources
+
+- [[https://github.com/swaywm/wlr-protocols/blob/master/unstable/wlr-data-control-unstable-v1.xml][wlr data control]]
+- [[https://gitlab.freedesktop.org/wayland/wayland-protocols/-/blob/main/staging/ext-data-control/ext-data-control-v1.xml][ext data control]]
+- [[https://github.com/apple-oss-distributions/Libc/blob/main/gen/clock_gettime.c][Darwin continuous clock implementation]]

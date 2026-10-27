@@ -930,10 +930,17 @@ today, up from 50.
 
 * Confidential extraction
 
-42. Property extraction decrypts scratch content before selection; every value uses an expiring confidential clipboard and bypasses the kill ring, PRIMARY, messages and helper arguments; expiry preserves a newer owner.
+47. Extraction requires acknowledged clipboard publication; Linux helpers serve locked anonymous memory under sleep-inclusive deadlines, and macOS publisher/guardian cleanup preserves newer owners; extraction and confidential paste bypass the kill ring.
 
 - [[file:../test/test-clipboard.el][Extraction contracts]]: warm ordinary table extraction performs zero blob reads and zero blob parses.
-- [[file:proposals/2026-10-27-confidential-extraction.done.org][Clipboard adapters]]: clipboard-manager hints require cooperation; X11 and Wayland expiry uses Emacs timers.
+- [[file:../test/test-clipboard-native.py][Native clipboard contracts]]: stopped Emacs does not extend Linux leases; stopped helpers reject late reads; expired X11 replies retire ownership before client retries; helper termination removes the source; replacement owners survive cleanup; Wayland file writes are refused by an audit hook.
+- [[file:../test/test-clipboard.el][Paste contracts]]: ordinary yank retains an extracted value after clipboard expiry; confidential paste preserves the existing kill ring.
+- [[file:proposals/2026-10-27-confidential-clipboard-lifecycle.done.org][Clipboard lifecycle]]: clipboard-manager hints require cooperation; destination copies, macOS pasteboard caching, and host memory persistence remain outside the lease.
+
+* Test execution
+
+- [[file:../test/test-helpers.el][Test bootstrap]]: entry point and data/view modules load from the checkout; newer source wins over stale bytecode; =loads-checkout-libraries= checks all three origins.
+- [[file:../test/test-relations.el][Reference display contract]]: all reference aliases refresh current state/title with zero blob reads or full-graph scans; an older installed entry point reproduces missing display properties.
 
 * Known hazards
 

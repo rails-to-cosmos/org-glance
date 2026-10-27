@@ -14,36 +14,40 @@ ordinary headlines and opens encrypted content explicitly.
 
 * Clipboard adapters
 
-[[file:../../src/view/org-glance-clipboard.el][org-glance-clipboard]] bypasses the
-kill ring, PRIMARY and value-bearing messages.  The default lifetime is 15
-seconds and must remain positive.  Failed adapters refuse copying.
+[[file:../../src/view/org-glance-clipboard.el][org-glance-clipboard]] owns the
+API and acknowledged process transport; platform adapters load on demand.
+The default lease is 15 seconds and must remain positive.
 
-- [[file:../../src/view/org-glance-clipboard-linux-x.el][Linux X11]]: a conditional =x-kde-passwordManagerHint: secret= target; expiry checks
-  terminal ownership and the identical local selection object, using any
-  surviving frame on that terminal.
-- [[file:../../src/view/org-glance-clipboard-linux-wayland.el][Linux Wayland]]: =wl-copy --foreground --sensitive=, supplied through stdin; expiry
-  terminates that source process, leaving a newer owner alone.
-- [[file:../../src/view/org-glance-clipboard-osx.el][macOS]]: a system JXA process reads stdin and creates one AppKit pasteboard
-  item with =ConcealedType= and =TransientType=.  =currentHostOnly= disables
-  Handoff sharing.  The helper expires independently of Emacs and clears
-  only its saved pasteboard change count.
+- [[file:../../src/view/org-glance-clipboard-linux-x.el][Linux X11]] starts an
+  independent Xlib selection owner backed by locked anonymous memory.
+- [[file:../../src/view/org-glance-clipboard-linux-wayland.el][Linux Wayland]]
+  starts a memory-only data-control client.  Publication requires the compositor
+  to report the helper's unique offer as selected.
+- [[file:../../src/view/org-glance-clipboard-osx.el][macOS]] starts a JXA publisher
+  and guardian.  Both check a sleep-inclusive clock and preserve subsequent
+  pasteboard owners.  Either can clear the lease after its counterpart exits.
 
-The adapters avoid secret-bearing process arguments, environment variables,
-temporary files and output buffers.  Helper diagnostics are discarded.
-The common module loads the selected platform adapter on demand and owns
-the clipboard API, expiry setting and shared process transport.
+Linux helpers check their deadlines before each transfer, disable core dumps,
+refuse failed memory locking, and create no payload files.  Helpers receive
+plaintext through stdin and suppress diagnostics.  Confidentiality hints are
+published with the content; macOS also requests =currentHostOnly=.
 
 * Limits
 
-Confidentiality markers require clipboard-manager cooperation.  An application
-can collect plaintext during its availability window.  X11 permits broad
-client access; expiry cannot recall collected data.  Emacs timer delays can
-extend X11 and Wayland availability.  Ordinary copy commands and third-party
-packages retain their existing behavior.  Password-cache expiry leaves
-decrypted material text visible.
+Ordinary =C-y= can import clipboard text into the kill ring.  The confidential
+paste command inserts directly; destination undo and save policies still apply.
+Clipboard history tools must honor confidentiality hints.  Previously delivered
+copies remain outside the lease, including copies materialized by macOS's
+pasteboard server.  Stopping both macOS helpers can delay cleanup.  Host memory
+persistence policy governs Emacs and other applications.
+
+The shared clipboard does not authenticate the eventual destination value.
+Destination-specific transfer can avoid that substitution boundary.
 
 [[file:2026-10-27-windows-confidential-clipboard.proposed.org][Windows support]]
 is deferred pending a native clipboard helper and Windows verification.
+[[file:2026-10-27-confidential-clipboard-lifecycle.done.org][Lifecycle hardening]]
+records the filesystem, paste, acknowledgment and deadline corrections.
 
 * Evidence
 
@@ -60,7 +64,6 @@ eask emacs --batch -l test/test-helpers.el -l test/test-clipboard.el -f ert-run-
 
 * Sources
 
-- [[https://github.com/bugaevc/wl-clipboard/releases][wl-clipboard 2.3 confidentiality hint]]
 - [[https://nspasteboard.org/][Pasteboard confidentiality conventions]]
 - [[https://developer.apple.com/documentation/appkit/nspasteboard/contentsoptions/currenthostonly][AppKit currentHostOnly]]
 - [[https://developer.apple.com/documentation/appkit/nspasteboard/changecount][AppKit ownership generation]]

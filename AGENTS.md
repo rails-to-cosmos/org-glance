@@ -209,9 +209,12 @@ evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
     are wake-up hints. One operation derives History, payload integrity, parsing,
     and projection from one observation and re-observes only after mutation. A
     writer commits its family projection before success.
-42. Property extraction decrypts scratch content before selection and copies through
-    an expiring confidential clipboard; values bypass the kill ring, PRIMARY,
-    messages and helper arguments, and expiry preserves a newer clipboard owner.
+47. Extraction decrypts scratch content before selection and requires acknowledged
+    clipboard publication; Linux helpers serve locked anonymous memory under
+    sleep-inclusive deadlines, and macOS publisher/guardian cleanup preserves
+    newer owners. Extracted values bypass the kill ring, PRIMARY, messages and
+    helper arguments; confidential paste bypasses the kill ring. Ordinary paste
+    and destination undo/save policies can retain plaintext.
 
 ## Known hazards
 

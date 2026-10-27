@@ -99,6 +99,7 @@ FILTER, if non-nil, is a predicate on the metadata."
 (define-key org-glance-material-mode-map (kbd "C-c #") #'org-glance-material:crypt)
 (define-key org-glance-material-mode-map (kbd "C-c d") #'org-glance-material:set-project-dir)
 (define-key org-glance-material-mode-map (kbd "C-c e") #'org-glance-material:extract-here)
+(define-key org-glance-material-mode-map (kbd "C-c y") #'org-glance-clipboard:paste)
 (define-key org-glance-material-mode-map (kbd "C-c j") #'org-glance-material:open-link-here)
 (define-key org-glance-material-mode-map (kbd "C-c i") #'org-glance-material:set-interval)
 (define-key org-glance-material-mode-map (kbd "@") #'org-glance-material:refer)

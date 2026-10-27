@@ -5,6 +5,14 @@ Notable user-facing changes.  Versions date-based
 
 * Unreleased
 
+** Added
+
+- =org-glance-clipboard:paste= and material =C-c y= insert clipboard text without importing it into the kill ring.
+
+** Fixed
+
+- =org-glance-extract= requires publication acknowledgment and uses independent clipboard deadlines; Linux helpers keep payloads in locked anonymous memory, and macOS adds a cleanup guardian.
+
 * 1.55.1.0.20261027.0
 
 ** Changed

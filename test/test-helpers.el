@@ -1,9 +1,26 @@
 ;;; test-helpers.el --- Helpers for org-glance
+(defconst org-glance-test--root
+  (file-name-directory (directory-file-name
+                        (file-name-directory (or load-file-name buffer-file-name)))))
+
+(dolist (directory '("" "src/data" "src/view"))
+  (add-to-list 'load-path (expand-file-name directory org-glance-test--root)))
+(setq load-prefer-newer t)
+
 (require 'ert)
 (require 's)
 (require 'org-glance)
 
 (setq org-glance-cache--refresh-synchronously t)
+
+(ert-deftest org-glance-test:loads-checkout-libraries ()
+  "Load the entry point and both source layers from this checkout."
+  (dolist (entry '((org-glance-init . "")
+                   (org-glance-graph:add . "src/data")
+                   (org-glance-material:open . "src/view")))
+    (should (file-equal-p
+             (file-name-directory (symbol-file (car entry) 'defun))
+             (expand-file-name (cdr entry) org-glance-test--root)))))
 
 (cl-defmacro with-temp-directory (dir &rest body)
   "Bind symbol DIR to a fresh temporary directory, run BODY, then delete it."

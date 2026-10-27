@@ -174,20 +174,35 @@ encrypted properties use the same confidential clipboard path.  Sealed
 content prompts for its password before the property picker opens; extraction
 decrypts a scratch copy and preserves the live buffer and stored content.
 
-Values bypass the kill ring and message log.  Clipboard expiry defaults to
-15 seconds; =org-glance-clipboard-ttl= accepts positive integers.  Expiry
-preserves clipboard content copied afterward.
+Extraction bypasses the kill ring and message log, and reports success only
+after the helper acknowledges publication.  The lease defaults to 15 seconds;
+=org-glance-clipboard-ttl= accepts positive integers.  Helpers enforce their
+deadlines independently of Emacs and preserve subsequent clipboard owners.
 
-- Wayland requires =wl-clipboard= 2.3 or newer and uses =--sensitive=.
-- Graphical X11 offers =x-kde-passwordManagerHint= and leaves PRIMARY alone.
-- macOS uses AppKit through the system JXA interpreter, with confidential
-  and transient markers plus =currentHostOnly= to prevent Handoff sharing.
-- Unsupported sessions and failed helpers refuse copying.
+- Linux requires Python 3 and permission to lock the payload's memory.  The
+  helpers use anonymous memory, disable core dumps, and refuse storage fallback.
+- Wayland requires =ext-data-control-v1= or =wlr-data-control= support from the
+  compositor; unsupported compositors refuse copying.  The helper serves
+  transfer pipes directly and advertises =x-kde-passwordManagerHint=.
+- Graphical X11 requires =libX11=; a separate process owns CLIPBOARD and leaves
+  PRIMARY alone.  Linux helpers reject reads after their sleep-inclusive deadline.
+- macOS uses two system JXA processes: a publisher and a cleanup guardian.
+  Confidential/transient markers and =currentHostOnly= discourage history and
+  prevent Handoff sharing.  Either process cleans up if its counterpart exits.
 
-Clipboard managers must honor confidentiality hints.  Expiry cannot remove
-copies already collected by another application.  Ordinary =M-w= and =C-w=
-retain their usual Emacs behavior.  Password-cache expiry and
-=org-glance-material:lock= leave decrypted buffer text visible.
+Use =M-x org-glance-clipboard:paste=, or =C-c y= in a material buffer, to paste
+without importing text into the kill ring.  Ordinary =C-y= can import the
+clipboard into the kill ring and retain it after expiry; history packages may
+persist that copy.  Destination buffer contents, undo, and save policies apply
+to both paste commands.
+
+Clipboard managers must honor confidentiality hints.  Copies already delivered
+to applications or the macOS pasteboard server cannot be recalled reliably;
+stopping both macOS helpers can delay cleanup.  The shared clipboard does not
+authenticate what a destination receives.  A destination-specific transfer
+avoids that substitution boundary.  Host swap and hibernation policy still
+govern plaintext in Emacs and other applications.  Password-cache expiry and
+=org-glance-material:lock= leave decrypted material text visible.
 
 ** Repeating headlines
 

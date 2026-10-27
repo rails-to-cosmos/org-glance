@@ -27,18 +27,19 @@
   "Terminate PROCESS if it still owns a live clipboard source."
   (when (process-live-p process) (delete-process process)))
 
-(cl-defun org-glance-clipboard--send (value command &key ready)
-  "Send VALUE through stdin to COMMAND; wait for READY when supplied.
-Discard helper output and report failures without its diagnostic contents."
+(cl-defun org-glance-clipboard--send
+    (value command &key (ready "ready") (coding 'utf-8-unix))
+  "Send VALUE to COMMAND using CODING; require its READY acknowledgment.
+Discard helper diagnostics and refuse failed or unacknowledged publication."
   (let* ((ack nil)
          (matched 0)
-         (expected (and ready (concat ready "\n")))
-         (process-connection-type nil)
+         (expected (concat ready "\n"))
          (process (make-process
                    :name "org-glance-clipboard" :buffer nil
-                   :command command :coding 'utf-8-unix :noquery t
+                   :command command :coding coding :noquery t
+                   :connection-type 'pipe
                    :filter (lambda (_process output)
-                             (when (and expected (numberp matched) (not ack))
+                             (when (and (numberp matched) (not ack))
                                (cl-loop for character across output
                                         while (numberp matched)
                                         do (if (and (< matched (length expected))
@@ -46,24 +47,56 @@ Discard helper output and report failures without its diagnostic contents."
                                                (cl-incf matched)
                                              (setq matched nil)))
                                (setq ack (equal matched (length expected)))))
-                   :sentinel (lambda (_process _event)))))
-    (condition-case nil
-        (progn
-          (process-send-string process value)
-          (process-send-eof process)
-          (if ready
+                   :sentinel (lambda (_process _event))))
+         (success nil))
+    (unwind-protect
+        (condition-case nil
+            (progn
+              (process-send-string process value)
+              (process-send-eof process)
               (let ((deadline (+ (float-time) 5)))
-                (while (and (not ack) (process-live-p process)
+                (while (and (not ack) (numberp matched) (process-live-p process)
                             (< (float-time) deadline))
-                  (accept-process-output process 0.05))
-                (unless ack (user-error "Confidential clipboard helper failed")))
-            (accept-process-output process 0.05)
-            (unless (process-live-p process)
-              (user-error "Confidential clipboard helper failed")))
-          process)
-      (error
-       (org-glance-clipboard--stop process)
-       (user-error "Confidential clipboard helper failed")))))
+                  (accept-process-output process 0.05)))
+              (unless (and ack (process-live-p process))
+                (user-error "Confidential clipboard publication failed"))
+              (setq success t)
+              process)
+          (error (user-error "Confidential clipboard publication failed")))
+      (unless success (org-glance-clipboard--stop process)))))
+
+(defconst org-glance-clipboard--directory
+  (file-name-directory (or load-file-name buffer-file-name))
+  "Directory containing the packaged clipboard helpers.")
+
+(defun org-glance-clipboard--linux-copy (value backend)
+  "Publish VALUE through the independent Linux BACKEND with a memory lease."
+  (let ((python (executable-find "python3"))
+        (helper (expand-file-name "org_glance_clipboard.py"
+                                  org-glance-clipboard--directory))
+        (bytes (encode-coding-string value 'utf-8-unix))
+        (token (secure-hash 'sha256
+                            (format "%s:%s:%s" (emacs-pid) (current-time) (random)))))
+    (unless python (user-error "Confidential copying requires Python 3"))
+    (unless (file-readable-p helper)
+      (user-error "The org-glance clipboard helper is missing; reinstall the package"))
+    (org-glance-clipboard--send
+     bytes (list python "-I" "-B" helper backend
+                 (number-to-string (length bytes))
+                 (number-to-string org-glance-clipboard-ttl) token)
+     :coding 'no-conversion)))
+
+;;;###autoload
+(defun org-glance-clipboard:paste ()
+  "Insert clipboard text without importing it into the kill ring.
+The destination buffer's undo and save policies apply to the inserted text.
+The shared clipboard does not authenticate the source of the text."
+  (interactive)
+  (barf-if-buffer-read-only)
+  (let ((text (gui-get-selection
+               'CLIPBOARD (if (memq window-system '(x pgtk)) 'UTF8_STRING 'STRING))))
+    (unless (stringp text) (user-error "No text on the clipboard"))
+    (insert (substring-no-properties text))))
 
 (defun org-glance-clipboard:copy (value)
   "Copy VALUE confidentially, bypassing the kill ring and PRIMARY selection.

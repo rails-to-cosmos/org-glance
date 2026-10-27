@@ -7,6 +7,55 @@
 (require 'org-glance-clipboard-linux-wayland)
 (require 'org-glance-clipboard-linux-x)
 
+(defconst org-glance-test--clipboard-directory
+  (file-name-directory (or load-file-name buffer-file-name)))
+
+(ert-deftest org-glance-test:clipboard-native-linux-lifecycle ()
+  "Run the Linux protocol, storage and process-lifetime contracts."
+  (skip-unless (eq system-type 'gnu/linux))
+  (skip-unless (executable-find "python3"))
+  (with-temp-buffer
+    (let ((status (call-process
+                   (executable-find "python3") nil t nil "-B"
+                   (expand-file-name "test-clipboard-native.py"
+                                     org-glance-test--clipboard-directory))))
+      (unless (zerop status) (ert-fail (buffer-string))))))
+
+(ert-deftest org-glance-test:clipboard-delayed-failure-needs-ack ()
+  "Refuse a helper that stays alive briefly and then fails publication."
+  (skip-unless (executable-find "python3"))
+  (should-error
+   (org-glance-clipboard--send
+    "credential" (list (executable-find "python3") "-c"
+                       "import sys,time; sys.stdin.read(); time.sleep(.2); sys.exit(1)"))
+   :type 'user-error))
+
+(ert-deftest org-glance-test:clipboard-extract-then-confidential-paste ()
+  "Paste an extracted value without importing it into the kill ring."
+  (let ((kill-ring '("previous")) clipboard)
+    (cl-letf (((symbol-function 'org-glance-clipboard:copy)
+               (lambda (value) (setq clipboard value)))
+              ((symbol-function 'gui-get-selection)
+               (lambda (&rest _) clipboard)))
+      (org-glance-material:extract-pairs '(("password" . "credential")) "password")
+      (with-temp-buffer
+        (buffer-enable-undo)
+        (org-glance-clipboard:paste)
+        (should (equal "credential" (buffer-string))))
+      (setq clipboard nil)
+      (should (equal '("previous") kill-ring)))))
+
+(ert-deftest org-glance-test:clipboard-ordinary-paste-retains-value ()
+  "Record the ordinary-yank limitation after extraction and clipboard expiry."
+  (let ((kill-ring '("previous")) (kill-ring-yank-pointer nil) clipboard)
+    (cl-letf (((symbol-function 'org-glance-clipboard:copy)
+               (lambda (value) (setq clipboard value))))
+      (org-glance-material:extract-pairs '(("password" . "credential")) "password"))
+    (let ((interprogram-paste-function (lambda () clipboard)))
+      (with-temp-buffer (yank)))
+    (setq clipboard nil)
+    (should (member "credential" kill-ring))))
+
 (ert-deftest org-glance-test:extract-confidential ()
   "Copy ordinary properties without retaining or displaying their values."
   (let ((kill-ring '("previous")) copied messages)
@@ -47,25 +96,6 @@
              (lambda (_) (ert-fail "Copied a missing property"))))
     (should-error (org-glance-material:extract-pairs '(("a" . "b")) "absent")
                   :type 'user-error)))
-
-(ert-deftest org-glance-test:clipboard-expiry-ownership ()
-  "Expire only the exact selection published by this copy."
-  (let ((terminal (frame-terminal)) (token (copy-sequence "secret"))
-        (owner t) current cleared)
-    (cl-letf (((symbol-function 'gui-backend-selection-owner-p) (lambda (_) owner))
-              ((symbol-function 'gui-get-selection) (lambda (&rest _) current))
-              ((symbol-function 'gui-set-selection)
-               (lambda (&rest _) (setq cleared t))))
-      (setq current (copy-sequence token))
-      (org-glance-clipboard-linux-x--expire terminal token)
-      (should-not cleared)
-      (setq current token)
-      (setq owner nil)
-      (org-glance-clipboard-linux-x--expire terminal token)
-      (should-not cleared)
-      (setq owner t)
-      (org-glance-clipboard-linux-x--expire terminal token)
-      (should cleared))))
 
 (ert-deftest org-glance-test:clipboard-unsupported-refuses ()
   "Refuse unsupported sessions without exporting through the kill ring."
@@ -138,26 +168,6 @@
                (lambda (value) (should (equal "Tolkien" value)))))
       (org-glance-table--act-extract graph "plain"))))
 
-(ert-deftest org-glance-test:clipboard-x-confidential-offer ()
-  "Offer only CLIPBOARD with a conditional hint and an exact expiry token."
-  (let ((selection-converter-alist (copy-tree selection-converter-alist))
-        offered expiry)
-    (cl-letf (((symbol-function 'gui-set-selection)
-               (lambda (selection value) (setq offered (cons selection value))))
-              ((symbol-function 'run-at-time)
-               (lambda (&rest arguments) (setq expiry arguments))))
-      (org-glance-clipboard-linux-x:copy "credential"))
-    (should (eq 'CLIPBOARD (car offered)))
-    (should (eq (cdr offered) (nth 4 expiry)))
-    (should (= org-glance-clipboard-ttl (car expiry)))
-    (should (equal '(x-kde-passwordManagerHint . "secret")
-                   (org-glance-clipboard-linux-x--hint
-                    'CLIPBOARD 'x-kde-passwordManagerHint (cdr offered))))
-    (should-not (org-glance-clipboard-linux-x--hint
-                 'PRIMARY 'x-kde-passwordManagerHint (cdr offered)))
-    (should-not (org-glance-clipboard-linux-x--hint
-                 'CLIPBOARD 'x-kde-passwordManagerHint "ordinary"))))
-
 (ert-deftest org-glance-test:clipboard-helper-private-transport ()
   "Send Unicode and newlines through stdin without creating an output buffer."
   (skip-unless (executable-find "python3"))
@@ -186,22 +196,26 @@
     :ready "ready")
    :type 'user-error))
 
-(ert-deftest org-glance-test:clipboard-wayland-dispatch ()
-  "Pass sensitive content over stdin and expire only its source process."
-  (let ((system-type 'gnu/linux) (process-environment '("WAYLAND_DISPLAY=test"))
-        sent command expiry)
-    (cl-letf (((symbol-function 'executable-find) (lambda (_) "/usr/bin/wl-copy"))
-              ((symbol-function 'org-glance-clipboard--send)
-               (lambda (value arguments &rest _)
-                 (setq sent value command arguments) 'source))
-              ((symbol-function 'run-at-time)
-               (lambda (&rest arguments) (setq expiry arguments))))
-      (org-glance-clipboard:copy "credential"))
-    (should (equal sent "credential"))
-    (should (equal command '("wl-copy" "--foreground" "--sensitive"
-                            "--type" "text/plain;charset=utf-8")))
-    (should (equal expiry (list org-glance-clipboard-ttl nil
-                               #'org-glance-clipboard--stop 'source)))))
+(ert-deftest org-glance-test:clipboard-linux-independent-memory-helper ()
+  "Use acknowledged memory helpers without wl-copy or Emacs expiry timers."
+  (let ((system-type 'gnu/linux))
+    (dolist (backend '("wayland" "x11"))
+      (let ((process-environment
+             (and (equal backend "wayland") '("WAYLAND_DISPLAY=test")))
+            (window-system (and (equal backend "x11") 'x))
+            sent command options)
+        (cl-letf (((symbol-function 'executable-find) (lambda (_) "/usr/bin/python3"))
+                  ((symbol-function 'org-glance-clipboard--send)
+                   (lambda (value arguments &rest keywords)
+                     (setq sent value command arguments options keywords)))
+                  ((symbol-function 'run-at-time)
+                   (lambda (&rest _) (ert-fail "Expiry depends on Emacs timers"))))
+          (org-glance-clipboard:copy "credential λ"))
+        (should (equal sent (encode-coding-string "credential λ" 'utf-8-unix)))
+        (should (equal (nth 4 command) backend))
+        (should (equal (nth 5 command) (number-to-string (length sent))))
+        (should (eq (plist-get options :coding) 'no-conversion))
+        (should-not (string-match-p "credential" (mapconcat #'identity command " ")))))))
 
 (ert-deftest org-glance-test:clipboard-mac-dispatch ()
   "Keep the secret out of JXA's arguments and require readiness acknowledgement."
@@ -212,7 +226,7 @@
       (org-glance-clipboard:copy "credential"))
     (should (equal sent "credential"))
     (should-not (string-match-p "credential" (mapconcat #'identity command " ")))
-    (should (equal ready "ready"))
+    (should-not ready)
     (should (equal (car command) "/usr/bin/osascript"))))
 
 (ert-deftest org-glance-test:clipboard-mac-native-expiry ()
@@ -223,10 +237,11 @@
          (board (format "$.NSPasteboard.pasteboardWithName($('%s'))" name))
          (script (string-replace "$.NSPasteboard.generalPasteboard" board
                                  org-glance-clipboard-osx--script))
+         (publisher (string-replace "$.NSPasteboard.generalPasteboard" board
+                                    org-glance-clipboard-osx--publisher))
          (process (org-glance-clipboard--send
                    "test credential"
-                   (list "/usr/bin/osascript" "-l" "JavaScript" "-e" script "3")
-                   :ready "ready")))
+                   (list "/usr/bin/osascript" "-l" "JavaScript" "-e" script "3" publisher))))
     (unwind-protect
         (progn
           (with-temp-buffer
@@ -257,3 +272,66 @@
                        "!ObjC.unwrap(b.stringForType($.NSPasteboardTypeString))"))))
             (should (equal "true" (string-trim (buffer-string))))))
       (org-glance-clipboard--stop process))))
+
+(defun org-glance-test:mac-lease ()
+  "Start an isolated ten-second macOS lease and return its process and board."
+  (let* ((board (format "$.NSPasteboard.pasteboardWithName($('org.glance.test.%s'))"
+                        (random most-positive-fixnum)))
+         (script (string-replace "$.NSPasteboard.generalPasteboard" board
+                                 org-glance-clipboard-osx--script))
+         (publisher (string-replace "$.NSPasteboard.generalPasteboard" board
+                                    org-glance-clipboard-osx--publisher)))
+    (list (org-glance-clipboard--send
+           "test credential" (list "/usr/bin/osascript" "-l" "JavaScript" "-e"
+                                   script "10" publisher))
+          board)))
+
+(defun org-glance-test:mac-eval (board expression)
+  "Return EXPRESSION evaluated against the isolated pasteboard BOARD."
+  (with-temp-buffer
+    (should (zerop (call-process
+                    "/usr/bin/osascript" nil t nil "-l" "JavaScript" "-e"
+                    (concat "ObjC.import('AppKit'); var b = " board ";" expression))))
+    (string-trim (buffer-string))))
+
+(ert-deftest org-glance-test:clipboard-mac-native-helper-termination ()
+  "Clear the isolated lease when either publisher or guardian is killed."
+  (skip-unless (eq system-type 'darwin))
+  (dolist (victim '(publisher guardian))
+    (pcase-let ((`(,process ,board) (org-glance-test:mac-lease)))
+      (unwind-protect
+          (progn
+            (if (eq victim 'guardian)
+                (org-glance-clipboard--stop process)
+              (let ((pid (with-temp-buffer
+                           (should (zerop (call-process
+                                           "pgrep" nil t nil "-P"
+                                           (number-to-string (process-id process)))))
+                           (string-to-number (buffer-string)))))
+                (should (> pid 1))
+                (signal-process pid 'SIGKILL)))
+            (let ((deadline (+ (float-time) 3)) empty)
+              (while (and (not empty) (< (float-time) deadline))
+                (setq empty (equal "true" (org-glance-test:mac-eval
+                                          board "!ObjC.unwrap(b.stringForType($.NSPasteboardTypeString))")))
+                (unless empty (sleep-for .05)))
+              (should empty)))
+        (org-glance-clipboard--stop process)
+        (org-glance-test:mac-eval board "b.clearContents; true")))))
+
+(ert-deftest org-glance-test:clipboard-mac-native-replacement-preserved ()
+  "Leave a subsequent pasteboard owner intact when the lease terminates."
+  (skip-unless (eq system-type 'darwin))
+  (pcase-let ((`(,process ,board) (org-glance-test:mac-lease)))
+    (unwind-protect
+        (progn
+          (org-glance-test:mac-eval
+           board "b.clearContents; b.setStringForType('replacement', $.NSPasteboardTypeString)")
+          (let ((deadline (+ (float-time) 3)))
+            (while (and (process-live-p process) (< (float-time) deadline))
+              (accept-process-output process .05)))
+          (should-not (process-live-p process))
+          (should (equal "replacement" (org-glance-test:mac-eval
+                                        board "ObjC.unwrap(b.stringForType($.NSPasteboardTypeString))"))))
+      (org-glance-clipboard--stop process)
+      (org-glance-test:mac-eval board "b.clearContents; true"))))

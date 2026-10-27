@@ -106,9 +106,11 @@ findings and exits non-zero if any linter reports, so it can gate CI.
   bench …)~ and ~(eask-defcommand lint …)~ alongside it; add a
   ~(development (depends-on "package-lint") (depends-on "relint"))~ block.
   ~checkdoc~ is built in.
-- The ~files~ / ~load-paths~ directives (=Eask:6-8=) already put ~src/data~ and
-  ~src/view~ on the load path, so both commands see the sources with no extra
-  wiring.
+- [[file:../../test/test-helpers.el][The shared test bootstrap]] prepends the checkout
+  root, ~src/data~ and ~src/view~ and prefers newer source files. Eask package
+  activation can otherwise put an installed entry point ahead of the checkout.
+  =loads-checkout-libraries= verifies the origin of all three layers; the benchmark
+  harness uses the same bootstrap.
 - No change to any ~src/~ file. If ~checkdoc~ / ~package-lint~ / ~relint~ flag
   existing violations, fixing those is follow-up work tracked separately — this
   proposal lands the *harness*, green or with a documented baseline allowlist.
