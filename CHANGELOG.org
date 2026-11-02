@@ -5,6 +5,10 @@ Notable user-facing changes.  Versions date-based
 
 * Unreleased
 
+** Fixed
+
+- The cache worker folds pending Glance Snapshot notifications before inventory reconciliation.
+
 * 1.55.1.0.20261027.1
 
 ** Added

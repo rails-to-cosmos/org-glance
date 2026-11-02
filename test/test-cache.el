@@ -1861,5 +1861,29 @@
                      (org-glance-headline-metadata:title
                       (org-glance-cache:headline graph "incremental")))))))
 
+
+(ert-deftest org-glance-test:external-snapshot-precedes-inventory-failure ()
+  "Publish a notified Snapshot before an unrelated inventory failure."
+  (org-glance-test:with-graph graph
+    (let* ((id "repaired-current")
+           (dir (org-glance-graph:headline-data-path graph id)))
+      (org-glance-graph:add graph
+        (org-glance-test:headline id "* Original"))
+      (let* ((parent (car (org-glance-version:current dir id)))
+             (contents (concat "* Repaired current\n:PROPERTIES:\n"
+                               ":ORG_GLANCE_ID: " id "\n:END:\n")))
+        (org-glance-version:write-snapshot
+         dir id (list (org-glance-version:id parent)) "glance" contents 10)
+        (org-glance-test:write
+         (org-glance-graph:external-path graph)
+         (concat (json-serialize (list :id id :at "2026-11-02T07:35:34Z")) "\n")))
+      (cl-letf (((symbol-function 'org-glance-cache--reconcile-now)
+                 (lambda (_graph) (error "Unrelated inventory failed"))))
+        (should-error
+         (org-glance-cache:refresh-batch (org-glance-graph:directory graph))))
+      (should (equal "Repaired current"
+                     (org-glance-headline-metadata:title
+                      (org-glance-graph:live-meta graph id)))))))
+
 (provide 'test-cache)
 ;;; test-cache.el ends here

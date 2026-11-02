@@ -1387,8 +1387,12 @@ Return the number of families folded."
   "Reconcile DIRECTORY once in the current noninteractive Emacs."
   (let* ((org-glance-graph-after-open-functions nil)
          (graph (org-glance-graph directory)))
-    (prog1 (org-glance-cache--reconcile-now graph)
-      (org-glance-graph:refresh-external graph))))
+    (if (file-exists-p (org-glance-cache:path graph))
+        (progn
+          (org-glance-graph:refresh-external graph)
+          (org-glance-cache--reconcile-now graph))
+      (prog1 (org-glance-cache--reconcile-now graph)
+        (org-glance-graph:refresh-external graph)))))
 
 (cl-defun org-glance-cache:refresh-worker (directory)
   "Reconcile DIRECTORY in a batch worker and report a concise failure."

@@ -399,8 +399,9 @@ argument in [[file:proposals][docs/proposals/]].
     new =glance= against an old org-glance degrades to a skipped ="no stored blob"=, an
     old =glance= writes no third field at all. The isolated reconciliation worker
     discovers immutable events without entering a graph read. A bounded timer
-    survey wakes that worker promptly; the worker drains the compatibility
-    relay. Explicit =org-glance-graph:refresh-external= remains available.
+    survey wakes that worker promptly; the worker drains relay entries before
+    inventory reconciliation for an existing cache, or after cold recovery.
+    Explicit =org-glance-graph:refresh-external= remains available.
     The whole batch — records and tombstones alike — is ONE
     =graph:insert=; the fold's cursor moves only AFTER that append (crash rule: a
     repeated write costs an equal record the latest-per-id fold cannot distinguish, a
