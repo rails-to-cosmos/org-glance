@@ -1,3 +1,5 @@
+;; -*- lexical-binding: nil; -*-
+
 (require 'package)
 (require 'json)
 
