@@ -118,11 +118,7 @@ evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
 20. Overview headings are self-sufficient, metadata-only: state, priority, one planning
     line, id drawer, interval line, relations, plain links — zero blob parses; agenda +
     link-following need no materialization.
-21. Managed drawer keys (`org-glance-material-hidden-properties`, fixed per buffer at open)
-    live in the FILE, never in the material buffer: removed at open and after every revert
-    (`--strip-reserved`), spliced back into every write by `write-region-annotate-functions`
-    — the buffer never changes to restore them. A material buffer reverts with its modes
-    preserved (`--revert`); a mode re-run kills the stash the next write needs.
+21. Managed drawer keys (`org-glance-material-hidden-properties`, fixed per buffer at open) are stripped on source load and supplied by the in-memory publication serializer; revert preserves modes and the managed stash.
 22. Material saves rewrite user content only through announced normalize hooks (a
     hand-typed managed line dropped, tag normalization — each warns — and the crypt
     seal).
@@ -140,9 +136,7 @@ evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
     takes a lone candidate at any depth, and breaks exhausted-path ties by target.
 26. Plugins (`org-glance-plugins`) load error-demoted, self-register their UI
     remove-then-append, and never unload.
-27. `after-save-hook` depth order is load-bearing: `material:sync` (0) re-parses the FILE
-    before `--decrypt-buffer` (90) unseals the buffer, so the WAL and every index see
-    SEALED bytes — the mechanism behind inv 14.
+27. Material saves seal hardened scratch content, parse metadata from those exact bytes, and complete event/WAL/family publication before success; save hooks carry notifications and the editor retains its presentation.
 28. Crypt block rewrites iterate blocks LAST-to-FIRST; forward iteration invalidates later
     blocks' recorded positions after any length change.
 29. `--from-element` strips org's `ARCHIVE` marker from the parsed tag set; it is
@@ -188,8 +182,7 @@ evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
     instance and one open pass.
 37. `org-glance-core` is a one-way base module and never requires top-level
     `org-glance.el`.
-38. Material relation logbook entries derive live on open, revert and save; the
-    before-save hook removes them, preserving authored blob content alone. Plain
+38. Material relation logbook entries derive live on open, revert and save through display overlays, preserving authored text and undo. Plain
     edges use `Refers to` / `Referred by`; typed edges capitalize `<type>`; each
     entry carries its current source snapshot creation time, except legacy roots.
     Reference display uses current target state and title; authored link bytes persist.
@@ -216,6 +209,8 @@ evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
     ownership-conditional AppKit writes. Extracted values bypass the kill ring,
     PRIMARY, messages and helper arguments; confidential paste bypasses the kill
     ring. Ordinary paste and destination undo/save policies can retain plaintext.
+
+48. Material editors are keyed by canonical graph directory and logical ID, have no visited file, adopt exact publication receipts without reloading, preserve dirty drafts, and treat pending publication as outstanding work independently of the modified flag; durable incomplete events retry under their original identities.
 
 ## Known hazards
 

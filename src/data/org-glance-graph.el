@@ -12,6 +12,7 @@
 (require 'org-glance-version)
 
 (declare-function org-glance-cache:headline "org-glance-cache")
+(declare-function org-glance-cache:material-state "org-glance-cache")
 
 (defvar org-glance-graph:list (make-hash-table :test #'equal)
   "Registered instances of `org-glance-graph' in current session.")
@@ -548,6 +549,14 @@ Registering the same CALLBACK for GRAPH more than once has no effect."
        (funcall listener graph changed))
      nil)))
 
+(cl-defstruct (org-glance-publication
+               (:conc-name org-glance-publication:))
+  graph id version contents metadata revision source-version source-digest
+  (phase 'prepared) frontier)
+
+(defvar org-glance-graph--edit-publication nil
+  "Receipt supplying the exact source during an edit's compatibility projection.")
+
 (defvar org-glance-graph--publication-hook nil
   "Function called after local projection commit and before live publication.")
 
@@ -569,6 +578,10 @@ SPECS are metadata structs or bare plists; each gets a fresh monotonic `seq'."
              collect record into records
              collect (json-serialize record) into jsons
              finally (progn (f-append-text (concat (s-join "\n" jsons) "\n") 'utf-8 open)
+                            (when org-glance-graph--edit-publication
+                              (setf (org-glance-publication:phase
+                                     org-glance-graph--edit-publication)
+                                    'wal-appended))
                             (setq written records)))
     ;; Seal/compact first: compaction REWRITES records; no patch expresses that.
     (org-glance-graph--maybe-seal graph)
@@ -753,6 +766,78 @@ Signal a `user-error' when ID has concurrent leaves of either kind."
       (setq history (org-glance-version-observation:history
                      (org-glance-version:observe dir id))))
     history))
+
+(cl-defun org-glance-graph:prepare-edit
+    (graph &key id contents metadata expected-frontier revision
+           source-version source-digest)
+  "Prepare GRAPH's publication receipt for ID without publishing an event.
+Capture sealed CONTENTS, METADATA, EXPECTED-FRONTIER and authored REVISION.
+SOURCE-VERSION and SOURCE-DIGEST identify the editing source."
+  (let* ((dir (org-glance-graph:headline-data-path graph id))
+         (settings (org-glance-config:current graph)))
+    (unless (and (equal id (org-glance-headline-metadata:id metadata))
+                 (equal id (org-glance-headline:id
+                            (org-glance-headline--from-string contents))))
+      (error "Publication content and metadata must identify the logical headline"))
+    (unless (stringp (json-serialize (org-glance-headline-metadata:serialize metadata)))
+      (error "Invalid publication metadata"))
+    (when (and settings
+               (org-glance-config:local-tags-p
+                settings (append (org-glance-headline-metadata:tags metadata) nil))
+               (file-in-directory-p dir (org-glance-graph:data-path graph)))
+      (user-error "Local tags require explicit localization of family %s" id))
+    (make-org-glance-publication
+     :graph graph :id id :contents contents :metadata metadata :revision revision
+     :source-version source-version :source-digest source-digest
+     :version (org-glance-version:prepare
+               dir id :parents expected-frontier :producer "org-glance"
+               :kind 'snapshot :contents contents))))
+
+(cl-defun org-glance-graph:publish-edit (receipt)
+  "Publish or complete RECEIPT's exact event and return RECEIPT.
+Errors and quits leave RECEIPT retryable, including after event rename."
+  (unless (eq 'projection-committed (org-glance-publication:phase receipt))
+    (let* ((graph (org-glance-publication:graph receipt))
+           (id (org-glance-publication:id receipt))
+           (version (org-glance-publication:version receipt))
+           (final (org-glance-version:directory version))
+           (dir (org-glance-graph:headline-data-path graph id)))
+      (if (file-exists-p final)
+          (unless (and
+                   (equal (f-read-text (f-join final "meta.json") 'utf-8-unix)
+                          (concat (json-serialize
+                                   (org-glance-version--plist version)) "\n"))
+                   (equal (secure-hash
+                           'sha256 (f-read-text (f-join final "data.org") 'utf-8-unix))
+                          (org-glance-version:content-sha256 version)))
+            (error "Published event %s failed recovery verification"
+                   (org-glance-version:id version)))
+        (let* ((history (org-glance-version-observation:history
+                         (org-glance-version:observe dir id)))
+               (frontier (sort (mapcar #'org-glance-version:id
+                                       (org-glance-version:leaves history))
+                               #'string<))
+               (source (cl-find (org-glance-publication:source-version receipt)
+                                history :key #'org-glance-version:id :test #'equal)))
+          (unless (and (equal frontier (org-glance-version:parents version))
+                       source (org-glance-version:valid source)
+                       (equal (org-glance-publication:source-digest receipt)
+                              (org-glance-version:content-sha256 source)))
+            (user-error "Headline %s changed; save refused" id))
+          (when (cl-find "legacy" history :key #'org-glance-version:producer :test #'equal)
+            (org-glance-version:migrate-legacy dir id))
+          (org-glance-version--publish
+           version (org-glance-publication:contents receipt))))
+      (setf (org-glance-publication:phase receipt) 'event-published)
+      (let ((org-glance-graph--edit-publication receipt))
+        (org-glance-graph:insert graph (list (org-glance-publication:metadata receipt))))
+      (let ((state (org-glance-cache:material-state graph id)))
+        (unless (plist-get state :verified)
+          (error "Headline %s was published; family projection needs recovery" id))
+        (setf (org-glance-publication:frontier receipt) (plist-get state :frontier)
+              (org-glance-publication:phase receipt) 'projection-committed
+              (org-glance-publication:contents receipt) nil))))
+  receipt)
 
 (cl-defun org-glance-graph:put-content (graph headline)
   "Persist HEADLINE's contents atomically under GRAPH's store, keyed by its id.

@@ -5,8 +5,20 @@ Notable user-facing changes.  Versions date-based
 
 * Unreleased
 
+* 1.57.0.0.20261104.0
+
+** Changed
+
+- =org-glance-material:open= reuses a virtual editor per logical headline; =C-x C-s= publishes in place and =C-x s= includes material drafts.
+- Material relation logbooks use display overlays; crypt saves preserve the editor's decrypted presentation and reject malformed markers.
+
+** Added
+
+- =org-glance-material:preview= and =:restore= provide pinned version recovery; =:export= and =:diff= handle ordinary content copies and comparisons.
+
 ** Fixed
 
+- Material save, save-all, close and exit protect pending publications after undo; same-version revert refreshes externally resolved conflict state.
 - Overview and table views collapse repeated cached snapshots of the same logical headline.
 
 * 1.55.1.0.20261102.0

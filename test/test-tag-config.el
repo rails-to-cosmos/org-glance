@@ -78,11 +78,11 @@ CONFIGS is an alist (TAG-STRING . CONTENTS); the cache resets around BODY."
         (should (member "PLAN" org-not-done-keywords))
         (should-not (member "PLAN" org-done-keywords))
         (org-glance-test:save)
-        (should-not (string-match-p "#\\+TODO:" (f-read-text buffer-file-name 'utf-8-unix)))
+        (should-not (string-match-p "#\\+TODO:" (f-read-text (plist-get org-glance-material--base :path) 'utf-8-unix)))
         (goto-char (point-min))
         (let ((org-inhibit-logging t)) (org-todo "DONE"))
         (org-glance-test:save)
-        (should (string-prefix-p "* DONE Task" (f-read-text buffer-file-name 'utf-8-unix))))
+        (should (string-prefix-p "* DONE Task" (f-read-text (plist-get org-glance-material--base :path) 'utf-8-unix))))
       (should (equal "#+TODO: PLAN\n\n* Book\n" (f-read-text (f-join dir "book.org") 'utf-8-unix))))))
 
 (ert-deftest org-glance-test:tag-config-render-from-config ()

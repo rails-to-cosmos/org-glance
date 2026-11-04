@@ -57,6 +57,12 @@ immutable history.
 
 * Org-glance behavior for actual variants
 
+The editor identity and save lifecycle are specified by
+[[file:2026-11-04-virtual-material-buffers.done.org][Virtual material buffers]].
+Editable material buffers follow logical headlines; exact-version previews
+remain pinned and read-only. This replaces the file-visiting editor assumption
+in the steps below.
+
 Materialization branches on the derived leaf set:
 
 1. One snapshot leaf opens the editable material buffer attached to that exact

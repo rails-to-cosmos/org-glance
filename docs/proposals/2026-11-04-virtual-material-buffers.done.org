@@ -1,0 +1,432 @@
+#+TITLE: Virtual material buffers with stable headline identity
+#+DATE: 2026-11-04
+#+STATUS: done
+
+* Decision
+
+A material buffer edits one logical headline. Its identity is the canonical
+graph directory plus logical headline ID. Its editing base is an explicit
+version reference. Saving publishes a child and advances that reference in
+the existing buffer, preserving its text, point, windows, folding and undo.
+
+The material buffer has =buffer-file-name=nil=. Snapshot paths are private
+storage references. History previews are separate, read-only buffers keyed by
+graph, headline and version. The logical editor follows successful local
+publication; a history preview remains pinned.
+
+The migration uses virtual logical editors and pinned previews. The reported
+transient stale-buffer behavior was not reproduced; its cause remains unknown.
+
+* Previous implementation and preserved constraints
+
+At [[https://github.com/rails-to-cosmos/org-glance/commit/1f32cbefbc069ab406ad041d7fa7686c6488dafa][1f32cbe]],
+=src/view/org-glance-material.el:273= writes a temporary serialization, calls
+=graph:put-content= and changes the visited file. =material:sync= at line 318
+reads that file and appends metadata in =after-save-hook=. =material:open= at
+line 921 finds buffers through their snapshot paths.
+
+The migration preserves invariants 11, 14, 22, 38, 39, 40 and 41: protect dirty
+drafts, keep crypt plaintext off disk, announce normalization, derive relation
+display, retain immutable history, preserve rejected-version recovery, and
+finish the required family projection before reporting mutation success.
+
+Invariants 21 and 27 now describe serializer-supplied managed properties and
+metadata derived from sealed publication bytes before success. Invariant 38
+uses relation display overlays; invariant 48 owns logical editor identity and
+receipt recovery.
+
+* Buffer identity and state
+
+Maintain one registry entry per =(graph-truename, logical-id)=. Entries refer
+to live buffers; lookup removes dead entries and buffer teardown unregisters
+itself. Opening an already edited headline returns that exact buffer, even
+when another version has arrived. A changed title may rename the buffer;
+snapshot changes never replace its buffer object.
+
+Buffer-local state contains:
+
+- Graph and logical ID; =material:current= retains its existing public result.
+- Base version ID, payload digest and source path as one immutable reference.
+- Expected structural frontier captured with the base observation.
+- Managed properties, newline provenance, Org configuration and crypt state.
+- A pending publication receipt when durable publication needs completion.
+- A refresh flag set by graph notifications; current state is checked on use.
+
+The modified flag represents unsaved authored changes or incomplete save
+completion. Derived relation rendering and reference labels do not dirty it.
+Version IDs describe storage; the user-facing buffer name describes the
+headline. =default-directory= remains a meaningful graph directory, with
+project selection continuing through the existing project-directory API.
+
+Use three records with separate lifetimes:
+
+| Record | Contents | Lifetime |
+|--------+----------+----------|
+| Editing base | Source version, SHA-256 digest, private path, expected structural frontier | Until load, restore or completed publication |
+| Save draft | Authored revision, sealed UTF-8 bytes, parsed metadata, captured parents | One save attempt |
+| Publication receipt | Event envelope and path, draft revision, completion phase, observed resulting frontier | Through completion and buffer adoption |
+
+The source version and expected frontier can differ during explicit restore.
+Frontiers are sorted sets of all structural leaves, including rejected nodes
+and tombstones. The base digest identifies the source payload; the draft
+digest identifies the exact encoded bytes to publish.
+
+Maintain a monotonic authored revision through change hooks. Normalization,
+undo and indirect-buffer text edits advance it. Relation logbook lines use a
+buffer-local overlay, and reference labels use display properties. Their
+refresh preserves authored text, the modified flag and undo. Explicit crypt
+presentation changes preserve the authored dirty state. The serializer returns
+the revision captured with its text; edits during password entry remain dirty.
+
+Saving, loading and recovery share a buffer-local operation guard. Recursive
+save attempts signal an error; notifications set flags while an operation is
+active. Dirty state and refresh state remain independent: a clean editor can
+be stale, and a pending publication always needs completion.
+Pending work is tested independently of the modified flag. Native save and
+save-all selection mark pending editors modified before Emacs considers them;
+close, exit and mutation guards use the shared outstanding-work predicate.
+Same-version revert refreshes the committed frontier and reconciliation state
+while retaining the existing text and undo baseline.
+
+* Save transaction
+
+=C-x C-s=, programmatic =save-buffer= and any Material Apply command share one
+save implementation. It runs synchronously initially.
+
+1. Finish pending publication recovery before beginning another publication.
+2. Run announced normalization and obtain a coherent editing snapshot. Record
+   its authored revision after normalization. Required validation
+   runs inside the save implementation and propagates errors.
+3. Serialize authored text into hardened scratch memory: splice managed
+   properties, restore newline provenance, and seal complete crypt blocks. Parse metadata from those exact sealed bytes. The editing buffer
+   keeps its existing decrypted or sealed presentation.
+4. Validate the captured expected frontier against a fresh family observation.
+   A changed frontier refuses publication and preserves the draft. Pass the
+   expected parent IDs explicitly to the writer.
+5. Publish one immutable child with those parents, append its metadata to the
+   compatibility WAL, and commit the required private family projection.
+6. Return a receipt containing the exact published version, digest, path and
+   projection outcome. Advance the buffer's base from this receipt. Successful
+   local publication performs zero snapshot-content reads to re-materialize
+   the editor and never invokes =material:open=, =find-file= or revert.
+7. Mark the buffer clean only when its authored revision still matches
+   the serialized draft. Refresh derived annotations without adding undo
+   entries or moving point. Subsequent edits remain dirty against the new base.
+
+The success path preserves the authored text already in the editor. Announced
+normalization may edit that text before serialization. Serialization must not
+silently transform authored content into different stored content; its allowed
+representation changes are managed properties, derived display removal,
+newline encoding and encryption.
+
+An unmodified save creates no new event. A pending receipt remains actionable
+even when the authored text has no additional edits. Undo after a successful
+save changes the draft against the new base; it never moves the base pointer
+backward or changes a published snapshot.
+
+* Concurrent writers and partial failure
+
+The writer must not reselect newer parents after validating the editing base.
+Use the captured frontier as the publication's parent set. A recheck immediately
+before publication can reject a detected race, but independent writers and
+delayed sync can still publish concurrent children. The DAG retains both.
+There is no cross-machine atomic compare-and-swap guarantee.
+
+If another child appears during publication, retain the exact child returned
+by this save and mark the editor as requiring reconciliation. Report that its
+content was saved with concurrent versions; avoid claiming a sole current
+leaf. A later save refuses the changed frontier until the user resolves it.
+
+| Failure point | Buffer and retry behavior |
+|---------------+---------------------------|
+| Validation, password or serialization | Preserve draft and base; write no event. |
+| Publication fails before a durable event | Preserve draft and base; retry the save. |
+| Event is durable; WAL or required projection fails | Keep a receipt, remain modified and report incomplete completion. |
+| Retry of a durable event | Verify and complete that same event; publish no duplicate child. |
+| Optional view or annotation refresh fails | Keep the successful save; flag display stale and report the refresh problem. |
+
+The receipt includes the event identity and serialized draft revision, and exposes
+no plaintext through diagnostics. The caller owns the prepared receipt before
+calling the publisher; failures update that receipt and re-signal the condition. WAL recovery may replay
+an idempotent metadata record; immutable event creation is not repeated.
+
+Allocate the event identity and install its prepared receipt in the editor
+before entering the low-level publisher. Completion phases are =prepared=,
+=event-published=, =wal-appended= and =projection-committed=. An error or quit
+immediately after rename can leave the phase behind reality: recovery checks
+the recorded final directory and verifies its envelope and payload digest
+before deciding whether publication happened. A mismatching existing event
+refuses recovery. Retrying a retained receipt uses its original identity;
+Material releases a prepared receipt when no durable event exists.
+
+Catch errors and quits across the publication boundary, preserve the receipt
+and modified state, then re-signal. The receipt retains sealed bytes or their
+verified immutable source; it carries no decrypted draft or password. Recovery
+may read that source. The zero-reload requirement concerns successful local
+save adoption.
+
+Projection completion observes the current family and includes concurrent
+events; replaying this event's WAL metadata cannot establish it as the sole
+current version. The receipt reports the observed frontier. Only a sole-child
+result advances the editor's expected frontier to that child. A concurrent
+result advances its source base to the saved child and records a reconciliation
+requirement; ordinary save remains refused until explicit resolution.
+
+If the user edits after a partial failure, finish the recorded event first,
+advance the base, then save the newer draft as another child. If the process
+exits before recovery, inventory reconciliation can recover the durable event.
+Unsaved in-memory edits retain their existing process-lifetime limitation.
+
+* Emacs integration
+
+Use buffer-local =write-contents-functions= to handle =save-buffer= before
+Emacs asks for a filename. The handler returns non-nil only on completed save;
+failure signals an error. It never falls through to ordinary file writing.
+Keep normal =before-save-hook= and =after-save-hook= notifications, but move
+publication-critical work into the handler. Emacs demotes before-save hook
+errors, so encryption and stale-base checks cannot depend on those hooks.
+
+The public =material:save= entry calls =save-buffer= and returns the receipt
+recorded by the handler; the handler calls a private transaction function.
+This keeps hooks single-shot for direct saves, Apply and helper commands.
+After-save notification errors leave a completed publication completed and
+are reported separately. A save with no authored changes and no pending work
+returns without allocating an event.
+
+Set =buffer-offer-save='always=. Native =save-some-buffers= then includes dirty
+material buffers with the default predicate, honors explicit predicates and
+the save-without-query argument, and owns the save / skip / quit interaction.
+This contract exists in Emacs 29.1, the package minimum. Its source is
+[[https://github.com/emacs-mirror/emacs/blob/emacs-29.1/lisp/files.el#L151-L165][buffer-offer-save]]
+and
+[[https://github.com/emacs-mirror/emacs/blob/emacs-29.1/lisp/files.el#L5643-L5665][files--buffers-needing-to-be-saved]].
+No additional save-all hook is needed.
+
+Use a buffer-local kill query for save / discard / cancel. A failed save or
+cancel keeps the buffer and its draft. Test the normal exit save sequence as
+well as =C-x k= and programmatic discard. Controlled teardown clears the dirty
+state only after explicit discard or successful domain deletion.
+
+Emacs exit uses its native save pass. A =kill-emacs-query-functions= handler
+requires discard consent for material drafts left after that pass; native
+Emacs's final modified-file check excludes non-file buffers. Tests exercise
+=save-buffers-kill-emacs= with process termination stubbed. A low-level forced
+=kill-emacs= retains Emacs's process-loss behavior.
+
+Implement Material revert through =revert-buffer-function=. It reads the
+current verified version after obtaining consent to discard a dirty draft;
+it never delegates to the file-visiting revert implementation. Reverting to
+different source content starts a fresh undo baseline. A same-version clean
+revert may refresh derived display alone.
+
+Automatic disk saves, backups and lockfiles are disabled for material buffers.
+Version history recovers completed saves; it does not recover unsaved drafts
+after process loss. Persistent draft recovery is a separate future feature.
+The migration deliberately limits unsaved draft recovery to the running process.
+
+File-specific actions need explicit treatment: remap =write-file= and
+=set-visited-file-name= in Material to explain the domain save/export behavior;
+guard against accidental attachment before publication. An explicit ordinary
+content export writes a copy and retains the editor's identity. Exporting
+decrypted crypt content remains outside this change. Diff-against-base reads
+the stored base into a separate preview; it never changes the editor's pointer.
+
+Command remapping covers interactive calls. Scoped advice on
+=set-visited-file-name= also refuses programmatic attachment before it can
+change modes or enable disk auto-save. The contents handler requires
+=buffer-file-name=nil=. Export remains a separate operation on serialized
+ordinary content; the diff adapter compares a serialized draft with a pinned
+base preview. Both refuse crypt content.
+
+Org mode hooks see source text and graph =default-directory=; their text edits
+remain unsaved. Graph configuration supplies TODO and tag context. Snapshot
+file-local and directory-local variables are skipped. Relative file links use
+the graph directory. Org source editing and indirect shared-text saves are
+tested; other Material commands use the logical editor. Capture retains its
+separate temporary-file workflow. File-based refile/capture targets, VC and
+other visited-file consumers require an export or a domain integration.
+
+* External updates and explicit historical edits
+
+Graph commits and reconciliation notifications flag matching editors stale.
+Refresh is pulled at display or explicit refresh boundaries, with a bounded
+committed point read. A user typing in the buffer is never interrupted by a
+background content replacement.
+
+| Editor state | New committed state | Action |
+|--------------+---------------------+--------|
+| Clean | Same version | Refresh derived metadata if needed. |
+| Clean | One newer readable leaf | Load it at the refresh boundary; preserve location/folds where meaningful and reset undo. |
+| Dirty | Changed frontier | Keep draft and base; show stale state; refuse ordinary save. |
+| Any | Conflict, tombstone or unreadable payload | Keep visible content; report the state and require an explicit recovery choice. |
+| Publishing or pending receipt | Any notification | Defer automatic content refresh until publication is settled. |
+
+Loading externally changed encrypted content returns the editor to SEALED
+state and clears its prior password proof. Decryption remains explicit. A
+dirty encrypted draft receives the same preservation rule as any other draft.
+
+History and exact-version lookup open pinned read-only previews. An explicit
+Edit/Restore action seeds the logical editor from a chosen version and captures
+the current structural frontier as the intended parents. An existing dirty
+editor must be saved or explicitly discarded first. The source version is
+tracked separately from the expected frontier, so restoring old content never
+masquerades as an edit based on the current payload.
+
+Preserve the rejected-leaf recovery contract: applying a selected rejected
+snapshot publishes a child of the captured complete structural frontier, and
+then the logical editor follows that child. Existing exact rejected-row callers
+need migration to the explicit action. Several current candidates continue
+through explicit conflict resolution; this proposal does not choose a winner.
+
+* API and migration surface
+
+Implemented API responsibilities:
+
+- =material:buffer(graph, id)= finds the logical editor without loading content.
+- =material:open(graph, id)= creates or reuses that editor.
+- =material:save()= publishes the current draft and returns its receipt.
+- =material:revert()= refreshes the current editor with dirty-draft protection.
+- =graph:prepare-edit(graph, :id, :contents, :metadata, :expected-frontier,
+  :revision, :source-version, :source-digest)= allocates an owned receipt.
+- =graph:publish-edit(receipt)= completes that exact event, WAL append and
+  required projection; repeated completion creates no duplicate event.
+
+The preparation API takes keyword arguments for logical ID, sealed content,
+parsed metadata, expected frontier and editing source. It validates that content,
+metadata and envelope identify the same headline. The publisher accepts
+the prepared receipt. The version layer owns immutable event creation; the
+graph layer owns WAL and required projection completion; the material layer
+owns buffer adoption and UI state. Keep =graph:put-content='s path-returning
+contract for existing callers while migrating editor saves to this API.
+
+Replace every path-based editor lookup: TODO transitions, deferred log notes,
+bulk operations, retagging, deletion, crypt transforms and replacement helpers.
+Temporary editors owned by a command may be killed after successful save;
+pre-existing editors stay open. Clean programmatic transforms update and save
+the existing logical editor instead of discarding it.
+
+The shared refresh guard protects dirty material buffers independently of
+filename and defers refresh while publication or receipt recovery is active.
+Other views retain their own refresh policies.
+
+Initial consumer inventory at
+[[https://github.com/rails-to-cosmos/org-glance/commit/1f32cbefbc069ab406ad041d7fa7686c6488dafa][1f32cbe]]:
+
+| Consumer | Migration |
+|----------+-----------|
+| [[https://github.com/rails-to-cosmos/org-glance/blob/1f32cbefbc069ab406ad041d7fa7686c6488dafa/src/view/org-glance-material.el#L921][material:open]] | Resolve the logical editor before consulting current storage; separate exact-row preview. |
+| [[https://github.com/rails-to-cosmos/org-glance/blob/1f32cbefbc069ab406ad041d7fa7686c6488dafa/src/view/org-glance-material.el#L1015][change-todo-live / set-todo-bulk]] | Determine ownership and dirty state through the registry; retain deferred note markers. |
+| [[https://github.com/rails-to-cosmos/org-glance/blob/1f32cbefbc069ab406ad041d7fa7686c6488dafa/src/view/org-glance-material.el#L1162][assert-blob-clean / replace-headline / delete]] | Guard logical drafts; transform in place; tombstone before teardown. |
+| [[https://github.com/rails-to-cosmos/org-glance/blob/1f32cbefbc069ab406ad041d7fa7686c6488dafa/src/view/org-glance-view.el#L121][refresh-when-stale]] | Apply material dirty-state protection independently of visited files. |
+
+Capture's temporary file and overview's cached file have their own lifecycles;
+their file-buffer lookups remain appropriate.
+
+=org-glance-llm= uses =material:current= and =material:open=, and resolves project
+paths through its existing property API. Its 21 tests pass against this
+checkout. Public =material:current= keeps returning =(GRAPH . ID)=, including
+from indirect views.
+
+Deploy with a restart initially; existing file-visiting material buffers must
+be saved or discarded before adopting the virtual implementation. In-session
+conversion is separate work because it must preserve dirty text, crypt state,
+pending log-note markers, narrowing and undo without executing save hooks.
+
+* Implementation sequence and acceptance tests
+
+1. Add failing lifecycle tests and an inventory of path-based consumers.
+2. Add explicit-frontier publication and receipts with failure-injection tests.
+3. Extract in-memory serialization for managed properties, derived relations,
+   mixed newlines and crypt blocks; preserve byte-level round-trip contracts.
+4. Introduce the logical editor registry, non-file open/save/revert and Emacs
+   save-all/close integration; migrate mutation helpers in the same pass.
+5. Add external-update handling and pinned-preview restore integration.
+6. Update invariants, guide, properties documentation where meaning changes,
+   plugin contracts and changelog; run the supported Emacs/platform matrix.
+
+Required regression cases:
+
+- Two consecutive saves keep the identical buffer object, nil filename,
+  point/mark, narrowing, folds and undo; each receipt identifies the new base.
+- Saving reuses the editing text and performs zero post-publication content
+  reads to reload it; previous snapshot bytes remain unchanged.
+- Opening the same headline through a graph path alias reuses its editor;
+  different IDs with equal titles remain separate.
+- Save-buffer, Material Apply, save-all, exit and buffer-close all use the
+  save contract, without filename prompts or silent draft loss.
+- Failed required validation writes no event, including a failing password
+  check when Emacs would demote an ordinary before-save-hook error.
+- Faults after event rename, after WAL append and during projection retain a
+  retryable receipt; recovery creates no duplicate event or lost newer edit.
+- A writer arriving before validation causes refusal; one arriving during
+  publication produces detectable concurrency with the captured parents.
+- Clean external update refreshes at the boundary; dirty update, deletion,
+  conflict and missing payload preserve visible text and refuse unsafe save.
+- Undo after save is a new dirty draft; external replacement resets its undo
+  baseline; local save never resets undo.
+- Derived relation refresh between authored edits preserves undo positions,
+  narrowing, mark and authored revision; save hooks and indirect edits cannot
+  make a newer draft appear clean.
+- Native save-all honors include/exclude predicates, skip, quit and save-all
+  without duplicate prompts; recursive save attempts preserve the draft.
+- Crypt save leaves editor plaintext in memory and published crypt blocks sealed;
+  password expiry, wrong passwords, sealed opens and multi-block edits pass.
+- Managed properties, relation logbooks, TODO notes, mixed line endings,
+  indirect Org source edits, retagging, bulk changes and deletion retain their
+  correctness contracts.
+- History previews stay pinned; explicit rejected-version restoration follows
+  its newly published child and protects an existing dirty editor.
+
+Performance gates compare opening and saving against the existing implementation
+at several graph/history sizes. Warm editor lookup performs no family census;
+an own-save performs zero content reloads; notifications do no synchronous
+full-graph scan. Record validation and post-mutation observation counts
+separately so required concurrency checks remain visible. Measure both plain
+and encrypted saves, and run the existing family-observation contracts.
+
+* Design probes and validation
+
+The file-visiting baseline passed all 76 material tests during investigation.
+Its lifecycle assertions now use explicit editing bases and cover consecutive
+saves, reuse, revert and old-snapshot immutability.
+
+Local Emacs 31.1 source runs =write-contents-functions= before filename selection.
+A batch probe confirms that a non-file buffer with =buffer-offer-save=t= is
+skipped by default save-all, while ='always= saves it through the contents
+handler. An excluding predicate prevents that save; subsequent =save-buffer=
+also uses the handler and leaves the filename nil. Emacs 29.1 source has the
+same ='always= selection rule. Runtime tests cover the supported minimum Emacs 29.1 and local Emacs 31.1.
+
+The implementation replaces file-visiting integration and disk draft recovery.
+The guide lists supported Org integrations and visited-file limitations.
+Native macOS and Windows execution was unavailable in this Linux workspace.
+
+Related: [[file:2026-10-05-immutable-headline-versions.done.org][Immutable versions]],
+[[file:2026-10-08-version-aware-materialization.proposed.org][Variant resolution]],
+[[file:2026-10-27-confidential-extraction.done.org][Confidential extraction]].
+
+* Implementation evidence
+
+The implementation uses a plist editing base, a serialized draft tuple and an
+=org-glance-publication= receipt. Successful saves advance the existing editor
+from the receipt; immutable family observation runs once before publication
+and once during its required projection. The compatibility projection uses the
+receipt's exact source, including during concurrent publication.
+
+=org-glance-material--serialize= supplies managed properties, newline provenance
+and scratch sealing. Ordinary transforms request its editing presentation;
+crypt transforms request sealed input. Typed crypt blocks seal before writing,
+and malformed or removed secrecy markers refuse publication. Relation lines
+are clickable overlay text and contribute zero authored bytes or undo entries.
+
+=basic-save-buffer= advice guards recursive saves and classifies after-save
+notification errors after completed publication. File attachment and ordinary
+diff use narrowly scoped adapters. Temporary command-owned editors are closed
+only after successful saves; failed bulk note rows keep their drafts and the
+queue continues.
+
+The lifecycle and fault-injection tests live in =test/test-material-virtual.el=;
+existing material, configuration, rejected-version, external-writer and relation
+tests use virtual editing bases. =test/bench-material.el= supplies repeatable
+latency and work measurements. Current measurements and test results are
+recorded in [[file:../invariants.org::*Virtual material lifecycle evidence][the invariant evidence]].

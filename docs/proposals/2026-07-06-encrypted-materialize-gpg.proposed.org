@@ -5,21 +5,17 @@ Status: *proposed* · security 2026-07-06
 
 * Context — what ships today
 
-Materializing an encrypted headline now prompts for a password, decrypts its
-=#+begin_crypt= blocks in the buffer (see
-[[file:2026-07-17-crypt-blocks.done.org][crypt-blocks]]; the pre-block layout
-sealed the whole body), and re-seals on save via a round-trip:
-- ~org-glance-material--maybe-decrypt~ prompts, decrypts, caches the password
-  buffer-local with a TTL (~org-glance-material-password-ttl~, forget early with
-  ~org-glance-material:lock~).
-- ~before-save-hook~ (~--encrypt-buffer~) writes the file as ciphertext;
-  ~after-save-hook~ (~--decrypt-buffer~, after ~sync~) decrypts back.
-- A retained sealed block validates a password re-entered after the TTL, and the
-  immutable-version writer refuses an encrypted buffer until every block is sealed.
-- ~--harden-buffer~ disables auto-save, backups and lockfiles so plaintext cannot
-  leak to ~#data.org#~ / ~data.org~~ / lock files.
-- Crypto itself is ~org-glance--crypt-seal-blocks~ / ~--crypt-unseal-blocks~ over the
-  ~aes.el~ package (AES-OCB).
+Encrypted headlines open sealed; explicit decryption prompts and caches the
+password with a TTL. The virtual material serializer seals crypt blocks in
+scratch memory before immutable publication while preserving the editor's
+presentation. A retained sealed block validates a password re-entered after
+expiry. All material and Org source edit buffers disable disk autosave,
+backups and lockfiles. Crypto remains =org-glance--crypt-seal-blocks= /
+=--crypt-unseal-blocks= over =aes.el= (AES-OCB).
+
+[[file:2026-11-04-virtual-material-buffers.done.org][Virtual material buffers]]
+replaces the visited-file save hooks assumed by this proposal. A GPG migration
+would integrate with its scratch serializer and explicit decryption command.
 
 That closes the on-disk leak and bounds the password's residence.  Three risks
 remain, and they are structural.

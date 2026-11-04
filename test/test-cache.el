@@ -761,8 +761,13 @@
       (should (equal "Right"
                      (org-glance-headline-metadata:title
                       (org-glance-cache:headline graph "a"))))
+      (org-glance-test:with-open preview (org-glance-material:open graph "a/left")
+        (with-current-buffer preview (should buffer-read-only))
+        (should-error (org-glance-material:retag graph "a/left" "new") :type 'user-error)
+        (should-error (org-glance-material:set-title graph "a/left" "New") :type 'user-error)
+        (should (eq preview (org-glance-material:open graph "a/left"))))
       (org-glance-test:with-open buffer
-          (org-glance-material:open graph "a/left")
+          (org-glance-material:restore graph "a" "left")
         (with-current-buffer buffer
           (goto-char (point-min))
           (should (search-forward "Left" nil t))

@@ -61,7 +61,8 @@
                           (buffer-local-value 'kill-buffer-hook buf)))
             ;; the kill and the hook that follows it are ONE command
             (let ((this-command 'kill-buffer))
-              (cl-letf (((symbol-function 'y-or-n-p) (lambda (&rest _) t)))
+              (cl-letf (((symbol-function 'y-or-n-p) (lambda (&rest _) t))
+                        ((symbol-function 'read-char-choice) (lambda (&rest _) ?d)))
                 (kill-buffer buf))
               (should-not (buffer-live-p buf))
               (should-not (memq 'org-add-log-note post-command-hook))
@@ -84,20 +85,46 @@
         (ignore-errors (when (org-clocking-p) (org-clock-out)))))))
 
 (ert-deftest org-glance-test:material-save-affordance ()
-  "A material buffer visits its blob file, is editable and in the minor mode;
+  "A virtual material buffer is editable and in the minor mode;
 a save persists to the graph and survives re-materializing."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "s1" "* TODO foo"))
     (org-glance-test:with-material (buffer graph "s1")
       (should org-glance-material-mode)
       (should-not buffer-read-only)
-      (should buffer-file-name)            ; a real file -> the standard save works
+      (should-not buffer-file-name)
       (should (s-contains? "TODO foo" (buffer-string)))
       (org-glance-test:sed "TODO" "DONE")
       (org-glance-test:save))
     (should (string= "DONE" (org-glance-test:field graph "s1" state)))
     (org-glance-test:with-material (buffer graph "s1")
       (should (s-contains? "DONE foo" (buffer-string))))))
+
+(ert-deftest org-glance-test:material-save-follows-current-leaf ()
+  "Saving keeps the editing buffer attached to the newly published leaf."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-test:headline "follow" "* Original" "Original body"))
+    (org-glance-test:with-material (buffer graph "follow")
+      (let ((original-path (plist-get org-glance-material--base :path))
+            (original-bytes (f-read-text (plist-get org-glance-material--base :path) 'utf-8)))
+        (dolist (title '("First edit" "Second edit"))
+          (goto-char (point-min))
+          (re-search-forward "^\\* .*\n")
+          (replace-match (concat "* " title "\n") t t)
+          (org-glance-test:save)
+          (should-not buffer-file-name)
+          (should (equal (plist-get org-glance-material--base :path)
+                         (org-glance-graph:content-path graph "follow")))
+          (should-not buffer-file-name)
+          (should (equal (plist-get org-glance-material--base :path)
+                         (org-glance-cache:material-path graph "follow")))
+          (should (eq buffer (org-glance-material:open graph "follow")))
+          (should (s-contains? title (buffer-string)))
+          (should-not (buffer-modified-p))
+          (revert-buffer t t)
+          (should (s-contains? title (buffer-string))))
+        (should (equal original-bytes (f-read-text original-path 'utf-8)))))))
 
 (ert-deftest org-glance-test:material-edit-updates-metadata ()
   "Editing the heading and saving updates the stored metadata projection."
@@ -123,7 +150,7 @@ a save persists to the graph and survives re-materializing."
                 (should (string-prefix-p "*org-glance: " (buffer-name)))
                 (should org-glance-material-mode)
                 (should-not buffer-read-only)
-                (should buffer-file-name)
+                (should-not buffer-file-name)
                 (org-glance-test:sed "TODO" "DONE")
                 (let ((inhibit-message t))
                   (call-interactively (key-binding (kbd "C-x C-s")))))
@@ -149,13 +176,13 @@ a save persists to the graph and survives re-materializing."
       (should (s-contains?
                ":LOGBOOK:\n- Referred by [[glance:a][TODO Alpha]]\n:END:"
                (replace-regexp-in-string
-                " at \\[[^]]+\\]" "" (buffer-string))))
+                " at \\[[^]]+\\]" "" (org-glance-test:material-display))))
       (should (string-match-p
                "- Referred by \\[\\[glance:a\\]\\[TODO Alpha\\]\\] at \\[[-0-9]+ [[:alpha:]]+ [0-9:]+\\]"
-               (buffer-string)))
+               (org-glance-test:material-display)))
       (should-not (buffer-modified-p)))
     (org-glance-test:with-material (buffer graph "a")
-      (let ((shown (buffer-string)))
+      (let ((shown (org-glance-test:material-display)))
         (should (s-contains? "- Kept" shown))
         (should (s-contains? "- Refers to [[glance:b][TODO Bee]]" shown))
         (should (s-contains?
@@ -182,9 +209,9 @@ a save persists to the graph and survives re-materializing."
           (concat "- Refers to [[glance:d][TODO Delta]] at "
                   (funcall original "[%Y-%m-%d %a %H:%M]"
                            (date-to-time created)))
-          (buffer-string))))
-      (should-not (s-contains? "- Refers to [[glance:b][TODO Bee]]" (buffer-string)))
-      (should (s-contains? "- Refers to [[glance:d][TODO Delta]]" (buffer-string)))
+          (org-glance-test:material-display))))
+      (should-not (s-contains? "- Refers to [[glance:b][TODO Bee]]" (org-glance-test:material-display)))
+      (should (s-contains? "- Refers to [[glance:d][TODO Delta]]" (org-glance-test:material-display)))
       (should-not (buffer-modified-p)))
     (let ((blob (org-glance-graph:get-content graph "a")))
       (should (s-contains? "- Kept" blob))
@@ -201,11 +228,11 @@ a save persists to the graph and survives re-materializing."
       (org-glance-test:headline "a" "* A" "[[glance:b][B]]")
       (org-glance-test:headline "b" "* B"))
     (org-glance-test:with-material (_buffer graph "a")
-      (should (s-contains? "- Refers to [[glance:b][B]]" (buffer-string)))
-      (should-not (s-contains? "- Referred by [[glance:b][B]]" (buffer-string))))
+      (should (s-contains? "- Refers to [[glance:b][B]]" (org-glance-test:material-display)))
+      (should-not (s-contains? "- Referred by [[glance:b][B]]" (org-glance-test:material-display))))
     (org-glance-test:with-material (_buffer graph "b")
-      (should (s-contains? "- Referred by [[glance:a][A]]" (buffer-string)))
-      (should-not (s-contains? "- Refers to [[glance:a][A]]" (buffer-string))))))
+      (should (s-contains? "- Referred by [[glance:a][A]]" (org-glance-test:material-display)))
+      (should-not (s-contains? "- Refers to [[glance:a][A]]" (org-glance-test:material-display))))))
 
 (ert-deftest org-glance-test:material-open-missing ()
   "Materializing an unknown id errors."
@@ -354,7 +381,7 @@ a save persists to the graph and survives re-materializing."
         (should (s-contains? "keep me" (buffer-string)))
         (should-not (s-contains? "transient note" (buffer-string)))
         (org-glance-test:save)
-        (should (s-contains? ":ORG_GLANCE_ID: R" (f-read-text buffer-file-name 'utf-8)))
+        (should (s-contains? ":ORG_GLANCE_ID: R" (f-read-text (plist-get org-glance-material--base :path) 'utf-8)))
         (should (s-contains? "transient note"
                              (f-read-text (cdar (org-glance-graph:occurrences graph "R"))
                                           'utf-8)))))))
@@ -381,7 +408,7 @@ undo, a save round-trips byte for byte, a revert re-strips, nil manages none."
       (org-glance-test:headline-props "vis" "* TODO Visible" '(("AUTHOR" . "Tolkien")))
       (org-glance-test:headline "bare" "* TODO Bare" "body"))
     (org-glance-test:with-material (buf graph "vis")
-      (let ((disk (f-read-text buffer-file-name 'utf-8)))
+      (let ((disk (f-read-text (plist-get org-glance-material--base :path) 'utf-8)))
         (should-not (s-contains? "ORG_GLANCE_ID" (buffer-string)))
         (should (s-contains? ":PROPERTIES:\n:AUTHOR: Tolkien\n:END:" (buffer-string)))
         (should (s-contains? ":ORG_GLANCE_ID: vis" disk))
@@ -392,17 +419,17 @@ undo, a save round-trips byte for byte, a revert re-strips, nil manages none."
         (set-buffer-modified-p t)
         (let ((require-final-newline nil))      ; measure the splice alone
           (org-glance-test:save))
-        (should (equal disk (f-read-text buffer-file-name 'utf-8)))
+        (should (equal disk (f-read-text (plist-get org-glance-material--base :path) 'utf-8)))
         (revert-buffer t t)
         (should-not (s-contains? "ORG_GLANCE_ID" (buffer-string)))
         (should (equal "vis" org-glance-material--id))
         (goto-char (point-max))
         (insert "\nafter revert")
         (org-glance-test:save)
-        (should (s-contains? ":ORG_GLANCE_ID: vis" (f-read-text buffer-file-name 'utf-8)))))
+        (should (s-contains? ":ORG_GLANCE_ID: vis" (f-read-text (plist-get org-glance-material--base :path) 'utf-8)))))
     (org-glance-test:with-material (buf graph "bare")
       (should-not (s-contains? ":PROPERTIES:" (buffer-string)))
-      (should (s-contains? ":ORG_GLANCE_ID: bare" (f-read-text buffer-file-name 'utf-8))))
+      (should (s-contains? ":ORG_GLANCE_ID: bare" (f-read-text (plist-get org-glance-material--base :path) 'utf-8))))
     (let ((org-glance-material-hidden-properties nil))
       (org-glance-test:with-material (buf graph "bare")
         (should (s-contains? ":ORG_GLANCE_ID: bare" (buffer-string)))))))
@@ -413,7 +440,7 @@ the id drawer: the saved file keeps exactly one, directly under the heading."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "p1" "* TODO Kopi Luwak" "body"))
     (cl-flet ((one-drawer-under-heading ()
-                (let ((disk (f-read-text buffer-file-name 'utf-8)))
+                (let ((disk (f-read-text (plist-get org-glance-material--base :path) 'utf-8)))
                   (should (= 1 (s-count-matches ":ORG_GLANCE_ID:" disk)))
                   (should (string-match-p
                            "\\`\\* [^\n]*\n:PROPERTIES:\n:ORG_GLANCE_ID: p1\n:END:\n" disk)))))
@@ -424,7 +451,7 @@ the id drawer: the saved file keeps exactly one, directly under the heading."
         (org-glance-test:save)
         (one-drawer-under-heading)
         (should (s-contains? ":END:\n[[https://example.com][link]]\nbody"
-                             (f-read-text buffer-file-name 'utf-8))))
+                             (f-read-text (plist-get org-glance-material--base :path) 'utf-8))))
       (org-glance-test:with-material (buf graph "p1")
         (goto-char (point-min))
         (search-forward "body")
@@ -1221,7 +1248,8 @@ ranges never project; `C-c i' never edits them, inserting a fresh body line."
         (should (s-contains? "SCHEDULED: <2020-03-01 Sun>--<2020-03-02 Mon>" text))
         (should (s-contains? "<2020-04-01 Wed>--<2020-04-02 Thu>" text)))
       (set-buffer-modified-p t)
-      (org-glance-test:save))
+      (org-glance-test:answering ((read-passwd "pw"))
+        (org-glance-test:save)))
     (should (equal '("<2020-05-05 Tue>" "<2020-05-05 Tue>")
                    (org-glance-test:field graph "p" range)))))
 
@@ -1242,7 +1270,7 @@ ranges never project; `C-c i' never edits them, inserting a fresh body line."
         (should (s-contains? "example.com/unsaved" opened))))))
 
 (ert-deftest org-glance-test:material-opens-encrypted-as-is ()
-  "An encrypted headline materializes AS-IS: unprompted, ciphertext, unhardened.
+  "An encrypted headline opens unprompted, sealed and hardened.
 `:decrypt' (transient `-d') opens it unsealed; `C-c #' toggles the seal later."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-headline:encrypt
@@ -1253,7 +1281,8 @@ ranges never project; `C-c i' never edits them, inserting a fresh body line."
       (org-glance-test:with-material (buf graph "e")
         (should (s-contains? "aes-encrypted" (buffer-string)))
         (should-not (s-contains? "plainbody" (buffer-string)))
-        (should-not org-glance-material--encrypted)          ; unwired until asked
+        (should org-glance-material--encrypted)
+        (should-not buffer-auto-save-file-name)
         (should (eq (key-binding (kbd "C-c #")) #'org-glance-material:crypt))))
     (org-glance-test:answering ((read-passwd "pw"))
       (org-glance-test:with-material (buf graph "e")

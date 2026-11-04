@@ -125,7 +125,11 @@ errors are demoted (invariant 9)."
   (with-current-buffer (if (windowp window) (window-buffer window) (current-buffer))
     (when (and org-glance-view--stale-fn
                (funcall org-glance-view--stale-fn))
-      (if (and buffer-file-name (buffer-modified-p))
+      (if (or (bound-and-true-p org-glance-material--busy)
+              (bound-and-true-p org-glance-material--pending)
+              (and (buffer-modified-p)
+                   (or buffer-file-name
+                       (bound-and-true-p org-glance-material-mode))))
           (org-glance-view--mark-stale)
         (with-demoted-errors "org-glance: view refresh failed: %S"
           (funcall org-glance-view--reload-fn))))))

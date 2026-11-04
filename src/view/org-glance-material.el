@@ -29,6 +29,11 @@
 
 (declare-function org-glance-cache:incoming-relations
                   "org-glance-cache" (graph id))
+(defvar org-glance-material--reserved-lines)
+(defvar org-glance-material--password-proof)
+(declare-function org-src-source-buffer "org-src")
+(declare-function diff-buffers "diff")
+
 (declare-function org-glance-cache:material-path
                   "org-glance-cache" (graph id))
 
@@ -117,8 +122,50 @@ Set it with `org-glance-material:set-project-dir' (`C-c d').")
 (defvar-local org-glance-material--row-id nil
   "Exact projection Row used to open the current material buffer.")
 
+(defvar org-glance-material--buffers (make-hash-table :test #'equal)
+  "Logical editors keyed by canonical graph directory and headline id.")
+(defvar-local org-glance-material--base nil
+  "Selected immutable source and expected structural frontier.")
+(defvar-local org-glance-material--pending nil
+  "Publication receipt awaiting completion and buffer adoption.")
+(defvar-local org-glance-material--receipt nil
+  "Most recently completed publication receipt.")
+(defvar-local org-glance-material--revision 0
+  "Monotonic authored change revision, including undo and indirect edits.")
+(defvar-local org-glance-material--display-change nil
+  "Non-nil while changing the editor's presentation alone.")
+(defvar-local org-glance-material--busy nil
+  "Non-nil during publication or source replacement.")
+(defvar org-glance-material--save-completed nil
+  "Non-nil after the contents handler returns successfully for this save.")
+(defvar-local org-glance-material--saving nil
+  "Non-nil throughout Emacs's save hooks and material publication.")
+(defvar-local org-glance-material--relation-overlay nil
+  "Overlay displaying live relation logbook entries.")
+
+(cl-defun org-glance-material:buffer (graph id)
+  "Return GRAPH's live logical editor for ID without loading content."
+  (let* ((key (cons (org-glance-graph:directory graph) id))
+         (buffer (gethash key org-glance-material--buffers)))
+    (if (buffer-live-p buffer) buffer
+      (remhash key org-glance-material--buffers)
+      nil)))
+
+(defun org-glance-material--unregister ()
+  "Remove the current logical editor from the registry."
+  (let ((key (cons (org-glance-graph:directory org-glance-material--graph)
+                   org-glance-material--id)))
+    (when (eq (gethash key org-glance-material--buffers) (current-buffer))
+      (remhash key org-glance-material--buffers))))
+
+(defun org-glance-material--changed (&rest _)
+  "Advance the logical editor's authored revision after a text change."
+  (with-current-buffer (or (buffer-base-buffer) (current-buffer))
+    (unless org-glance-material--display-change
+      (cl-incf org-glance-material--revision))))
+
 (defvar-local org-glance-material--encrypted nil
-  "Non-nil when this materialized buffer's stored blob is encrypted.")
+  "Non-nil when this editor requires sealed crypt publication.")
 
 (defvar-local org-glance-material--reference-graph nil
   "Graph whose metadata supplies this buffer's reference display.")
@@ -166,16 +213,26 @@ BRACKETP enables projection in descriptive links; source bytes stay intact."
 (add-hook 'org-glance-graph-after-commit-functions
           #'org-glance-material--references-committed)
 
+(defun org-glance-material--outstanding-p (&optional buffer)
+  "Return whether BUFFER's logical editor has edits or pending publication.
+BUFFER defaults to the current buffer."
+  (with-current-buffer (or buffer (current-buffer))
+    (with-current-buffer (or (buffer-base-buffer) (current-buffer))
+      (or org-glance-material--pending (buffer-modified-p)))))
+
 (cl-defun org-glance-material--ensure ()
   "Signal a `user-error' unless the current buffer is a materialized headline."
   (unless (and org-glance-material--graph org-glance-material--id)
-    (user-error "Not in a materialized headline buffer")))
+    (user-error "Not in a materialized headline buffer"))
+  (when (buffer-base-buffer)
+    (user-error "Use the logical Material editor for this command")))
 
 (cl-defun org-glance-material:current ()
   "Return this materialized buffer's (GRAPH . ID), or signal a `user-error'.
 Plugins use it instead of the buffer-local internals."
-  (org-glance-material--ensure)
-  (cons org-glance-material--graph org-glance-material--id))
+  (with-current-buffer (or (buffer-base-buffer) (current-buffer))
+    (org-glance-material--ensure)
+    (cons org-glance-material--graph org-glance-material--id)))
 
 (defvar-local org-glance-material--cycle nil
   "Per-tag `#+TODO:'-style cycle string for this buffer's headline, or nil.")
@@ -213,13 +270,12 @@ Plugins use it instead of the buffer-local internals."
 (defvar-local org-glance-material--newline-mixed nil
   "Non-nil when existing lines need endings different from the default.")
 
-(defun org-glance-material--read-endings ()
-  "Read exact source into LF editing text with per-newline provenance."
+(defun org-glance-material--read-endings (source)
+  "Load exact SOURCE into LF editing text with per-newline provenance."
   (setq org-glance-material--newline-default 'lf
         org-glance-material--newline-mixed nil)
-  (when (or (eq 1 (coding-system-eol-type buffer-file-coding-system))
-            (save-excursion (goto-char (point-min)) (search-forward "\r\n" nil t)))
-    (let ((source (f-read-text buffer-file-name 'utf-8-unix))
+  (when (string-match-p "\r\n" source)
+    (let ((source source)
           (modified (buffer-modified-p))
           (position (point))
           (buffer-undo-list t)
@@ -244,20 +300,6 @@ Plugins use it instead of the buffer-local internals."
       (set-buffer-modified-p modified)))
   (setq-local buffer-file-coding-system 'utf-8-unix))
 
-(defun org-glance-material--ending-annotations (start end)
-  "Restore original newline bytes for the editing region START to END."
-  (when (and (not (stringp start))
-             (or org-glance-material--newline-mixed
-                 (eq org-glance-material--newline-default 'crlf)))
-    (save-excursion
-      (goto-char start)
-      (let (annotations)
-        (while (search-forward "\n" end t)
-          (when (eq (or (get-text-property (1- (point)) 'org-glance-newline)
-                        org-glance-material--newline-default) 'crlf)
-            (push (cons (1- (point)) "\r") annotations)))
-        (nreverse annotations)))))
-
 (defun org-glance-material--encode-endings (text)
   "Restore newline bytes in inserted annotation TEXT."
   (let ((start 0) (cursor 0) parts)
@@ -270,57 +312,168 @@ Plugins use it instead of the buffer-local internals."
         (setq start cursor)))
     (apply #'concat (nreverse (cons (substring-no-properties text start) parts)))))
 
-(cl-defun org-glance-material--write-version ()
-  "Publish this material buffer as an immutable child snapshot."
-  (when (and org-glance-material--graph org-glance-material--id)
-    (when (and org-glance-material--encrypted
-               (let ((blocks (org-glance--crypt-block-regions)))
-                 (or (null blocks)
-                     (cl-some (lambda (block)
-                                (not (org-glance--crypt-sealed? block)))
-                              blocks))))
-      (user-error "Encrypted headline is not sealed; headline was not saved"))
-    (when (org-glance-version:file-p buffer-file-name)
-      (let* ((dir (org-glance-graph:headline-data-path
-                   org-glance-material--graph org-glance-material--id))
-             (selected (f-filename (f-parent buffer-file-name)))
-             (leaves (mapcar #'org-glance-version:id
-                             (org-glance-version:leaves
-                              (org-glance-version:history
-                               dir org-glance-material--id)))))
-        (unless (member selected leaves)
-          (user-error "Headline %s changed; the selected version is no longer a Leaf"
-                      org-glance-material--id))))
-    (let ((temp (make-temp-file "org-glance-material-")))
-      (unwind-protect
-          (progn
-            (let ((coding-system-for-write 'utf-8-unix))
-              (write-region (point-min) (point-max) temp nil 'silent))
-            (let* ((org-glance-config--pending-context org-glance-config--org-context)
-                   (headline (org-glance-headline--from-string
-                              (f-read-text temp 'utf-8-unix)))
-                   (id (org-glance-headline:id headline)))
-              (unless (equal id org-glance-material--id)
-                (user-error "org-glance: %s lost its ORG_GLANCE_ID drawer"
-                            org-glance-material--id))
-              (let ((path (org-glance-graph:put-content
-                           org-glance-material--graph headline)))
-                (set-visited-file-name path t)
-                (setq-local org-glance-material--row-id org-glance-material--id)
-                (setq-local revert-buffer-function #'org-glance-material--revert)
-                (add-hook 'write-file-functions
-                          #'org-glance-material--write-version nil t)
-                (set-visited-file-modtime)
-                (set-buffer-modified-p nil))))
-        (when (f-exists? temp) (delete-file temp))))
-    t))
+(cl-defun org-glance-material--serialize (&key (seal t))
+  "Return encoded content, metadata, crypt proof and authored revision.
+SEAL encrypts crypt blocks for publication; nil retains editing presentation."
+  (when seal (org-glance-material--prepare-crypt))
+  (let* ((revision org-glance-material--revision)
+         (text (buffer-substring (point-min) (point-max)))
+         (reserved org-glance-material--reserved-lines)
+         (drawer org-glance-material--drawer-lines)
+         (endings org-glance-material--newline-default)
+         (encrypted org-glance-material--encrypted)
+         (password (when (and seal encrypted
+                              (cl-some (lambda (block)
+                                         (not (org-glance--crypt-sealed? block)))
+                                       (org-glance--crypt-block-regions)))
+                     (org-glance-material--require-password)))
+         (org-glance-config--pending-context org-glance-config--org-context)
+         (org-todo-keywords (org-glance-tag-config:cycle->keywords-or
+                            org-glance-material--cycle org-todo-keywords)))
+    (with-temp-buffer
+      (org-glance--org-mode)
+      (org-glance-material--harden-buffer)
+      (insert text)
+      (setq-local org-glance-material--drawer-lines drawer
+                  org-glance-material--newline-default endings)
+      (let ((inhibit-read-only t))
+        (when seal (org-glance-headline--crypt-upgrade-legacy))
+        (goto-char (point-min))
+        (when reserved
+          (let ((splice (org-glance-material--drawer-splice
+                         (apply #'concat reserved))))
+            (goto-char (car splice))
+            (insert (cdr splice))))
+        (when password (org-glance--crypt-seal-blocks password)))
+      (when (and seal encrypted
+                 (let ((blocks (org-glance--crypt-block-regions)))
+                   (or (null blocks)
+                       (cl-some (lambda (block) (not (org-glance--crypt-sealed? block)))
+                                blocks))))
+        (user-error "Encrypted headline is not sealed; save refused"))
+      (let* ((content (org-glance-material--encode-endings (buffer-string)))
+             (headline (org-glance-headline--from-string content)))
+        (list content (org-glance-headline:metadata headline)
+              (org-glance-material--sealed-proof) revision)))))
+
+(defun org-glance-material--adopt (receipt)
+  "Advance this editor's base from completed RECEIPT without loading content."
+  (let* ((version (org-glance-publication:version receipt))
+         (frontier (org-glance-publication:frontier receipt))
+         (concurrent (not (equal frontier (list (org-glance-version:id version))))))
+    (setq org-glance-material--base
+          (list :version (org-glance-version:id version)
+                :digest (org-glance-version:content-sha256 version)
+                :path (f-join (org-glance-version:directory version) "data.org")
+                :frontier frontier :reconcile concurrent)
+          org-glance-material--receipt receipt
+          org-glance-material--pending nil
+          org-glance-material--row-id org-glance-material--id)
+    (when (listp buffer-undo-list)
+      (setq buffer-undo-list
+            (cl-delete-if (lambda (entry) (eq t (car-safe entry))) buffer-undo-list)))
+    (set-buffer-modified-p
+     (/= org-glance-material--revision (org-glance-publication:revision receipt)))
+    (when concurrent
+      (display-warning 'org-glance "Content saved with concurrent versions; reconcile before saving again"))
+    (condition-case nil
+        (progn
+          (org-glance-material--reload-context org-glance-material--graph)
+          (org-glance-material--refresh-derived-relations))
+      ((error quit)
+       (org-glance-view--mark-stale)
+       (display-warning 'org-glance "Material saved; display refresh failed")))))
+
+(defun org-glance-material--write-version ()
+  "Complete pending work and publish the current authored draft."
+  (org-glance-material--ensure)
+  (when buffer-file-name
+    (user-error "Material saves require a virtual buffer; use content export"))
+  (when org-glance-material--busy (user-error "Material operation already running"))
+  (let ((org-glance-material--busy t))
+    (when org-glance-material--pending
+      (org-glance-material--adopt
+       (org-glance-graph:publish-edit org-glance-material--pending)))
+    (when (buffer-modified-p)
+      (when (plist-get org-glance-material--base :reconcile)
+        (user-error "Resolve concurrent versions before saving"))
+      (save-excursion
+        (org-glance-material--drop-hand-typed-reserved)
+        (org-glance-material--normalize-tags))
+      (let* ((serialized (org-glance-material--serialize))
+             (revision (nth 3 serialized))
+             (receipt (org-glance-graph:prepare-edit
+                       org-glance-material--graph :id org-glance-material--id
+                       :contents (car serialized) :metadata (cadr serialized)
+                       :revision revision
+                       :expected-frontier (plist-get org-glance-material--base :frontier)
+                       :source-version (plist-get org-glance-material--base :version)
+                       :source-digest (plist-get org-glance-material--base :digest))))
+        (setq org-glance-material--pending receipt)
+        (when (nth 2 serialized)
+          (setq org-glance-material--password-proof (nth 2 serialized)))
+        (condition-case err
+            (org-glance-material--adopt (org-glance-graph:publish-edit receipt))
+          ((error quit)
+           (unless (file-exists-p (org-glance-version:directory
+                                  (org-glance-publication:version receipt)))
+             (setq org-glance-material--pending nil))
+           (set-buffer-modified-p
+            (or (not (eq receipt org-glance-material--receipt))
+                (/= org-glance-material--revision
+                    (org-glance-publication:revision receipt))))
+           (signal (car err) (cdr err)))))))
+  (setq org-glance-material--save-completed t)
+  t)
+
+(defun org-glance-material:save ()
+  "Save the logical draft and return its completed receipt, or nil for no work."
+  (interactive)
+  (with-current-buffer (or (buffer-base-buffer) (current-buffer))
+    (org-glance-material--ensure)
+    (let ((previous org-glance-material--receipt))
+      (save-buffer)
+      (unless (eq previous org-glance-material--receipt)
+        org-glance-material--receipt))))
+
+(defun org-glance-material--save-buffer (save &rest args)
+  "Run SAVE with ARGS while protecting a material editor's save lifecycle."
+  (with-current-buffer (or (buffer-base-buffer) (current-buffer))
+    (if (not org-glance-material-mode) (apply save args)
+      (when (or org-glance-material--saving org-glance-material--busy)
+        (user-error "Material save already running"))
+      (when buffer-file-name
+        (user-error "Material editors save through their logical identity"))
+      (when org-glance-material--pending
+        (set-buffer-modified-p t))
+      (let ((org-glance-material--saving t)
+            (org-glance-material--save-completed nil))
+        (condition-case err
+            (apply save args)
+          (error
+           (if (not org-glance-material--save-completed)
+               (signal (car err) (cdr err))
+             (org-glance-view--mark-stale)
+             (display-warning 'org-glance "Material saved; an after-save notification failed"))))))))
+
+(advice-add 'basic-save-buffer :around #'org-glance-material--save-buffer)
+
+(defun org-glance-material--offer-pending-saves (&rest _args)
+  "Include pending material publications in native save selection."
+  (maphash (lambda (_key buffer)
+             (when (buffer-live-p buffer)
+               (with-current-buffer buffer
+                 (when org-glance-material--pending
+                   (set-buffer-modified-p t)))))
+           org-glance-material--buffers))
+
+(advice-add 'save-some-buffers :before #'org-glance-material--offer-pending-saves)
 
 (cl-defun org-glance-material:sync ()
-  "Append the just-saved file's metadata to the graph's WAL; flag views stale.
-Buffer-local `after-save-hook'.  Parses the FILE: only it holds the managed
-drawer lines (invariant 21), and its crypt blocks are sealed (invariant 27).
-A file whose id differs from the buffer's is skipped with a message."
-  (when (and org-glance-material--graph org-glance-material--id)
+  "Append sealed visited-file metadata for compatibility callers.
+Virtual editors publish through `org-glance-material:save'.  Skip a visited
+file whose id differs from this buffer's logical id."
+  (when (and org-glance-material--graph org-glance-material--id buffer-file-name)
     (let* ((graph org-glance-material--graph)
            (id org-glance-material--id)
            (headline (let ((org-glance-config--pending-context org-glance-config--org-context)
@@ -451,10 +604,11 @@ Expiry makes the next save re-prompt; `org-glance-material:lock' forgets early."
 
 (cl-defun org-glance-material--clear-password ()
   "Forget the cached password and cancel its expiry timer."
-  (setq-local org-glance-material--password nil)
-  (when (timerp org-glance-material--password-timer)
-    (cancel-timer org-glance-material--password-timer))
-  (setq-local org-glance-material--password-timer nil))
+  (with-current-buffer (or (buffer-base-buffer) (current-buffer))
+    (setq-local org-glance-material--password nil)
+    (when (timerp org-glance-material--password-timer)
+      (cancel-timer org-glance-material--password-timer))
+    (setq-local org-glance-material--password-timer nil)))
 
 (cl-defun org-glance-material--set-password (pw)
   "Cache PW buffer-local and (re)arm the TTL timer that forgets it."
@@ -499,9 +653,18 @@ Expiry makes the next save re-prompt; `org-glance-material:lock' forgets early."
               backup-inhibited t
               create-lockfiles nil))
 
+(defun org-glance-material--harden-source-edit ()
+  "Disable disk draft recovery in source editors belonging to Material."
+  (when-let* ((source (ignore-errors (org-src-source-buffer)))
+              ((buffer-live-p source))
+              ((buffer-local-value 'org-glance-material-mode source)))
+    (org-glance-material--harden-buffer)))
+
+(add-hook 'org-src-mode-hook #'org-glance-material--harden-source-edit)
+
 (cl-defun org-glance-material--encrypt-buffer ()
-  "Seal the buffer's crypt blocks in place before the file is written to disk.
-Buffer-local `before-save-hook'; prompts for the password if the TTL expired."
+  "Seal crypt blocks for explicit presentation locking.
+Prompt for the password when its TTL has expired."
   (when org-glance-material--encrypted
     (let ((inhibit-read-only t))
       (org-glance--crypt-seal-blocks (org-glance-material--require-password))
@@ -509,17 +672,29 @@ Buffer-local `before-save-hook'; prompts for the password if the TTL expired."
                   (org-glance-material--sealed-proof)))))
 
 (cl-defun org-glance-material--decrypt-buffer ()
-  "Unseal the buffer's crypt blocks in place and clear the modified flag.
-A legacy whole-body cipher is first wrapped in one block.  Buffer-local
-`after-save-hook', run after `org-glance-material:sync' (invariant 27)."
+  "Unseal this hardened editor while preserving its authored dirty state.
+Validate every block in scratch memory before replacing the presentation."
   (when org-glance-material--encrypted
-    (let ((inhibit-read-only t))
-      (when (org-glance-headline--crypt-upgrade-legacy)
-        (message "org-glance: upgraded to the crypt-block format"))
-      (setq-local org-glance-material--password-proof
-                  (org-glance-material--sealed-proof))
-      (org-glance--crypt-unseal-blocks (org-glance-material--require-password))
-      (set-buffer-modified-p nil))))
+    (org-glance-material--harden-buffer)
+    (let* ((text (buffer-substring (point-min) (point-max)))
+           (proof (org-glance-material--sealed-proof))
+           (password (org-glance-material--require-password))
+           (plaintext
+            (with-temp-buffer
+              (org-glance-material--harden-buffer)
+              (insert text)
+              (org-glance--org-mode)
+              (org-glance-headline--crypt-upgrade-legacy)
+              (setq proof (org-glance-material--sealed-proof))
+              (org-glance--crypt-unseal-blocks password)
+              (buffer-string)))
+           (modified (buffer-modified-p))
+           (org-glance-material--display-change t)
+           (inhibit-read-only t))
+      (save-excursion
+        (replace-region-contents (point-min) (point-max) (lambda () plaintext)))
+      (setq org-glance-material--password-proof proof)
+      (set-buffer-modified-p modified))))
 
 (cl-defun org-glance-material:lock ()
   "Forget this encrypted buffer's cached password now; the next save re-prompts.
@@ -540,17 +715,31 @@ Both encrypt paths call it (invariant 14); idempotent."
       (message "org-glance: plaintext occurrence history removed (headline is now encrypted)"))))
 
 (cl-defun org-glance-material--wire-crypto ()
-  "Mark the buffer encrypted, harden it and wire its crypt hooks; idempotent."
+  "Mark the buffer encrypted and harden it; preserve save presentation."
   (setq-local org-glance-material--encrypted t)
   (org-glance-material--harden-buffer)
-  (add-hook 'before-save-hook #'org-glance-material--encrypt-buffer nil t)
-  (add-hook 'after-save-hook #'org-glance-material--decrypt-buffer t t)
   (add-hook 'kill-buffer-hook #'org-glance-material--clear-password nil t))
+
+(defun org-glance-material--prepare-crypt ()
+  "Validate crypt markers and establish sealing state before serialization."
+  (let* ((case-fold-search t)
+         (blocks (org-glance--crypt-block-regions))
+         (markers (how-many (concat org-glance--crypt-begin-re "\\|"
+                                     org-glance--crypt-end-re)
+                            (point-min) (point-max))))
+    (unless (= markers (* 2 (length blocks)))
+      (user-error "Crypt blocks must be complete and unnested; save refused"))
+    (when (and blocks (not org-glance-material--encrypted))
+      (org-glance-material--wire-crypto)
+      (when (cl-some (lambda (block) (not (org-glance--crypt-sealed? block))) blocks)
+        (org-glance-material--set-password (read-passwd "Headline password (confirm): " t)))
+      (org-glance-material--purge-occurrences org-glance-material--graph
+                                              org-glance-material--id))))
 
 (cl-defun org-glance-material--maybe-decrypt (_meta buffer)
   "Prompt and decrypt BUFFER when its content is sealed.
 Return non-nil when it decrypted; wire and harden the buffer first.  A wrong
-password forgets it, kills BUFFER and re-signals."
+password clears the cached password and preserves BUFFER."
   (with-current-buffer buffer
     (when (org-glance-headline--buffer-encrypted?)
       (org-glance-material--wire-crypto)
@@ -558,7 +747,6 @@ password forgets it, kills BUFFER and re-signals."
       (condition-case err
           (org-glance-material--decrypt-buffer)
         (error (org-glance-material--clear-password)
-               (org-glance--discard-buffer buffer)
                (signal (car err) (cdr err))))
       t)))
 
@@ -589,12 +777,12 @@ The first block prompts for a confirmed password and wires the round-trip."
 
 (cl-defun org-glance-material:seal ()
   "Seal this buffer's crypt blocks in place and forget the cached password.
-Signal a `user-error' on an unencrypted or modified buffer (invariant 11)."
+Refuse unencrypted buffers or outstanding work (invariant 11)."
   (interactive)
   (org-glance-material--ensure)
   (unless org-glance-material--encrypted
     (user-error "Not an encrypted materialized buffer"))
-  (when (buffer-modified-p)
+  (when (org-glance-material--outstanding-p)
     (user-error "Save this buffer before sealing it"))
   (org-glance-material--encrypt-buffer)
   (set-buffer-modified-p nil)               ; sealed == the bytes on disk
@@ -605,6 +793,7 @@ Signal a `user-error' on an unencrypted or modified buffer (invariant 11)."
   "Remove the crypt block around point; its body becomes public on save.
 A sealed body decrypts first; the last unwrap drops encryption entirely."
   (interactive)
+  (org-glance-material--ensure)
   (let ((block (org-glance--crypt-block-at (point))))
     (unless block (user-error "Point is not inside a crypt block"))
     (when (org-glance--crypt-sealed? block)
@@ -626,6 +815,7 @@ region -> wrap it; sealed buffer -> unseal; block at point -> unwrap;
 decrypted buffer -> seal; plaintext -> wrap the whole body.  Sealed comes
 before block: a sealed buffer's point sits inside its ciphertext block."
   (interactive)
+  (org-glance-material--ensure)
   (cond
    ((use-region-p)
     (org-glance-material:crypt-region (region-beginning) (region-end)))
@@ -664,7 +854,7 @@ Store home paths with `~' and no trailing slash; `C-u' clears."
 
 (defcustom org-glance-material-hidden-properties org-glance-headline:hash-ignore-properties
   "Uppercase drawer property keys org-glance manages in material buffers.
-Kept in the file only (invariant 21): removed at open, spliced into writes."
+Supply these through the publication serializer (invariant 21)."
   :group 'org-glance
   :type '(repeat string))
 
@@ -674,25 +864,15 @@ Fixed for the buffer's life; an option change applies to later buffers.")
 
 (defvar-local org-glance-material--reserved-lines nil
   "Managed drawer lines removed from this buffer at open, verbatim.
-`org-glance-material--reserved-annotations' writes them back on every save.")
-
-(defconst org-glance-material--derived-relation-property
-  'org-glance-derived-relation
-  "Text property marking live relation lines in a material buffer.")
+The publication serializer supplies them on every save.")
 
 (cl-defun org-glance-material--relation-stamp (graph id)
-  "Return ID's current source snapshot time as an Org timestamp, or nil."
-  (ignore-errors
-    (let* ((dir (org-glance-graph:headline-data-path graph id))
-           (versions (org-glance-version:current dir id)))
-      (when-let* (((= 1 (length versions)))
-                  (version (car versions))
-                  ((eq 'snapshot (org-glance-version:kind version)))
-                  ((not (member (org-glance-version:producer version)
-                                '("legacy" "migration"))))
-                  (created (org-glance-version:created version)))
-        (format-time-string "[%Y-%m-%d %a %H:%M]"
-                            (date-to-time created))))))
+  "Return ID's committed source time as an Org timestamp, or nil."
+  (let ((state (org-glance-cache:material-state graph id)))
+    (when (and (plist-get state :created)
+               (not (member (plist-get state :producer) '("legacy" "migration"))))
+      (format-time-string "[%Y-%m-%d %a %H:%M]"
+                          (date-to-time (plist-get state :created))))))
 
 (cl-defun org-glance-material--relation-line
     (graph id &key kind direction stamp)
@@ -736,18 +916,6 @@ KIND supplies its relation label and STAMP names the source snapshot time."
                               :stamp (org-glance-material--relation-stamp
                                       graph source-id)))))))
 
-(cl-defun org-glance-material--remove-derived-relations ()
-  "Remove every live relation region from the current material buffer."
-  (let ((inhibit-read-only t)
-        (property org-glance-material--derived-relation-property)
-        (pos (point-min)))
-    (while (< pos (point-max))
-      (if (get-text-property pos property)
-          (delete-region pos (next-single-property-change
-                              pos property nil (point-max)))
-        (setq pos (next-single-property-change
-                   pos property nil (point-max)))))))
-
 (cl-defun org-glance-material--own-logbook ()
   "Return the first heading's own LOGBOOK drawer element, or nil."
   (save-excursion
@@ -775,33 +943,51 @@ KIND supplies its relation label and STAMP names the source snapshot time."
       (forward-line 1))
     (point)))
 
+(defun org-glance-material--relation-display (text)
+  "Return relation TEXT with descriptive, clickable reference links."
+  (let ((cursor 0) (graph org-glance-material--graph))
+    (while (string-match org-link-bracket-re text cursor)
+      (let* ((begin (match-beginning 0))
+             (end (match-end 0))
+             (label (or (match-string 2 text) (match-string 1 text)))
+             (link (substring-no-properties text begin end))
+             (target (car (split-string
+                           (string-remove-prefix "glance:" (match-string 1 text)) "[?]")))
+             (map (make-sparse-keymap))
+             (open (lambda (_event)
+                     (interactive "e")
+                     (switch-to-buffer (org-glance-material:open graph target)))))
+        (define-key map [mouse-1] open)
+        (define-key map [mouse-2] open)
+        (add-text-properties begin end
+                             (list 'display label 'face 'org-link 'mouse-face 'highlight
+                                   'follow-link t 'keymap map 'help-echo link) text)
+        (setq cursor end))))
+  text)
+
 (cl-defun org-glance-material--refresh-derived-relations ()
-  "Rebuild the material buffer's display-only relation logbook entries."
+  "Display current relation logbook entries without changing authored text."
   (when (and org-glance-material--graph org-glance-material--id)
-    (let ((buffer-undo-list t)
-          (inhibit-read-only t)
-          (modified (buffer-modified-p)))
+    (save-restriction
+      (widen)
       (save-excursion
-        (org-glance-material--remove-derived-relations)
-        (when-let* ((lines (org-glance-material--relation-lines
-                            org-glance-material--graph org-glance-material--id))
-                    ((not (string-empty-p lines))))
-          (let* ((drawer (org-glance-material--own-logbook))
-                 (text (if drawer lines (concat ":LOGBOOK:\n" lines ":END:\n")))
-                 (beg (if drawer
-                          (progn
-                            (goto-char (org-element-property :end drawer))
-                            (line-beginning-position 0))
-                        (org-glance-material--relation-insert-position))))
-            (goto-char beg)
-            (let ((start (point)))
-              (insert text)
-              (add-text-properties
-               start (point)
-               (list org-glance-material--derived-relation-property t
-                     'read-only "Relations are refreshed from the graph"
-                     'rear-nonsticky '(read-only org-glance-derived-relation)))))))
-      (set-buffer-modified-p modified))))
+        (let* ((lines (org-glance-material--relation-lines
+                       org-glance-material--graph org-glance-material--id))
+               (drawer (org-glance-material--own-logbook))
+               (position (if drawer
+                             (progn
+                               (goto-char (org-element-property :end drawer))
+                               (line-beginning-position 0))
+                           (org-glance-material--relation-insert-position))))
+          (unless (overlayp org-glance-material--relation-overlay)
+            (setq org-glance-material--relation-overlay
+                  (make-overlay position position nil t t)))
+          (move-overlay org-glance-material--relation-overlay position position)
+          (overlay-put org-glance-material--relation-overlay 'after-string
+                       (unless (string-empty-p lines)
+                         (org-glance-material--relation-display
+                          (if drawer lines
+                            (concat ":LOGBOOK:\n" lines ":END:\n"))))))))))
 
 (cl-defun org-glance-material--line-key (line)
   "Return the uppercase property key of drawer LINE, or nil."
@@ -849,10 +1035,8 @@ KEEP-DELIMITERS retains its source delimiters."
         (nreverse lines)))))
 
 (cl-defun org-glance-material--strip-reserved ()
-  "Move the managed drawer lines out of the buffer into the stash.
-Outside undo, and the modified flag is kept: the buffer is the file minus what
-org-glance manages, which `--reserved-annotations' restores on write.
-Buffer-local `after-revert-hook' too, since a revert reads them back in."
+  "Stash managed drawer lines while preserving undo and the modified flag.
+Run after loading a source; the serializer restores the stashed lines."
   (let ((buffer-undo-list t)
         (modified (buffer-modified-p)))
     (setq org-glance-material--drawer-lines nil)
@@ -879,113 +1063,283 @@ planning line.  Point is on the heading."
                              (not (string-suffix-p "\n" (cdr org-glance-material--drawer-lines))))
                     "\n")))))
 
-(cl-defun org-glance-material--reserved-annotations (start _end)
-  "Splice the stashed managed lines back into the bytes being written.
-A `write-region-annotate-functions' member, so the buffer never changes.  START
-is a string when the caller writes one; nothing is added then."
-  (when (and org-glance-material--reserved-lines (not (stringp start)))
-    (save-excursion
-      (org-glance-material--goto-first-heading)
-      (when (org-at-heading-p)
-        (let ((splice (org-glance-material--drawer-splice
-                       (apply #'concat org-glance-material--reserved-lines))))
-          (list (cons (car splice)
-                      (org-glance-material--encode-endings (cdr splice)))))))))
-
 (cl-defun org-glance-material--normalize-tags ()
   "Canonicalize heading tags before saving, and warn when they change."
   (when org-glance-material--id
     (when (> (org-glance-tag:normalize-buffer) 0)
       (display-warning 'org-glance "heading tags downcased, deduplicated and sorted"))))
 
-(defvar revert-buffer-preserve-modes)  ; files.el: special only in its own file
+(defun org-glance-material--read-source (state)
+  "Return STATE's verified snapshot content, refusing damaged or missing bytes."
+  (let* ((path (plist-get state :path))
+         (content (and path (f-read-text path 'utf-8-unix))))
+    (unless (and content (plist-get state :verified) (plist-get state :available)
+                 (equal (secure-hash 'sha256 content) (plist-get state :digest)))
+      (user-error "No verified readable snapshot"))
+    content))
+
+(defun org-glance-material--load-source (state &optional initial)
+  "Load STATE and reset the editor's undo baseline, preserving its modes.
+INITIAL retains the verified initial text and any Org mode hook edits."
+  (let ((content (if initial (buffer-string) (org-glance-material--read-source state)))
+        (modified (and initial (buffer-modified-p))))
+    (org-glance-material--clear-password)
+    (setq org-glance-material--password-proof nil)
+    (let ((org-glance-material--display-change t)
+          (buffer-undo-list t)
+          (inhibit-read-only t))
+      (save-restriction
+        (widen)
+        (unless (equal content (buffer-string))
+          (erase-buffer)
+          (insert content))
+        (org-glance-material--read-endings content)
+        (org-glance-material--strip-reserved)))
+    (setq org-glance-material--base state
+          org-glance-material--encrypted (org-glance-headline--buffer-encrypted?)
+          buffer-undo-list nil)
+    (cl-incf org-glance-material--revision)
+    (set-buffer-modified-p modified)
+    (goto-char (point-min))
+    (org-glance-material--reload-context org-glance-material--graph)
+    (org-glance-material--refresh-derived-relations)))
 
 (cl-defun org-glance-material--revert (ignore-auto noconfirm)
-  "Revert this buffer without re-running its modes (`revert-buffer-function').
-A mode re-run kills every buffer-local: the stash the next write restores
-from, and the wiring that makes this a material buffer.  IGNORE-AUTO and
-NOCONFIRM pass through to `revert-buffer--default'."
-  (let ((revert-buffer-preserve-modes t))
-    (revert-buffer--default ignore-auto noconfirm)))
+  "Load the current snapshot, passing IGNORE-AUTO through indirect views.
+NOCONFIRM permits discarding a dirty draft."
+  (when (buffer-base-buffer)
+    (cl-return-from org-glance-material--revert
+      (with-current-buffer (buffer-base-buffer)
+        (org-glance-material--revert ignore-auto noconfirm))))
+  (org-glance-material--ensure)
+  (when (or org-glance-material--busy org-glance-material--pending)
+    (user-error "Complete the pending material save before reverting"))
+  (when (or (not (buffer-modified-p)) noconfirm
+            (yes-or-no-p "Discard unsaved material edits and revert? "))
+    (let ((state (org-glance-cache:material-state
+                  org-glance-material--graph org-glance-material--id)))
+      (unless (equal "live" (plist-get state :state))
+        (user-error "Headline is %s; visible content retained"
+                    (or (plist-get state :state) "unavailable")))
+      (let ((org-glance-material--busy t)
+            (position (point)))
+        (if (and (not (buffer-modified-p))
+                 (equal (plist-get state :version)
+                        (plist-get org-glance-material--base :version))
+                 (equal (plist-get state :digest)
+                        (plist-get org-glance-material--base :digest)))
+            (progn
+              (setq org-glance-material--base state)
+              (org-glance-material--refresh-derived-relations))
+          (org-glance-material--load-source state)
+          (goto-char (min position (point-max)))))
+      (org-glance-view:mark-fresh))))
+
+(defun org-glance-material:revert ()
+  "Refresh this editor from its current verified snapshot with draft protection."
+  (interactive)
+  (org-glance-material--revert nil nil))
+
+(defun org-glance-material--kill-query ()
+  "Offer to save, discard or retain edits and pending publication."
+  (if (or (buffer-base-buffer)
+          (eq (current-buffer) org-glance--discarding-buffer)
+          (not (org-glance-material--outstanding-p))) t
+    (pcase (read-char-choice "Material draft: [s]ave, [d]iscard, [c]ancel? " '(?s ?d ?c))
+      (?s (org-glance-material:save) (not (org-glance-material--outstanding-p)))
+      (?d (set-buffer-modified-p nil) t)
+      (_ nil))))
+
+(defun org-glance-material--exit-query ()
+  "Require discard consent for material drafts remaining after exit's save pass."
+  (let ((dirty 0))
+    (maphash (lambda (_key buffer)
+               (when (and (buffer-live-p buffer)
+                          (org-glance-material--outstanding-p buffer))
+                 (cl-incf dirty)))
+             org-glance-material--buffers)
+    (or (= 0 dirty)
+        (yes-or-no-p (format "Discard %d unsaved material draft(s) and exit Emacs? " dirty)))))
+
+(add-hook 'kill-emacs-query-functions #'org-glance-material--exit-query)
+
+(defun org-glance-material--file-command ()
+  "Explain how virtual material editors save and export content."
+  (interactive)
+  (user-error "Use save-buffer for Material or org-glance-material:export for a copy"))
+
+(defun org-glance-material--set-file (set-file &rest args)
+  "Run SET-FILE with ARGS while refusing attachment of a material editor."
+  (if (or org-glance-material-mode
+          (and (buffer-base-buffer)
+               (buffer-local-value 'org-glance-material-mode (buffer-base-buffer))))
+      (org-glance-material--file-command)
+    (apply set-file args)))
+
+(advice-add 'set-visited-file-name :around #'org-glance-material--set-file)
+
+(defun org-glance-material:export (file)
+  "Write ordinary material content to FILE while retaining this editor."
+  (interactive "FExport content to: ")
+  (org-glance-material--ensure)
+  (when (or org-glance-material--encrypted (org-glance--crypt-block-regions))
+    (user-error "Crypt content export requires an explicit confidential workflow"))
+  (when (and (file-exists-p file) (not (yes-or-no-p "Replace existing export? ")))
+    (user-error "Export canceled"))
+  (org-glance--atomic-write file (car (org-glance-material--serialize))))
+
+(defun org-glance-material:diff ()
+  "Compare ordinary content with a pinned preview and return the diff buffer.
+Refuse crypt content and retain this editor's source reference."
+  (interactive)
+  (org-glance-material--ensure)
+  (when (or org-glance-material--encrypted (org-glance--crypt-block-regions))
+    (user-error "Crypt content comparison requires a confidential workflow"))
+  (require 'diff)
+  (let ((base (org-glance-material:preview
+               org-glance-material--graph org-glance-material--id
+               (plist-get org-glance-material--base :version)))
+        (content (car (org-glance-material--serialize))))
+    (with-temp-buffer
+      (org-glance-material--harden-buffer)
+      (insert content)
+      (diff-buffers base (current-buffer) nil t))))
+
+(defun org-glance-material--diff-buffer (diff &optional buffer)
+  "Run DIFF for BUFFER, using Material's editing base for a virtual editor."
+  (let ((target (get-buffer (or buffer (current-buffer)))))
+    (with-current-buffer (or (buffer-base-buffer target) target)
+      (if org-glance-material-mode (org-glance-material:diff)
+        (funcall diff buffer)))))
+
+(with-eval-after-load 'diff
+  (advice-add 'diff-buffer-with-file :around #'org-glance-material--diff-buffer))
+
+(define-key org-glance-material-mode-map [remap write-file] #'org-glance-material--file-command)
+(define-key org-glance-material-mode-map [remap set-visited-file-name] #'org-glance-material--file-command)
+(define-key org-glance-material-mode-map [remap diff-buffer-with-file] #'org-glance-material:diff)
 
 (cl-defun org-glance-material--drop-hand-typed-reserved ()
-  "Delete managed drawer lines the user typed, warning per line.
-Buffer-local `before-save-hook': the stash is what `--reserved-annotations'
-writes, so a typed line would land as a second copy or a fabricated value."
+  "Delete hand-typed managed drawer lines and warn once per dropped line."
   (dolist (line (org-glance-material--remove-reserved-lines))
     (display-warning
      'org-glance
      (format "%s is managed by org-glance; your line was dropped"
              (org-glance-material--line-key line)))))
 
-(cl-defun org-glance-material:open (graph id &key decrypt)
-  "Open headline ID from GRAPH for editing as its content-blob file; return it.
-Crypt blocks stay SEALED unless DECRYPT; an open material buffer for ID is
-reused.  Signal a `user-error' when ID is dead or has no stored blob."
-  (cl-check-type graph org-glance-graph)
-  (cl-check-type id string)
-  (let* ((meta (org-glance-cache:headline graph id))
-         (logical-id (org-glance-cache:logical-id graph id)))
-    (unless (org-glance-headline-metadata? meta)
-      (user-error "No indexed live headline with id %s" id))
-    (let ((path (org-glance-cache:material-path graph id)))
-      (unless path
-        (user-error "No digest-verified current Snapshot for id %s" id))
-      (when-let* ((existing (find-buffer-visiting path)))
-        (when (equal id (buffer-local-value 'org-glance-material--row-id existing))
-          (with-current-buffer existing
-            (org-glance-material--refresh-derived-relations))
-          (when decrypt (org-glance-material--maybe-decrypt meta existing))
-          (cl-return-from org-glance-material:open existing)))
-      (let* ((cycle (org-glance-tag-config:cycle-for-filter
-                     graph (list :tags (append (org-glance-headline-metadata:tags meta) nil))))
-             (buffer
-             ;; Bound GLOBALLY: `find-file-noselect' reads the DEFAULT value.
-             (let ((org-todo-keywords
-                    (org-glance-tag-config:cycle->keywords-or cycle org-todo-keywords)))
-               (find-file-noselect path))))
+(defun org-glance-material--create (graph id state)
+  "Create GRAPH's logical editor for ID from verified STATE."
+  (let ((content (org-glance-material--read-source state))
+        (buffer (generate-new-buffer (format "*org-glance: %s*" id))))
+    (condition-case err
         (with-current-buffer buffer
-          (when (buffer-modified-p)
-            (user-error "Source buffer has unsaved edits; save or discard them before opening Material"))
-          (org-glance-material--read-endings)
-          (rename-buffer (format "*org-glance: %s*" (org-glance-headline-metadata:title meta)) t)
+          (setq default-directory (file-name-as-directory (org-glance-graph:directory graph)))
+          (org-glance-material--harden-buffer)
+          (insert content)
+          (set-buffer-modified-p nil)
+          (org-mode)
+          (org-glance-material--harden-buffer)
           (setq-local org-glance-material--graph graph
-                      org-glance-material--id logical-id
-                      org-glance-material--row-id id)
-          (when-let* ((context (org-glance-config:org-context
-                               graph #'org-glance-material--context-tags)))
-            (setq-local org-glance-config--org-context context)
-            (org-set-regexps-and-options))
-          ;; invariant 2: temp-then-rename; a crash never truncates the blob.
-          (setq-local file-precious-flag t)
-          (setq-local require-final-newline nil)
-          ;; NEVER `setq-local' `org-todo-keywords': `sync' binds it globally.
-          (setq-local org-glance-material--cycle cycle)
-          (add-hook 'after-save-hook #'org-glance-material:sync nil t)
-          (add-hook 'write-file-functions #'org-glance-material--write-version nil t)
+                      org-glance-material--id id
+                      org-glance-material--row-id id
+                      default-directory (file-name-as-directory
+                                         (org-glance-graph:directory graph))
+                      require-final-newline nil
+                      buffer-offer-save 'always
+                      org-glance-material--managed-keys org-glance-material-hidden-properties
+                      revert-buffer-function #'org-glance-material--revert)
           (org-glance-material-mode 1)
-          ;; invariant 21: managed keys live in the file, never in the buffer.
-          (setq-local org-glance-material--managed-keys
-                      org-glance-material-hidden-properties)
-          (org-glance-material--strip-reserved)
-          (add-hook 'write-region-annotate-functions
-                    #'org-glance-material--reserved-annotations nil t)
-          (add-hook 'write-region-annotate-functions
-                    #'org-glance-material--ending-annotations nil t)
-          (setq-local revert-buffer-function #'org-glance-material--revert)
-          (add-hook 'after-revert-hook #'org-glance-material--read-endings nil t)
-          (add-hook 'after-revert-hook #'org-glance-material--strip-reserved t t)
-          (add-hook 'after-revert-hook
-                    #'org-glance-material--refresh-derived-relations t t)
-          (add-hook 'before-save-hook
-                    #'org-glance-material--remove-derived-relations nil t)
-          (add-hook 'after-save-hook
-                    #'org-glance-material--refresh-derived-relations t t)
-          (add-hook 'before-save-hook #'org-glance-material--drop-hand-typed-reserved nil t)
-          (add-hook 'before-save-hook #'org-glance-material--normalize-tags nil t)
-          (org-glance-material--refresh-derived-relations)
-          (when decrypt (org-glance-material--maybe-decrypt meta buffer)))
-        buffer))))
+          (org-glance-material--load-source state t)
+          (org-cycle-set-startup-visibility)
+          (buffer-enable-undo)
+          (add-hook 'after-change-functions #'org-glance-material--changed nil t)
+          (add-hook 'write-contents-functions #'org-glance-material--write-version nil t)
+          (add-hook 'kill-buffer-query-functions #'org-glance-material--kill-query nil t)
+          (add-hook 'kill-buffer-hook #'org-glance-material--unregister nil t)
+          (add-hook 'kill-buffer-hook #'org-glance-material--clear-password nil t)
+          (org-glance-view:register graph
+                                   :stale-fn (lambda () org-glance-view--stale)
+                                   :reload-fn #'org-glance-material:revert)
+          (when-let* ((meta (org-glance-cache:headline graph id)))
+            (when (org-glance-headline-metadata? meta)
+              (rename-buffer (format "*org-glance: %s*"
+                                     (org-glance-headline-metadata:title meta)) t)))
+          (puthash (cons (org-glance-graph:directory graph) id)
+                   buffer org-glance-material--buffers)
+          buffer)
+      ((error quit) (org-glance--discard-buffer buffer)
+       (signal (car err) (cdr err))))))
+
+(cl-defun org-glance-material:open (graph id &key decrypt)
+  "Return GRAPH's logical editor for ID, reusing its buffer and draft.
+Exact-version Row IDs open pinned read-only previews.  DECRYPT explicitly
+unseals a logical editor; ordinary opens preserve sealed content."
+  (when-let* ((existing (org-glance-material:buffer graph id)))
+    (when decrypt (org-glance-material--maybe-decrypt nil existing))
+    (cl-return-from org-glance-material:open existing))
+  (let ((logical (org-glance-cache:logical-id graph id)))
+    (unless (equal logical id)
+      (cl-return-from org-glance-material:open
+        (org-glance-material:preview graph logical
+                                     (substring id (1+ (length logical))))))
+    (let ((buffer (or (org-glance-material:buffer graph id)
+                      (let ((state (org-glance-cache:material-state graph id)))
+                        (unless (equal "live" (plist-get state :state))
+                          (user-error "No current readable headline with id %s" id))
+                        (org-glance-material--create graph id state)))))
+      (when decrypt (org-glance-material--maybe-decrypt nil buffer))
+      buffer)))
+
+(defvar org-glance-material--previews (make-hash-table :test #'equal)
+  "Pinned version previews keyed by graph, headline and version.")
+
+(cl-defun org-glance-material:preview (graph id version)
+  "Return a pinned read-only preview of VERSION of logical ID in GRAPH."
+  (org-glance-graph:headline-data-path graph id)
+  (let* ((key (list (org-glance-graph:directory graph) id version))
+         (existing (gethash key org-glance-material--previews)))
+    (if (buffer-live-p existing) existing
+      (let* ((state (org-glance-cache:material-state graph id version))
+             (path (plist-get state :path))
+             (text (and path (f-read-text path 'utf-8-unix))))
+        (unless (and text (plist-get state :verified) (plist-get state :available)
+                     (equal (secure-hash 'sha256 text) (plist-get state :digest)))
+          (user-error "Version %s is unavailable or damaged" version))
+        (let ((buffer (generate-new-buffer (format "*org-glance-history: %s [%s]*" id version))))
+          (with-current-buffer buffer
+            (setq default-directory (file-name-as-directory (org-glance-graph:directory graph)))
+            (org-glance-material--harden-buffer)
+            (insert text)
+            (org-mode)
+            (org-glance-material--harden-buffer)
+            (setq default-directory (file-name-as-directory (org-glance-graph:directory graph)))
+            (local-set-key (kbd "C-c C-c")
+                           (lambda () (interactive)
+                             (switch-to-buffer (org-glance-material:restore graph id version))))
+            (goto-char (point-min))
+            (set-buffer-modified-p nil)
+            (read-only-mode 1))
+          (puthash key buffer org-glance-material--previews)
+          buffer)))))
+
+(cl-defun org-glance-material:restore (graph id version)
+  "Seed GRAPH's logical editor for ID from VERSION with current parents.
+Require consent before discarding an existing dirty draft.  Saving publishes
+one child of every captured structural leaf."
+  (let* ((existing (org-glance-material:buffer graph id))
+         (state (org-glance-cache:material-state graph id version)))
+    (when existing
+      (with-current-buffer existing
+        (when (or org-glance-material--busy org-glance-material--pending)
+          (user-error "Complete the pending material operation first"))
+        (when (and (buffer-modified-p)
+                   (not (yes-or-no-p "Discard unsaved material edits and restore version? ")))
+          (user-error "Restore canceled"))))
+    (let ((buffer (or existing (org-glance-material--create graph id state))))
+      (with-current-buffer buffer
+        (when existing (org-glance-material--load-source state))
+        (set-buffer-modified-p t))
+      buffer)))
 
 ;;; TODO state change
 
@@ -1012,6 +1366,11 @@ Its `org-add-log-note' would run after the kill and error on the dead marker;
   (goto-char (point-min))
   (unless (org-at-heading-p) (outline-next-heading)))
 
+(defun org-glance-material--require-logical (id)
+  "Refuse a version Row ID where a logical mutation is required."
+  (when (string-match-p "/" id)
+    (user-error "Restore the selected version before changing its logical headline")))
+
 (cl-defun org-glance-material:change-todo-live (graph id arg finalize)
   "Advance ID's TODO state in GRAPH via `org-todo' with prefix ARG; persist it.
 A buffer this opens is saved once the change commits (after any note), then
@@ -1019,8 +1378,8 @@ killed, and FINALIZE runs on the new state in the origin buffer.  An open
 material buffer is edited in place; the user saves it."
   (cl-check-type graph org-glance-graph)
   (cl-check-type id string)
-  (let* ((path (org-glance-graph:content-path graph id))
-         (fresh (null (get-file-buffer path)))
+  (org-glance-material--require-logical id)
+  (let* ((fresh (null (org-glance-material:buffer graph id)))
          (origin (current-buffer))
          (buf (org-glance-material:open graph id)))  ; user-errors if not live
     (if (not fresh)
@@ -1031,7 +1390,8 @@ material buffer is edited in place; the user saves it."
       (let ((owned nil) (commit-now nil))
         (cl-labels
             ((finish (state)
-               (when (buffer-live-p buf) (kill-buffer buf))
+               (when (and (buffer-live-p buf) (not (org-glance-material--outstanding-p buf)))
+                 (kill-buffer buf))
                (when (buffer-live-p origin)
                  (with-current-buffer origin (funcall finalize state))))
              (persist ()
@@ -1051,10 +1411,11 @@ material buffer is edited in place; the user saves it."
                          (let ((state (persist)))
                            (run-at-time 0 nil (lambda () (finish state))))))
                       (setq owned t))
-                     ((buffer-modified-p)
+                     ((org-glance-material--outstanding-p)
                       (setq owned t commit-now t)))))
                 (when commit-now (finish (persist))))
-            (unless owned (org-glance--discard-buffer buf))))))))
+            (unless (or owned (org-glance-material--outstanding-p buf))
+              (org-glance--discard-buffer buf))))))))
 
 (cl-defun org-glance-material--on-next-log-note (continuation)
   "Run CONTINUATION once the pending log note is stored or aborted.
@@ -1076,20 +1437,26 @@ origin buffer with (CHANGED SKIPPED): ids set, (id . reason) pairs skipped."
   (let ((origin (current-buffer)) (queue (copy-sequence ids)) changed skipped)
     (cl-labels
         ((kill-fresh (buf existing)
-           (unless existing (when (buffer-live-p buf) (kill-buffer buf))))
+           (when (and (not existing) (buffer-live-p buf)
+                      (not (org-glance-material--outstanding-p buf)))
+             (kill-buffer buf)))
          (resume (buf existing id)          ; run after an interactive note settles
-           (with-current-buffer buf (save-buffer))
-           (push id changed)
+           (condition-case err
+               (progn
+                 (with-current-buffer buf (save-buffer))
+                 (push id changed))
+             (error (push (cons id (error-message-string err)) skipped)))
            ;; Kill + advance OFF `org-store-log-note's extent (its window restore).
            (run-at-time 0 nil (lambda () (kill-fresh buf existing) (drive))))
          (change-row (id)                   ; -> t when it SUSPENDS on a note, else nil
-           (let* ((path (org-glance-graph:content-path graph id))
-                  (existing (get-file-buffer path)))
+           (let ((existing (org-glance-material:buffer graph id)))
              (cond
-              ((and existing (buffer-modified-p existing))
+              ((and existing (org-glance-material--outstanding-p existing))
                (push (cons id "unsaved changes") skipped) nil)
               (t
-               (let ((buf (ignore-errors (org-glance-material:open graph id)))
+               (let ((buf (ignore-errors
+                            (org-glance-material--require-logical id)
+                            (org-glance-material:open graph id)))
                      (suspended nil))
                  (if (not (buffer-live-p buf))
                      (progn (push (cons id "not live") skipped) nil)
@@ -1114,7 +1481,7 @@ origin buffer with (CHANGED SKIPPED): ids set, (id . reason) pairs skipped."
                                  (org-add-log-note)))
                              (with-current-buffer buf (save-buffer))
                              (push id changed))
-                            (t (when (buffer-modified-p) (save-buffer))
+                            (t (when (org-glance-material--outstanding-p) (save-buffer))
                                (push id changed)))))
                      (error (push (cons id (error-message-string err)) skipped)))
                    (unless suspended (kill-fresh buf existing))
@@ -1136,8 +1503,7 @@ has unsaved edits (invariant 11).  Return non-nil when the tags changed."
   (cl-check-type graph org-glance-graph)
   (cl-check-type tag string)
   (unless remove (setq tag (org-glance-tag:validate-string tag)))
-  (let* ((path (org-glance-graph:content-path graph id))
-         (existing (org-glance-material--assert-blob-clean path)))
+  (let ((existing (org-glance-material--assert-clean graph id)))
     (let ((buffer (org-glance-material:open graph id))
           (changed nil))
       (unwind-protect
@@ -1156,39 +1522,74 @@ has unsaved edits (invariant 11).  Return non-nil when the tags changed."
                 (org-set-tags new)
                 (let ((inhibit-message t)) (save-buffer))
                 (setq changed t))))
-        (unless existing (org-glance--discard-buffer buffer)))
+        (when (and (not existing) (not (org-glance-material--outstanding-p buffer)))
+          (org-glance--discard-buffer buffer)))
       changed)))
 
-(cl-defun org-glance-material--assert-blob-clean (path)
-  "Signal a `user-error' when PATH's visiting buffer has unsaved edits.
-Return the visiting buffer, or nil."
-  (let ((existing (find-buffer-visiting path)))
-    (when (and existing (buffer-modified-p existing))
-      (user-error "org-glance: %s has unsaved edits"
-                  (file-name-nondirectory path)))
+(cl-defun org-glance-material--assert-clean (graph id)
+  "Return GRAPH's editor for ID; refuse an unsaved draft or pending operation."
+  (org-glance-material--require-logical id)
+  (let ((existing (org-glance-material:buffer graph id)))
+    (when existing
+      (with-current-buffer existing
+        (when (or (org-glance-material--outstanding-p) org-glance-material--busy)
+          (user-error "org-glance: %s has unsaved edits or pending work" id))))
     existing))
 
-(cl-defun org-glance-material--replace-headline (graph id transform)
-  "Replace headline ID in GRAPH with (TRANSFORM headline); return the new one.
-Signal a `user-error' when the blob has unsaved edits or ID is dead; an erring
-TRANSFORM aborts before any write.  Discard the now-stale open buffer."
-  (cl-check-type graph org-glance-graph)
-  (cl-check-type id string)
-  (let* ((path (org-glance-graph:content-path graph id))
-         (existing (org-glance-material--assert-blob-clean path))
-         (headline (org-glance-graph:headline graph id)))
-    (unless headline (user-error "No live headline with id %s" id))
-    (let ((new (funcall transform headline)))
-      (org-glance-graph:add graph new)
-      (when existing (org-glance--discard-buffer existing))
-      new)))
+(cl-defun org-glance-material--replace-headline (graph id transform &key sealed)
+  "Apply TRANSFORM to GRAPH's clean headline ID and save its logical editor.
+Return the transformed headline.  SEALED supplies ciphertext to crypt
+transforms.  Preserve existing editors and refuse unsaved edits; retain any
+draft whose publication fails."
+  (let* ((existing (org-glance-material--assert-clean graph id))
+         (buffer (org-glance-material:open graph id)))
+    (unwind-protect
+        (with-current-buffer buffer
+          (save-restriction
+            (widen)
+            (let* ((encrypted org-glance-material--encrypted)
+                   (serialized (org-glance-material--serialize :seal sealed))
+                   (headline (org-glance-headline--from-string (car serialized)))
+                   (new (funcall transform headline))
+                   (content (org-glance-headline:contents new))
+                   (managed org-glance-material--managed-keys)
+                   reserved drawer endings mixed)
+              (with-temp-buffer
+                (org-glance-material--harden-buffer)
+                (insert content)
+                (org-glance--org-mode)
+                (setq-local org-glance-material--managed-keys managed)
+                (org-glance-material--read-endings content)
+                (org-glance-material--strip-reserved)
+                (setq content (buffer-string)
+                      reserved org-glance-material--reserved-lines
+                      drawer org-glance-material--drawer-lines
+                      endings org-glance-material--newline-default
+                      mixed org-glance-material--newline-mixed))
+              (save-excursion
+                (replace-region-contents (point-min) (point-max) (lambda () content)))
+              (setq org-glance-material--reserved-lines reserved
+                    org-glance-material--drawer-lines drawer
+                    org-glance-material--newline-default endings
+                    org-glance-material--newline-mixed mixed
+                    org-glance-material--encrypted
+                    (or (org-glance-headline--buffer-encrypted?)
+                        (and (not sealed) encrypted (org-glance--crypt-block-regions) t)))
+              (when sealed
+                (org-glance-material--clear-password)
+                (setq org-glance-material--password-proof nil))
+              (save-buffer)
+              new)))
+      (when (and (not existing) (not (org-glance-material--outstanding-p buffer)))
+        (org-glance--discard-buffer buffer)))))
 
 (cl-defun org-glance-material:delete (graph id)
   "Tombstone headline ID in GRAPH after confirmation; return t when deleted.
 The prompt names referrers and unsaved edits; ID's open buffer is discarded
 and views flagged stale."
+  (org-glance-material--require-logical id)
   (let* ((title (org-glance-graph:title-or-id graph id))
-         (buf (find-buffer-visiting (org-glance-graph:content-path graph id)))
+         (buf (org-glance-material:buffer graph id))
          (referrers
           (cl-loop for meta in (org-glance-graph:headlines graph)
                    when (assoc id (org-glance-headline-metadata:relations meta))
@@ -1200,8 +1601,8 @@ and views flagged stale."
                        title (length referrers)
                        (s-join ", " (mapcar (lambda (r) (s-truncate 30 r)) referrers)))
              (format "Delete \"%s\"?" title))
-           (if (and buf (buffer-modified-p buf))
-               " (its open buffer has UNSAVED edits, which will be discarded)"
+           (if (and buf (org-glance-material--outstanding-p buf))
+               " (its open buffer has UNSAVED edits or pending publication, which will be discarded)"
              "")
            " ")))
     (when (yes-or-no-p prompt)
@@ -1226,6 +1627,7 @@ Ignores `org-glance-filter-spec', so filtered-out headlines stay deletable."
   "Add a copy of headline ID to GRAPH under a fresh id; return the new id.
 The blob is copied verbatim minus ORG_GLANCE_HASH; snapshots stay behind."
   (cl-check-type graph org-glance-graph)
+  (org-glance-material--require-logical id)
   (let ((headline (org-glance-graph:headline graph id))
         (new-id (org-glance-graph:make-id graph)))
     (unless headline (user-error "No live headline with id %s" id))
@@ -1296,7 +1698,8 @@ a wrong PASSWORD errors before any write.  Return t."
        (user-error "Headline is already %s" (if encrypt "encrypted" "decrypted")))
      (if encrypt
          (org-glance-headline:encrypt headline password)
-       (org-glance-headline:decrypt headline password t))))
+       (org-glance-headline:decrypt headline password t)))
+   :sealed t)
   (when encrypt (org-glance-material--purge-occurrences graph id))
   t)
 
@@ -1310,7 +1713,8 @@ Errors before any write on an unencrypted ID, unsaved edits or a wrong OLD."
    (lambda (headline)
      (unless (org-glance-headline:encrypted? headline)
        (user-error "Headline is not encrypted"))
-     (org-glance-headline:encrypt (org-glance-headline:decrypt headline old) new)))
+     (org-glance-headline:encrypt (org-glance-headline:decrypt headline old) new))
+   :sealed t)
   t)
 
 ;;; Commands

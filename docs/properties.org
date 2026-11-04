@@ -12,8 +12,9 @@ Set in a headline's =:PROPERTIES:= drawer.
   dir, WAL id).  Capture generates it; a headline without it is not tracked.
   Path-safety-checked before it touches the filesystem.  Read by
   =org-glance-headline:id=.  Managed in material buffers
-  (=org-glance-material-hidden-properties=): absent from the buffer, written back on
-  every save; a hand-typed copy is dropped with a warning.
+  (=org-glance-material-hidden-properties=): source loading strips it from the
+  editor and =org-glance-material--serialize= supplies it from the stash on every
+  publication; a hand-typed copy is dropped with a warning.
 - =ORG_GLANCE_CREATION_TIME= — when the headline was captured, as
   =[YYYY-MM-DD Dow HH:MM]=.  Stamped by =org-glance-graph:capture= on a headline that
   lacks one (=org-glance-graph--creation-stamp=); read by the =glance= daemon.
@@ -76,7 +77,9 @@ file is ignored (=org-glance-tag-config-lint= flags it).
 
 - =#+begin_crypt= … =#+end_crypt= — a secret region: ciphertext at rest,
   plaintext only in the material buffer.  Several per headline; text outside
-  stays public and indexable.  See [[file:proposals/2026-07-17-crypt-blocks.done.org][crypt-blocks]].
+  stays public and indexable. Material serialization seals complete sibling
+  blocks in scratch memory and refuses malformed markers; decryption is explicit.
+  See [[file:proposals/2026-07-17-crypt-blocks.done.org][crypt-blocks]].
 - =#+begin_pin= … =#+end_pin= — a pinned block: kept when a repeated headline is
   trimmed on completion (=org-glance-repeat-history-depth= non-zero), so it survives
   in the live headline while the trimmed history lives on in the occurrence

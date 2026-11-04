@@ -231,11 +231,21 @@
 (cl-defun org-glance-cache--prepare-headline (graph metadata)
   "Prepare METADATA's compatibility projection from GRAPH."
   (let* ((id (org-glance-headline-metadata:id metadata))
-         (path (org-glance-graph:content-path graph id))
+         (receipt (and org-glance-graph--edit-publication
+                       (eq graph (org-glance-publication:graph
+                                  org-glance-graph--edit-publication))
+                       (equal id (org-glance-publication:id
+                                  org-glance-graph--edit-publication))
+                       org-glance-graph--edit-publication))
+         (version (and receipt (org-glance-publication:version receipt)))
+         (path (if version (f-join (org-glance-version:directory version) "data.org")
+                 (org-glance-graph:content-path graph id)))
          (row-id (org-glance-cache--row-id id path))
-         (contents (org-glance-graph:get-content graph id))
+         (contents (if receipt (org-glance-publication:contents receipt)
+                     (org-glance-graph:get-content graph id)))
          (headline (and contents (org-glance-headline--from-string contents)))
-         (digest (and contents (org-glance-cache--file-digest path)))
+         (digest (and contents (if version (org-glance-version:content-sha256 version)
+                                 (org-glance-cache--file-digest path))))
          (content-hash (and headline (org-glance-headline:hash headline)))
          (record (plist-put
                   (org-glance-headline-metadata:serialize metadata)
@@ -1715,6 +1725,51 @@ FILTER preselects tags; the consumer resolves its per-Row state predicate."
                 "SELECT logical_id FROM headline_projection WHERE logical_id || '/' || event_id=? LIMIT 1"
                 (vector id)))))
       id))
+
+(cl-defun org-glance-cache:material-state (graph id &optional version)
+  "Return committed material state for logical ID in GRAPH.
+VERSION selects an exact source.  Return its path, digest, creation time,
+producer and the family's structural frontier in one pinned read."
+  (org-glance-cache--read-db
+   graph
+   (lambda (db)
+     (let* ((family (car (sqlite-select
+                         db
+                         "SELECT state,current_version_id,verified FROM headline_family WHERE logical_id=?"
+                         (vector id))))
+            (selected (or version (cadr family)))
+            (source (car (sqlite-select
+                          db
+                          "SELECT observation.path,event.payload_digest,event.created,event.producer,observation.payload_state FROM headline_event AS event LEFT JOIN headline_payload_observation AS observation USING(logical_id,event_id) WHERE event.logical_id=? AND event.event_id=?"
+                          (vector id selected))))
+            (legacy (and (or (not family) (equal "empty" (car family)))
+                         (car (sqlite-select
+                               db
+                               "SELECT org_headline.path,org_headline.digest FROM org_headline JOIN headline USING(id) WHERE headline.org_id=? ORDER BY headline.rowid LIMIT 1"
+                               (vector id)))))
+            (events (sqlite-select
+                     db
+                     "SELECT event_id,parents_json FROM headline_event WHERE logical_id=? AND kind IN ('snapshot-published','tombstone-published') ORDER BY event_id"
+                     (vector id)))
+            (parents (make-hash-table :test #'equal)))
+       (dolist (event events)
+         (mapc (lambda (parent) (puthash parent t parents))
+               (json-parse-string (cadr event) :array-type 'list)))
+       (if legacy
+           (let ((root (org-glance-version:legacy-id id (cadr legacy))))
+             (when (or (not version) (equal root version))
+               (list :state "live" :verified t :available t
+                     :path (car legacy) :digest (cadr legacy) :version root
+                     :created "1970-01-01T00:00:00Z" :producer "legacy"
+                     :frontier (list root))))
+         (when family
+           (list :state (car family) :verified (eq 1 (nth 2 family))
+                 :version selected :path (car source) :digest (nth 1 source)
+                 :created (nth 2 source) :producer (nth 3 source)
+                 :available (equal "available" (nth 4 source))
+                 :frontier (cl-loop for event in events
+                                    unless (gethash (car event) parents)
+                                    collect (car event)))))))))
 
 (cl-defun org-glance-cache:material-path (graph id)
   "Return ID's digest-verified current Snapshot path from GRAPH's committed cache.

@@ -95,7 +95,40 @@ overview line carries preceding comments naming its source config files.
 
 ** Edit a headline
 
-=RET= on a row/heading (or =C-x j m= anywhere) *materializes* it: its file opens in a normal org buffer. Everything org can do works here. =C-x C-s= saves and re-indexes; open views refresh on their next display.  Bookkeeping properties such as =:ORG_GLANCE_ID:= stay out of the buffer and are written back on every save.
+=RET= on a row/heading (or =C-x j m= anywhere) opens the headline's logical
+Org editor. Reopening the headline returns the same buffer and preserves its
+draft. =C-x C-s= publishes an immutable child and advances the editor's base
+while retaining text, location, folding and undo. =C-x s= includes these editors.
+Closing a dirty editor offers save, discard or cancel; normal Emacs exit
+requires consent before discarding any remaining drafts.
+Pending publication counts as unsaved work even when undo restores the
+unmodified flag; save, save-all, close and exit retain recovery protection.
+
+Material buffers have no visited file. Backups, lockfiles and automatic disk
+saves are disabled, including Org source edit buffers. Completed saves have
+immutable history; unsaved drafts are lost after process failure. Save or
+discard existing file-visiting material buffers and restart Emacs when upgrading.
+
+Bookkeeping properties such as =:ORG_GLANCE_ID:= stay outside the editing text;
+the serializer supplies them on every publication. Revert loads the current
+verified snapshot after consent to discard a dirty draft. A newer external
+snapshot refreshes a clean editor at a display boundary; changed frontiers,
+deletions and damaged payloads preserve dirty drafts and refuse unsafe saves.
+Revert refreshes the frontier and conflict state when the snapshot is unchanged.
+
+=org-glance-material:export= writes an ordinary content copy while retaining
+the editor. =diff-buffer-with-file= compares ordinary content with a pinned
+base preview. These commands refuse crypt content. Exact-version rows open
+read-only previews; =C-c C-c= there restores that version into the logical
+editor for a subsequent save with the captured current parents.
+
+Org source editing works through its parent editor. Indirect buffers support
+shared text edits and saves; Material commands use the logical editor. Relative
+file links resolve from the graph directory. Graph configuration supplies TODO
+and tag context; snapshot file-local and directory-local variables are skipped.
+Capture retains its separate temporary-file workflow. File-based refile targets,
+file capture targets, VC commands and other consumers requiring a visited file
+need an exported file or their own domain integration.
 
 =org-glance-capture= stamps =ORG_GLANCE_CREATION_TIME= when the capture is
 finalized. The stamp stays in the stored =data.org= and is hidden in the
@@ -139,8 +172,8 @@ The =LOGBOOK= also shows live relation entries.  Plain links use =Refers to=
 and =Referred by=; typed links capitalize the kind, such as =Blocked by
 [[glance:abc][TODO Other headline]] at [2026-01-01 Thu 12:00]=.  The timestamp is
 the current source snapshot's creation time.  These entries refresh from the
-graph on open, revert and save.  They are a material-buffer projection and stay
-out of the stored headline.
+graph on open, revert and save through display overlays. They preserve authored
+text and undo, and stay out of the stored headline.
 
 A relation table lists both directions in one view — the headlines this one refers to AND the ones referring to it — and its =Relation= column names each row's direction and kind (=> roasted by=, =<=).  =@= on a row in the table or the overview opens the same view for that headline.
 
@@ -158,7 +191,7 @@ bank: 1234-5678
 ,#+end_crypt
 #+end_src
 
-On disk it is ciphertext, and a materialized headline opens THAT WAY -- no password prompt until you ask for one.  Unseal with =C-c #= in the buffer, or materialize with the transient's =-d= switch to open decrypted; then it re-seals on every save (auto-save and backups disabled).  Text OUTSIDE the blocks stays public and searchable.
+On disk it is ciphertext, and a materialized headline opens THAT WAY -- no password prompt until you ask for one.  Unseal with =C-c #= in the buffer, or materialize with the transient's =-d= switch to open decrypted; saves seal scratch content while the editor keeps its decrypted presentation.  Text OUTSIDE the blocks stays public and searchable.
 
 =C-c #= is the only crypt key; what it does depends on where point is:
 

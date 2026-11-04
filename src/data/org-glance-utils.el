@@ -390,6 +390,10 @@ Signal a `user-error' on a wrong PASSWORD."
   "Wrap BEG..END in crypt block markers, each on a line of its own.
 The begin marker opens BEG's line; the end marker splits END's line if needed."
   (save-excursion
+    (goto-char beg)
+    (when (and (= beg end) (= end (point-max)) (not (bolp)))
+      (insert "\n")
+      (setq beg (point) end (point)))
     (goto-char end)
     (unless (bolp) (insert "\n"))
     (insert "#+end_crypt\n")
@@ -409,13 +413,17 @@ Iterates last-to-first (invariant 28)."
   (dolist (block (reverse (org-glance--crypt-block-regions)))
     (org-glance--crypt-unwrap-block block)))
 
+(defvar org-glance--discarding-buffer nil
+  "Buffer explicitly discarded by its owner during teardown.")
+
 (defun org-glance--discard-buffer (buffer)
   "Kill BUFFER without the `Buffer modified; kill anyway?' confirmation.
 Only for a buffer org-glance owns; no-op when BUFFER is already dead."
   (when (buffer-live-p buffer)
     (with-current-buffer buffer
       (set-buffer-modified-p nil))
-    (kill-buffer buffer)))
+    (let ((org-glance--discarding-buffer buffer))
+      (kill-buffer buffer))))
 
 (defun org-glance--kill-buffer-noconfirm ()
   "Clear the current buffer's modified flag and return t.

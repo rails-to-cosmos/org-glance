@@ -139,7 +139,7 @@ argument in [[file:proposals][docs/proposals/]].
 10. *PUSH-flag + PULL-refresh coherence.*  A save only flags open views stale (boolean;
     no I/O, never touches point); views re-fill at display boundaries; freshness checks
     are strict — when in doubt, rebuild.  Enforced: =org-glance-view=,
-    =org-glance-material:sync=.  Violation: serving stale is the only real bug.
+    =org-glance-material:save=.  Violation: serving stale is the only real bug.
 
     Materialize, Open link and Overview consume one committed SQLite generation
     through =org-glance-cache:headlines= or =org-glance-cache:headline=. These
@@ -151,7 +151,7 @@ argument in [[file:proposals][docs/proposals/]].
 11. *Never clobber unsaved edits.*  Any operation rewriting a blob open in a modified
     buffer must =user-error= or skip that row (=org-glance-material--replace-headline=,
     =:retag= — its =user-error= trapped by the table's =org-glance-table--act-deltag=,
-    bulk todo); a modified file-backed view is flagged stale, never reverted.
+    bulk todo); dirty material and file-backed views are flagged stale and preserve their drafts.
     =org-glance-material:delete= names unsaved edits in its consent prompt and
     tombstones BEFORE discarding the buffer, so a failed append never costs the only
     unsaved copy.  The external fold discards nothing, having no human to ask; the
@@ -182,28 +182,7 @@ argument in [[file:proposals][docs/proposals/]].
     capture, retag add — never on read or removal.  Violation: mixed-case duplicates
     fragment filters and caches, or a stored tag becomes untouchable.
 
-14. *Crypt: plaintext never touches disk; secrecy is per-block.*  An encrypted headline
-    materializes SEALED (ciphertext, no prompt, no hardening); decryption follows the
-    buffer's sealed bytes, independent of cached metadata, and is explicit
-    (=C-c #= on a sealed buffer, =org-glance-material:decrypt=, =:open ... :decrypt t=)
-    and hardens the buffer BEFORE any plaintext lands, the unwrap path included
-    (=org-glance-material:crypt-unwrap= wires first).  =C-c #= on a decrypted buffer
-    seals it back (=org-glance-material:seal=), refusing while edits are unsaved
-    (inv 11).  Decrypted buffers are hardened (no auto-save/backup/lockfiles), sealed by
-    =before-save-hook=, unsealed after; =#+begin_crypt= markers are the persistent
-    secrecy annotation; the legacy upgrade cannot re-wrap plaintext (aes-header guard in
-    =org-glance-headline--crypt-upgrade-legacy=).  Only block bodies are secret: text
-    OUTSIDE the blocks stays plaintext on disk and IS indexed even for an =encrypted?=
-    headline.  A password re-entered after its TTL must open the retained sealed proof,
-    and the immutable-version writer refuses any encrypted buffer with an unsealed block.
-    Snapshots are plaintext, so an encrypted material buffer never snapshots
-    (=org-glance-material:snapshot-on-repeat=) and BOTH encrypt paths purge existing
-    snapshots (=org-glance-material--purge-occurrences=).  The =links=/=relations=
-    projections compute from SEALED bytes, so a link inside a crypt block is never
-    indexed; capture of content already carrying UNSEALED =#+begin_crypt= markers
-    indexes it as the plaintext it is — markers bind through the material/crypt-set
-    flows only.  Violation: secrets leak to =data.org= / backups / =occurrences/=, or an
-    encrypted headline's intentionally-public regions vanish from search.
+14. *Crypt publication stays sealed.* Material editors and their Org source editors disable disk draft recovery; explicit decryption validates in hardened scratch memory; saves seal complete sibling crypt blocks in scratch and preserve the editor's presentation; encrypted editors never create occurrence snapshots, and encryption purges existing occurrences; public text outside blocks remains indexed; malformed markers refuse save.
 
 * Views and tables
 
@@ -281,31 +260,9 @@ argument in [[file:proposals][docs/proposals/]].
     =src/data/org-glance-cache.el:1595=, base
     [[https://github.com/rails-to-cosmos/org-glance/commit/0174379][0174379]].
 
-21. *Managed drawer keys live in the file, never in the material buffer.*  The keys in
-    =org-glance-material-hidden-properties= (snapshotted per buffer at open,
-    =org-glance-material--managed-keys=) are removed from the heading's drawer at open
-    and after every revert (=org-glance-material--strip-reserved=, outside undo, modified
-    flag kept), stashed verbatim (=--reserved-lines=), and spliced into every write by
-    =--reserved-annotations= on =write-region-annotate-functions= — into the heading's
-    drawer, else a fresh one after heading + planning.  A material buffer reverts with
-    modes preserved (=org-glance-material--revert=).  Violation: a managed line kept as
-    buffer text is editable — DEL at the body's start eats the drawer's closing newline, a
-    line typed under the heading detaches the drawer, and a save writes a second id
-    drawer; a mode re-run on revert kills the stash and the next save writes a blob with
-    no id.
+21. *Managed properties stay outside authored text.* Source loads strip the fixed per-buffer managed keys; the in-memory serializer supplies their original drawer lines; revert preserves modes and reloads the stash.
 
-22. *Material saves rewrite user content only through announced normalize hooks.*  The
-    =before-save-hook= rewrites are exactly: dropping a hand-typed managed line
-    (=org-glance-material--drop-hand-typed-reserved=), tag normalization
-    (=org-glance-material--normalize-tags=) — each raising a =display-warning= — and the
-    crypt seal (inv 14).  Violation: a silent rewrite clobbers user text with no trace
-    (collides with inv 11).
-    LF editing retains original LF/CRLF endings through write annotations;
-    new lines use the first source ending. The shared encoder preserves
-    repetition snapshot endings. Source: =src/view/org-glance-material.el:168=,
-    base [[https://github.com/rails-to-cosmos/org-glance/commit/0174379][0174379]].
-    Repetition cleanup retains header and pinned newline properties
-    (=src/view/org-glance-material.el:370= and =:376= on that base).
+22. *Material normalization is announced.* The transaction drops hand-typed managed lines and canonicalizes tags with warnings; the serializer preserves newline provenance, supplies managed properties and seals crypt blocks; new lines use the first source ending.
 
 23. *LLM session state is derived live, never persisted.*  Running / exited / stopped,
     buffer names and titles recompute at fill (=org-glance-llm--session-rows=) from two
@@ -348,12 +305,7 @@ argument in [[file:proposals][docs/proposals/]].
 
 * Confirmed by the 2026-07-26 sweep
 
-27. *Save-hook depth ordering is load-bearing.*  =org-glance-material:sync= runs at depth
-    0 and re-parses the FILE, =--decrypt-buffer= at 90 unseals the buffer after it, so
-    the WAL, the property index and every projection see ciphertext — the mechanism
-    behind inv 14.  Violation: lowering =--decrypt-buffer=
-    below =sync= indexes decrypted plaintext into =headlines.jsonl= and the property
-    cache.
+27. *Publication metadata derives from sealed bytes.* The contents handler seals scratch content, parses those exact publication bytes and completes the immutable event, compatibility WAL and required family projection before success; save hooks carry notifications.
 
 28. *Multi-block crypt rewrites iterate LAST to FIRST.*  Both
     =org-glance--crypt--transform-blocks= and =--crypt-unwrap-blocks= walk =(reverse
@@ -791,17 +743,7 @@ today, up from 50.
     [[https://github.com/rails-to-cosmos/org-glance/blob/32d20f3a939fa56ca1a86ce1a3f52ebb7a7e0b39/src/data/org-glance-core.el#L1-L8][core boundary at 32d20f3, lines 1–8]] and
     [[file:proposals/2026-06-07-generalize-core-v2-module.done.org::*Problem][the module proposal]].
 
-38. *Material relation logbook entries are a live projection.*  Materialization
-    derives outgoing and incoming entries from graph metadata on open, revert and
-    save.  The before-save hook removes every projected byte; source blobs retain
-    authored logbook content alone.  Plain edges render as =Refers to= /
-    =Referred by= and typed edges capitalize =<type>=.  Entries carry the current
-    source snapshot's creation timestamp; synthetic legacy roots carry none.
-    Incoming links omit the kind query so scanning cannot create a reversed edge.
-    Material open obtains incoming links from =edge_dst= and resolves only the
-    participating source Rows; it never enumerates the full headline projection.
-    Pinned by =material-relations-actualize-in-logbook=.
-    Reference display uses current target state and title; authored link bytes persist.
+38. *Material relations are display overlays.* Open, revert and save derive outgoing and incoming logbook lines from committed metadata; plain edges render as =Refers to= / =Referred by=, typed edges capitalize their kind, and timestamps come from committed source events; authored text, undo and reference link bytes persist.
 
 39. *Immutable version metadata is shared with Glance.*  New writes use schema 2
     with explicit =Snapshot= or =Tombstone= events. Schema 1 remains readable and
@@ -1017,3 +959,32 @@ daemon announced.
   today.  A reader who has it can undo the decision per store: the ignore does not
   untrack, so =git add -f= over the family keeps it synced, and the merge door comes back
   with it.
+
+* Virtual material lifecycle evidence
+
+48. *Logical editors follow publication receipts.* Registry keys are canonical graph directory plus logical ID; editors have =buffer-file-name=nil=; own saves preserve text, location, narrowing, folding and undo while advancing the exact base; pending events count as outstanding work independently of the modified flag and retry under their original identities; same-version revert refreshes committed concurrency metadata; dirty external updates preserve the draft; history previews remain pinned.
+
+- =test/test-material-virtual.el= covers lifecycle, failure injection, concurrency, crypt, native save/exit, source editing and work counters.
+- =virtual-save-family-work-contract= requires zero warm-open observations, two observations per save, and zero observations for an unmodified save at history depths 1, 8 and 32.
+- =virtual-save-preserves-editor-state= refuses snapshot reads, file visits and reverts during receipt adoption.
+- =test/bench-material.el= reports editor-absent open, warm lookup and save milliseconds for 10/1, 50/12 and 100/40 graph/history sizes, with plain and encrypted content; collection runs before timed operations and remains disabled during timed saves.
+
+- 2026-11-04: =eask recompile= completes without warnings; Emacs 31.1 runs 705 tests with 699 passes, six environment skips and zero failures; the sibling =org-glance-llm= suite passes all 21 tests.
+- Emacs 29.1 passes all 108 material tests; its full container run has 691 passes, six skips and eight failures reproduced by the unchanged =1f32cbe= baseline (five checkpoint tests require unavailable zlib; three exercise error demotion).
+
+Median milliseconds from three alternating baseline/current processes on Linux,
+Emacs 31.1; each process measures three editor-absent opens, 30 warm opens and
+three saves per fixture. Baseline:
+[[https://github.com/rails-to-cosmos/org-glance/commit/1f32cbefbc069ab406ad041d7fa7686c6488dafa][1f32cbe]].
+
+| Graph/history | Content | Open ms (base → current) | Warm ms | Save ms | Observations/save |
+|---------------+---------+--------------------------+---------+---------+-------------------|
+| 10/1 | plain | 6.622 → 2.878 | 2.137 → 0.001 | 24.662 → 15.446 | 6 → 2 |
+| 10/1 | crypt | 6.772 → 3.796 | 2.156 → 0.001 | 26.454 → 15.829 | 6 → 2 |
+| 50/12 | plain | 6.946 → 3.164 | 2.259 → 0.001 | 67.515 → 39.655 | 6 → 2 |
+| 50/12 | crypt | 7.593 → 7.304 | 2.325 → 0.001 | 74.566 → 41.987 | 6 → 2 |
+| 100/40 | plain | 7.559 → 3.784 | 2.435 → 0.001 | 170.517 → 111.212 | 6 → 2 |
+| 100/40 | crypt | 12.117 → 5.826 | 2.352 → 0.001 | 209.064 → 151.907 | 6 → 2 |
+
+- Review regressions: =virtual-pending-save-survives-clean-undo= covers native save/save-all/close/discard, exit consent and bulk guards after undo clears the modified flag; =virtual-same-version-revert-refreshes-concurrency= covers external rejection followed by display-only revert and another save.
+- Review validation: both supplied reproductions pass; the full Emacs 31.1 suite passes 701 tests with six skips and zero failures; all 110 material tests pass on Emacs 31.1 and 29.1; compilation is warning-free and the family work contract remains zero warm/unmodified observations and two per publication.

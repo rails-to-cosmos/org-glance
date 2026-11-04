@@ -452,7 +452,7 @@ Cells join target titles with commas; a gone target shows its id."
                   (cl-incf seen)
                   (should (equal (substring title 2)
                                  (get-text-property at 'display))))))
-            (should (= seen 6)))
+            (should (= seen 4)))
           (should (equal before (buffer-string)))
           (should (equal blob (org-glance-graph:get-content graph "source")))
           (should-not (buffer-modified-p)))

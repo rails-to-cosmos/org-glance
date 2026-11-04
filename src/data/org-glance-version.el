@@ -150,9 +150,10 @@
           version))
     (error nil)))
 
-(cl-defun org-glance-version--write
-    (headline-dir headline parents producer kind contents _depth)
-  "Create one immutable KIND version, optionally holding CONTENTS."
+(cl-defun org-glance-version:prepare
+    (headline-dir headline &key parents producer kind contents)
+  "Allocate a KIND event for HEADLINE below HEADLINE-DIR without writing.
+Capture PARENTS, PRODUCER and CONTENTS' digest in the returned envelope."
   (let* ((id (org-glance-version--uuid-v7))
          (final (org-glance-version:path headline-dir id))
          (created (format-time-string "%Y-%m-%dT%H:%M:%SZ" nil t))
@@ -161,7 +162,15 @@
                    :parents (sort (copy-sequence parents) #'string<)
                    :content-sha256 (and contents (secure-hash 'sha256 contents))
                    :created created :producer producer :directory final :valid t)))
-    (org-glance-version--publish version contents)))
+    version))
+
+(cl-defun org-glance-version--write
+    (headline-dir headline parents producer kind contents _depth)
+  "Create one immutable KIND version, optionally holding CONTENTS."
+  (org-glance-version--publish
+   (org-glance-version:prepare headline-dir headline :parents parents
+                              :producer producer :kind kind :contents contents)
+   contents))
 
 (defvar org-glance-version--publication-hook nil
   "Function called with each immutable event publication phase.")
