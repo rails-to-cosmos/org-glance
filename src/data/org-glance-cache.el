@@ -1515,15 +1515,32 @@ INITIAL queues startup work without consuming the first post-open refresh."
        (when (= 1 (length rows))
          (org-glance-cache--decode-metadata (caar rows)))))))
 
+(cl-defun org-glance-cache--ordinary-rows (db &optional tags)
+  "Return one compatibility record per logical ID from DB, restricted to TAGS.
+Keep the first stored row, matching the ordinary point-read policy."
+  (let ((seen (make-hash-table :test #'equal)))
+    (cl-loop
+     for row in (sqlite-select
+                 db
+                 (concat
+                  "SELECT headline.org_id,org_headline.record FROM org_headline JOIN headline USING(id)"
+                  (when tags
+                    (concat " WHERE "
+                            (mapconcat (lambda (_tag) "lower(headline.tags) LIKE ?")
+                                       tags " AND ")))
+                  " ORDER BY headline.rowid")
+                 (apply #'vector
+                        (mapcar (lambda (tag) (format "%%:%s:%%" tag)) tags)))
+     unless (gethash (car row) seen)
+     collect (progn (puthash (car row) t seen) row))))
+
 (cl-defun org-glance-cache--read-projection (db)
   "Return the complete committed live metadata projection from DB."
   (let* ((ordinary
           (delq nil
                 (mapcar (lambda (row)
-                          (org-glance-cache--decode-metadata (car row)))
-                        (sqlite-select
-                         db
-                         "SELECT org_headline.record FROM org_headline JOIN headline USING(id) ORDER BY headline.rowid"))))
+                          (org-glance-cache--decode-metadata (cadr row)))
+                        (org-glance-cache--ordinary-rows db))))
          (families (sqlite-select
                     db
                     "SELECT logical_id,state FROM headline_family"))
@@ -1570,23 +1587,13 @@ INITIAL queues startup work without consuming the first post-open refresh."
 (cl-defun org-glance-cache--tag-candidates (db tags)
   "Return committed metadata carrying every member of TAGS from DB."
   (let* ((tags (mapcar (lambda (tag) (downcase (format "%s" tag))) tags))
-         (ordinary-clause
-          (mapconcat (lambda (_tag) "lower(headline.tags) LIKE ?") tags " AND "))
          (family-clause
           (mapconcat
            (lambda (_tag)
              "EXISTS (SELECT 1 FROM json_each(headline_projection.record_payload,'$.tags') WHERE lower(json_each.value)=?)")
            tags " AND "))
-         (ordinary-params
-          (apply #'vector (mapcar (lambda (tag) (format "%%:%s:%%" tag)) tags)))
          (tag-params (apply #'vector tags))
-         (ordinary
-          (sqlite-select
-           db
-           (concat
-            "SELECT headline.org_id,org_headline.record FROM org_headline JOIN headline USING(id) WHERE "
-            ordinary-clause " ORDER BY headline.rowid")
-           ordinary-params))
+         (ordinary (org-glance-cache--ordinary-rows db tags))
          (projected
           (sqlite-select
            db

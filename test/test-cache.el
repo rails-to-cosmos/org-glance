@@ -240,6 +240,77 @@
                                 graph '(:tags ("benchmark"))))))
         (should (= 1 decoded))))))
 
+(ert-deftest org-glance-test:cache-snapshot-rows-render-current-once ()
+  "Retained compatibility snapshots emit each current headline once."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-test:headline "entry" "* Old :wrike:"))
+    (dolist (title '("Middle" "Current"))
+      (org-glance-test:with-open buffer (org-glance-material:open graph "entry")
+        (with-current-buffer buffer
+          (goto-char (point-min))
+          (re-search-forward "^\\* .* :wrike:")
+          (replace-match (concat "* " title " :wrike:") t t)
+          (org-glance-test:save))))
+    (org-glance-graph:add graph
+      (org-glance-test:headline "other" "* Current :wrike:"))
+    (let ((decoded 0)
+          (decode (symbol-function 'org-glance-cache--decode-metadata)))
+      (cl-letf (((symbol-function 'org-glance-graph:get-content)
+                 (lambda (&rest _) (ert-fail "Overview read a blob")))
+                ((symbol-function 'org-glance-cache--decode-metadata)
+                 (lambda (payload) (cl-incf decoded) (funcall decode payload))))
+        (dolist (filter '(nil (:tags ("wrike"))))
+          (should (equal '("entry" "other")
+                         (mapcar #'org-glance-headline-metadata:id
+                                 (org-glance-cache:headlines-for-filter graph filter))))
+          (setq decoded 0)
+          (let ((text (org-glance-overview:render graph filter)))
+            (should (equal '("entry" "other")
+                           (org-glance-test--overview-ids text)))
+            (should (= 2 (s-count-matches "^\\* Current" text))))
+          (should (<= decoded 4)))
+        (should (= 2 (length (org-glance-table--rows graph #'always))))))))
+
+(defun org-glance-test--overview-ids (text)
+  "Return the rendered headline IDs in TEXT."
+  (with-temp-buffer
+    (insert text)
+    (goto-char (point-min))
+    (let (ids)
+      (while (re-search-forward "^:ORG_GLANCE_ID: \\(.*\\)$" nil t)
+        (push (match-string 1) ids))
+      (nreverse ids))))
+
+(ert-deftest org-glance-test:cache-snapshot-rows-preserve-family-selection ()
+  "Historical rows cannot hide conflicts or retain a superseded tag."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-test:headline "entry" "* Root :wrike:"))
+    (let* ((dir (org-glance-graph:headline-data-path graph "entry"))
+           (parent (org-glance-version:id
+                    (car (org-glance-version:current dir "entry")))))
+      (dolist (title '("Left" "Right"))
+        (org-glance-version:write-snapshot
+         dir "entry" (list parent) "glance"
+         (org-glance-test:org-with-id (concat "* " title " :wrike:") "entry")))
+      (org-glance-cache:reconcile-inventory graph)
+      (dolist (filter '(nil (:tags ("wrike"))))
+        (should (equal '("Left" "Right")
+                       (sort (mapcar #'org-glance-headline-metadata:title
+                                     (org-glance-cache:headlines-for-filter graph filter))
+                             #'string<))))
+      (org-glance-version:write-snapshot
+       dir "entry" (mapcar #'org-glance-version:id
+                           (org-glance-version:current dir "entry"))
+       "glance" (org-glance-test:org-with-id "* Merged :home:" "entry"))
+      (org-glance-cache:reconcile-inventory graph)
+      (should-not (org-glance-cache:headlines-for-filter graph '(:tags ("wrike"))))
+      (should (equal '("Merged")
+                     (mapcar #'org-glance-headline-metadata:title
+                             (org-glance-cache:headlines-for-filter
+                              graph '(:tags ("home")))))))))
+
 (ert-deftest org-glance-test:family-inventory-is-search-authority-without-wal ()
   "A complete immutable family is searchable without a metadata notification."
   (org-glance-test:with-graph graph

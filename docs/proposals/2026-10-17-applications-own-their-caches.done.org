@@ -33,6 +33,21 @@ Checkpoint hydration replaces the private projection and refuses an artifact
 that loses an already admitted event. Reads continue using committed snapshots
 while another org-glance process prepares or publishes a generation.
 
+* Compatibility snapshot rows
+
+Compatibility writes retain a row per snapshot path. List queries group these
+rows by logical headline ID before joining the current family projection, using
+the first stored row consistently with point reads. Tag queries restrict their
+candidates in SQL before decoding. Current family metadata still controls the
+rendered content; separate IDs and family conflict versions retain their rows.
+Overview manifest and dependency revision 3 expire artifacts rendered with
+repeated rows, including artifacts considered for incremental refresh.
+
+The regression saves one material buffer twice and checks filtered and unfiltered
+Overview output, table rows, same-title entries, bounded decoding and zero blob
+reads. Additional cases cover conflict versions, a superseded tag and admission
+of an artifact produced by the previous renderer.
+
 * Verification
 
 Source compilation passes for 22 modules. All 539 ERT cases pass, including

@@ -47,6 +47,10 @@ write an ordinary headline, =C-c C-c=:
 | TODO  | Kopi Luwak | <2026-08-01 Sat> | <2026-08-10 Mon> | A   | coffee |
 #+end_example
 
+Overview and table views show each current headline once, even when the cache
+retains older snapshots. Separate headline IDs and unresolved conflict versions
+remain separate rows.
+
 =O= toggles to the org-text *overview* — a plain read-only org buffer, so folding, =C-x j a= (agenda) and link clicking all behave exactly as in org. Each overview heading is self-sufficient:
 
 #+begin_src org

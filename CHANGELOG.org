@@ -5,6 +5,10 @@ Notable user-facing changes.  Versions date-based
 
 * Unreleased
 
+** Fixed
+
+- Overview and table views collapse repeated cached snapshots of the same logical headline.
+
 * 1.55.1.0.20261102.0
 
 ** Fixed

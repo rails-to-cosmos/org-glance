@@ -272,6 +272,27 @@ sidecar mismatch rebuilds, then the owner hits.  A pinned `spec-key' collides."
           (org-glance-overview:cached-file graph s2)         ; now s2 owns -> hit
           (should (= 1 renders)))))))
 
+(ert-deftest org-glance-test:overview-cache-old-row-policy-rebuilds ()
+  "Both refresh paths discard artifacts from the previous row policy."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-test:headline "entry" "* Current :wrike:"))
+    (dolist (filter '(nil (:tags ("wrike"))))
+      (let* ((text (org-glance-overview:render graph filter))
+             (old (org-glance-overview--publish
+                   graph filter (org-glance-overview--dependency graph filter)
+                   (concat text text)))
+             (manifest (org-glance-overview--spec-sidecar old))
+             (receipt (json-parse-string (f-read-text manifest 'utf-8))))
+        (aset receipt 0 2)
+        (aset receipt 1 (s-replace "overview/3" "overview/2" (aref receipt 1)))
+        (org-glance--atomic-write manifest (json-serialize receipt))
+        (unless filter
+          (should (eq 'full (org-glance-overview:update graph nil '("entry")))))
+        (let ((current (org-glance-overview:cached-file graph filter)))
+          (should-not (equal old current))
+          (should (equal text (f-read-text current 'utf-8))))))))
+
 (ert-deftest org-glance-test:overview-cache-outdated-header-rebuilds ()
   "A cache with a stale `-v2' mode prop-line rebuilds even when mtime-fresh."
   (org-glance-test:with-graph graph

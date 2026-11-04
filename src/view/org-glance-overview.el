@@ -61,7 +61,7 @@ chars of the SHA-1 of its `org-glance-filter:identity'.
            (receipt (json-parse-string
                      (f-read-text (org-glance-overview--spec-sidecar anchor) 'utf-8))))
       (when (and (vectorp receipt) (= (length receipt) 3)
-                 (equal (aref receipt 0) 2) (stringp (aref receipt 1))
+                 (equal (aref receipt 0) 3) (stringp (aref receipt 1))
                  (stringp (aref receipt 2))
                  (string-match-p "\\`[0-9a-f]\\{64\\}\\'" (aref receipt 2)))
         (cons receipt (expand-file-name (concat "artifacts/" (aref receipt 2) ".org")
@@ -96,7 +96,7 @@ chars of the SHA-1 of its `org-glance-filter:identity'.
     (when (org-glance-overview:spec-key filter)
       (org-glance--atomic-write
        (org-glance-overview--spec-sidecar anchor)
-       (decode-coding-string (json-serialize (vector 2 receipt digest)) 'utf-8 t)))
+       (decode-coding-string (json-serialize (vector 3 receipt digest)) 'utf-8 t)))
     file))
 
 (cl-defun org-glance-overview:render-headline (graph metadata &optional titles)
@@ -217,7 +217,7 @@ Prefix the pragmas FILTER's tags agree on; select by their cycle's done-set."
   "Return FILTER's private Overview receipt for GRAPH's current context."
   (let ((json (org-glance-config:current graph)))
     (prin1-to-string
-     (list "overview/2" (org-glance-filter:identity filter)
+     (list "overview/3" (org-glance-filter:identity filter)
            (org-glance-config:cache-key graph) (org-glance-config:presentation-key graph)
            (unless json (org-glance-tag-config:source-mtime graph))
            (mapcar (lambda (path)

@@ -269,6 +269,8 @@ argument in [[file:proposals][docs/proposals/]].
     agenda shows the span), relations and plain links — all from metadata, zero blob
     parses; agenda and link-following work without materializing.  Violation: agenda
     misses planning, or the render cost becomes O(blobs).
+    Compatibility snapshot rows collapse by logical ID before family selection; =cache-snapshot-rows-render-current-once= covers repeated saves, equal titles, zero blob reads and bounded metadata decoding.
+    2026-11-04, 12 alternating query pairs on one committed local cache: all-row median 273.800 → 273.737 ms; =wrike= median 26.807 → 27.151 ms, 458 → 416 rows for 415 IDs (one conflict pair); paired mean change −3.924 / −1.039 ms, 95% bootstrap intervals [−25.904, 14.621] / [−4.009, 1.515] ms.
     JSON Overview resolves cached source TODO receipts per Row and refuses
     incompatible standalone headers after filtering; rendering reads no blobs.
     Persistent exports admit one atomic SPEC pointer to immutable local artifacts;
