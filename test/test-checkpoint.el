@@ -2,6 +2,21 @@
 
 (require 'org-glance-checkpoint)
 
+(ert-deftest org-glance-test:checkpoint-gzip-fallback-without-emacs-zlib ()
+  "Decode exact checkpoint bytes through gzip when Emacs has no zlib."
+  (let* ((bytes (encode-coding-string "Checkpoint 文\n" 'utf-8 t))
+         (compressed (org-glance-checkpoint--compress bytes))
+         (process (symbol-function 'call-process-region))
+         (calls 0))
+    (cl-letf (((symbol-function 'zlib-decompress-region) nil)
+              ((symbol-function 'call-process-region)
+               (lambda (&rest args)
+                 (cl-incf calls)
+                 (apply process args))))
+      (should (equal bytes (org-glance-checkpoint--decompress compressed)))
+      (should (= calls 1))
+      (should-error (org-glance-checkpoint--decompress "damaged checkpoint")))))
+
 (cl-defun org-glance-test:delete-shared-cache (graph)
   "Delete GRAPH's machine-local shared projection files."
   (let ((path (org-glance-cache:path graph)))
@@ -202,8 +217,8 @@
     (org-glance-cache:refresh graph)
     (org-glance-checkpoint:seal graph "test-writer")
     (org-glance-test:write
-     (org-glance-graph:config-file graph "system.org")
-     "#+TODO: NEXT | DONE\n")
+     (org-glance-config-file:path (org-glance-graph:directory graph))
+     "{\"format\":1,\"todoCycles\":[{\"active\":[\"NEXT\"],\"inactive\":[\"DONE\"]}]}")
     (should-error (org-glance-checkpoint:hydrate graph) :type 'error)))
 
 ;;; test-checkpoint.el ends here

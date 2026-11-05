@@ -501,19 +501,13 @@ own filter; an action-triggered reload keeps them."
 (ert-deftest org-glance-test:table-bulk-state-prompt-is-org-native ()
   "The bulk prompt is org's fast selection over the tag's `#+TODO:' keywords."
   (org-glance-test:with-graph graph
-    (with-temp-directory cfg
-      (let ((org-glance-tag-config-dir cfg)
-            seen)
-        (unwind-protect
-            (progn
-              (org-glance-test:write (f-join cfg "book.org")
-                                     "#+TITLE: Book\n#+TODO: TODO READING | READ\n\n* Book\n")
-              (org-glance-tag-config--invalidate)
-              (cl-letf (((symbol-function 'org-fast-todo-selection)
-                         (lambda (&rest _) (setq seen org-todo-keywords-1) "READING")))
-                (org-glance-table--read-state-native graph '(:tags ("book"))))
-              (should (equal '("TODO" "READING" "READ") seen)))
-          (org-glance-tag-config--invalidate))))))
+    (org-glance-config-test--publish graph
+      "{\"format\":1,\"tags\":{\"book\":{\"todoCycles\":[{\"active\":[\"TODO\",\"READING\"],\"inactive\":[\"READ\"]}]}}}")
+    (let (seen)
+      (cl-letf (((symbol-function 'org-fast-todo-selection)
+                 (lambda (&rest _) (setq seen org-todo-keywords-1) "READING")))
+        (org-glance-table--read-state-native graph '(:tags ("book"))))
+      (should (equal '("TODO" "READING" "READ" "DONE") seen)))))
 
 (ert-deftest org-glance-test:table-bulk-todo-marked ()
   "`C-c C-t' with marked rows sets them all to a chosen state, then clears marks."
@@ -559,6 +553,8 @@ relies on `org-add-log-note' switching buffers for real."
   (let ((org-todo-keywords '((sequence "TODO" "DONE(!)")))   ; `!' logs a timestamp
         (org-log-into-drawer nil) (this-command 'org-glance-test-bulk))
     (org-glance-test:with-graph graph
+      (org-glance-config-test--publish graph
+        "{\"format\":1,\"todoCycles\":[{\"active\":[\"TODO\"],\"inactive\":[\"DONE(!)\"]}]}")
       (org-glance-graph:add graph
                             (org-glance-test:headline "g1" "* TODO A")
                             (org-glance-test:headline "g2" "* TODO B")
@@ -899,9 +895,9 @@ the anchor id, so another anchor keeps the default layout."
       (org-glance-table--persist-schema)          ; what the live hooks would run
       (org-glance-table--persist-config))
     ;; a transient filter persists nothing, in any store (invariant 17).
-    (should-not (file-exists-p (org-glance-table--refs-file graph)))
-    (should-not (file-exists-p (org-glance-table--schema-file graph)))
-    (should-not (file-exists-p (org-glance-table--config-file graph)))
+    (should-not (file-exists-p (expand-file-name ".org-glance/config/table-refs.eld" (org-glance-graph:directory graph))))
+    (should-not (file-exists-p (expand-file-name ".org-glance/config/table-columns.eld" (org-glance-graph:directory graph))))
+    (should-not (file-exists-p (expand-file-name ".org-glance/config/table-views.eld" (org-glance-graph:directory graph))))
     (org-glance-test:with-table (graph '(:id-any ("r1")) '(:anchor "c1" :dir relations))
       (should (member "tags" (org-glance-test:table-col-keys)))   ; default restored
       (table-view-remove-column "tags")
@@ -936,7 +932,7 @@ the anchor id, so another anchor keeps the default layout."
           (org-glance-table--persist-config)
           (org-glance-table--persist-config))       ; unchanged -> no repeat
         (should (= 1 (cl-count-if (lambda (m) (s-contains? "C-c C-c" m)) msgs)))))
-    (should-not (file-exists-p (org-glance-table--refs-file graph)))))
+    (should-not (file-exists-p (expand-file-name ".org-glance/config/table-refs.eld" (org-glance-graph:directory graph))))))
 
 (ert-deftest org-glance-test:apply-layout-persistent-view ()
   "`C-c C-c' in a persistent (tag) view saves config + schema on the spot."
@@ -980,11 +976,11 @@ pair: the key is ANCHOR-tag > ROW-tag (invariant 18)."
   "The anchor's own entry wins over a matching tag-pair entry."
   (org-glance-test:with-graph graph
     (org-glance-test:ref-fixture graph)
-    (let ((file (org-glance-table--refs-file graph)))
-      (org-glance--eld-alist-set file "pair:relations:coffee>roaster"
-                                 '(:hidden ("tags") :applied 1))
-      (org-glance--eld-alist-set file "ref:relations:c2"
-                                 '(:hidden ("state") :applied 2)))
+    (progn
+      (org-glance-table--layout-write graph :section "tableRefs" :key "pair:relations:coffee>roaster"
+                                 :value '(:hidden ("tags") :applied 1))
+      (org-glance-table--layout-write graph :section "tableRefs" :key "ref:relations:c2"
+                                 :value '(:hidden ("state") :applied 2)))
     (org-glance-test:with-table (graph '(:id-any ("r2")) '(:anchor "c2" :dir relations))
       (let ((keys (org-glance-test:table-col-keys)))
         (should (member "tags" keys))
@@ -997,11 +993,11 @@ pair: the key is ANCHOR-tag > ROW-tag (invariant 18)."
       (org-glance-test:headline "c3" "* TODO Coffee3 :coffee:decaf:"
         "[[glance:r1][R1]]")
       (org-glance-test:headline "r1" "* TODO Roaster1 :roaster:"))
-    (let ((file (org-glance-table--refs-file graph)))
-      (org-glance--eld-alist-set file "pair:relations:coffee>roaster"
-                                 '(:hidden ("tags") :applied 1))
-      (org-glance--eld-alist-set file "pair:relations:decaf>roaster"
-                                 '(:hidden ("state") :applied 2)))
+    (progn
+      (org-glance-table--layout-write graph :section "tableRefs" :key "pair:relations:coffee>roaster"
+                                 :value '(:hidden ("tags") :applied 1))
+      (org-glance-table--layout-write graph :section "tableRefs" :key "pair:relations:decaf>roaster"
+                                 :value '(:hidden ("state") :applied 2)))
     (org-glance-test:with-table (graph '(:id-any ("r1")) '(:anchor "c3" :dir relations))
       (let ((keys (org-glance-test:table-col-keys)))
         (should (member "tags" keys))
@@ -1015,9 +1011,8 @@ pair: the key is ANCHOR-tag > ROW-tag (invariant 18)."
         "[[glance:r1][R1]]")
       (org-glance-test:headline-props "r1" "* TODO Roaster1 :roaster:"
                                       '(("ROAST" . "light"))))
-    (org-glance--eld-alist-set
-     (org-glance-table--refs-file graph) "ref:relations:c1"
-     '(:columns (("ROAST" . "Roast")) :hidden ("tags")
+    (org-glance-table--layout-write graph :section "tableRefs" :key "ref:relations:c1"
+     :value '(:columns (("ROAST" . "Roast")) :hidden ("tags")
        :order ("title" "state" "ROAST") :sort (("title" . t)) :applied 1))
     (org-glance-test:with-table (graph '(:id-any ("r1")) '(:anchor "c1" :dir relations))
       (let ((keys (org-glance-test:table-col-keys)))

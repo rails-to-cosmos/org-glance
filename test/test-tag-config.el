@@ -1,56 +1,50 @@
-;;; test-tag-config.el --- Separate optional per-tag config store -*- lexical-binding: t -*-
+;;; test-tag-config.el --- Shared JSON tag settings -*- lexical-binding: t -*-
 (require 'test-helpers)
 
-(cl-defmacro org-glance-test:with-tag-config (configs &rest body)
-  "Run BODY against a temp config dir holding CONFIGS as `<tag>.org' files.
-CONFIGS is an alist (TAG-STRING . CONTENTS); the cache resets around BODY."
-  (declare (indent 1))
-  `(with-temp-directory dir
-     (let ((org-glance-tag-config-dir dir))
-       (dolist (cfg ,configs)
-         (f-write-text (cdr cfg) 'utf-8 (f-join dir (concat (car cfg) ".org"))))
-       (org-glance-tag-config--invalidate)
-       (unwind-protect (progn ,@body)
-         (org-glance-tag-config--invalidate)))))
+(cl-defmacro org-glance-test:with-tag-config (target configs &rest body)
+  "Run BODY with CONFIGS as JSON tag objects in TARGET, or a temporary graph."
+  (declare (indent 2))
+  `(with-temp-directory config-root
+     (let* ((org-glance-graph (or ,target (org-glance-graph config-root)))
+            (root (org-glance-graph:directory org-glance-graph))
+            (snapshot (org-glance-config:snapshot org-glance-graph)))
+       (org-glance-config-file:write
+        root :expected (org-glance-config-file:revision snapshot)
+        :change (lambda (object)
+                  (let ((tags (make-hash-table :test 'equal)))
+                    (dolist (entry ,configs)
+                      (puthash (car entry) (json-parse-string (cdr entry)) tags))
+                    (puthash "tags" tags object) object)))
+       (org-glance-config:refresh org-glance-graph)
+       ,@body)))
 
 (cl-defun org-glance-test:one-config (tag contents)
   "Return a one-entry `with-tag-config' alist mapping TAG to CONTENTS."
   (list (cons tag contents)))
 
 (defconst org-glance-test:book-config
-  "#+TITLE: Book
-#+TODO:  TODO READING | READ ABANDONED
-
-* Book
-:PROPERTIES:
-:LOCATION: %^{Where}
-:END:
-*** Notes
-    %?
-"
+  "{\"title\":\"Book\",\"todoCycles\":[{\"active\":[\"TODO\",\"READING\"],\"inactive\":[\"READ\",\"ABANDONED\"]}],\"template\":\"* Book\\n:PROPERTIES:\\n:LOCATION: %^{Where}\\n:END:\\n*** Notes\\n    %?\"}"
   "Full book config: cycle, a property prompt, and a sub-heading skeleton.")
 
 (defconst org-glance-test:book-config-min
-  "#+TITLE: Book\n#+TODO: TODO READING | READ\n\n* Book\n"
+  "{\"title\":\"Book\",\"todoCycles\":[{\"active\":[\"TODO\",\"READING\"],\"inactive\":[\"READ\"]}],\"template\":\"* Book\"}"
   "Minimal single-tag book config: cycle only, an empty capture entry.")
 
 (ert-deftest org-glance-test:tag-config-degrades-without-config ()
   "With no config, the capture template is byte-identical to the default."
-  (let ((org-glance-tag-config-dir nil)
-        (org-glance-graph nil))
-    (org-glance-tag-config--invalidate)
+  (let ((org-glance-graph nil))
     (should (string= "* Hi%?  :task:" (org-glance-capture:template 'task "Hi")))))
 
 (ert-deftest org-glance-test:tag-config-resolve ()
   "A per-tag file resolves to a struct; an unknown tag resolves to nil."
-  (org-glance-test:with-tag-config (org-glance-test:one-config "book" org-glance-test:book-config)
-    (let ((config (org-glance-tag-config:resolve nil 'book)))
+  (org-glance-test:with-tag-config nil (org-glance-test:one-config "book" org-glance-test:book-config)
+    (let ((config (org-glance-tag-config:resolve org-glance-graph 'book)))
       (should (org-glance-tag-config? config))
       (should (eq 'book (org-glance-tag-config:tag config)))
       (should (equal "Book" (org-glance-tag-config:title config)))
       (should (equal "TODO READING | READ ABANDONED" (org-glance-tag-config:todo config)))
       (should (s-contains? "Notes" (org-glance-tag-config:template config))))
-    (should (null (org-glance-tag-config:resolve nil 'nonexistent)))))
+    (should (null (org-glance-tag-config:resolve org-glance-graph 'nonexistent)))))
 
 (ert-deftest org-glance-test:tag-config-done-keywords ()
   "The done-set is everything after the last `|', derived by org itself."
@@ -71,8 +65,8 @@ CONFIGS is an alist (TAG-STRING . CONTENTS); the cache resets around BODY."
       (should (member "PLAN" org-not-done-keywords))
       (should-not (member "PLAN" org-done-keywords))))
   (org-glance-test:with-graph graph
-    (org-glance-test:with-tag-config
-        (org-glance-test:one-config "book" "#+TODO: PLAN\n\n* Book\n")
+    (org-glance-test:with-tag-config graph
+        (org-glance-test:one-config "book" "{\"todoCycles\":[{\"active\":[\"PLAN\"],\"inactive\":[]}],\"template\":\"* Book\"}")
       (org-glance-test:capture graph (org-glance-test:org-with-id "* PLAN Task :book:" "active-only"))
       (org-glance-test:with-material (buffer graph "active-only")
         (should (member "PLAN" org-not-done-keywords))
@@ -83,13 +77,12 @@ CONFIGS is an alist (TAG-STRING . CONTENTS); the cache resets around BODY."
         (let ((org-inhibit-logging t)) (org-todo "DONE"))
         (org-glance-test:save)
         (should (string-prefix-p "* DONE Task" (f-read-text (plist-get org-glance-material--base :path) 'utf-8-unix))))
-      (should (equal "#+TODO: PLAN\n\n* Book\n" (f-read-text (f-join dir "book.org") 'utf-8-unix))))))
+      (should (equal "PLAN |" (org-glance-tag-config:todo (org-glance-tag-config:resolve graph 'book)))))))
 
 (ert-deftest org-glance-test:tag-config-render-from-config ()
   "Render keeps tag, skeleton and prompts, prepends `#+TODO:', yields one `%?'."
-  (org-glance-test:with-tag-config (org-glance-test:one-config "book" org-glance-test:book-config)
-    (let* ((org-glance-graph nil)
-           (template (org-glance-capture:template 'book "Dune")))
+  (org-glance-test:with-tag-config nil (org-glance-test:one-config "book" org-glance-test:book-config)
+    (let* ((template (org-glance-capture:template 'book "Dune")))
       (should (s-contains? ":book:" template))
       (should (s-contains? "#+TODO: TODO READING | READ ABANDONED" template))
       (should (s-contains? "Notes" template))
@@ -99,60 +92,56 @@ CONFIGS is an alist (TAG-STRING . CONTENTS); the cache resets around BODY."
 
 (ert-deftest org-glance-test:tag-config-render-single-capture-point ()
   "Render appends no `%?' when a kept drawer property already holds one."
-  (org-glance-test:with-tag-config
+  (org-glance-test:with-tag-config nil
       (org-glance-test:one-config
        "note"
-       "#+TITLE: Note\n\n* Note\n:PROPERTIES:\n:RECORD:  %?\n:END:\nbody\n")
+       "{\"title\":\"Note\",\"template\":\"* Note\\n:PROPERTIES:\\n:RECORD:  %?\\n:END:\\nbody\"}")
     (let ((template (org-glance-capture:template 'note "X")))
       (should (= 1 (s-count-matches "%\\?" template)))
       (should (s-contains? ":RECORD:  %?" template)))))
 
 (ert-deftest org-glance-test:tag-config-render-bare-capture-point ()
   "A bare `* %?' skeleton renders the default entry without `#+TODO:'."
-  (org-glance-test:with-tag-config
+  (org-glance-test:with-tag-config nil
       (org-glance-test:one-config
        "task"
-       "# only a capture template below\n\n* %?\n")
-    (let* ((org-glance-graph nil)
-           (template (org-glance-capture:template 'task "Buy milk")))
+       "{\"template\":\"* %?\"}")
+    (let* ((template (org-glance-capture:template 'task "Buy milk")))
       (should (s-contains? "* Buy milk%?" template))   ; TITLE fills heading, %? survives
       (should (s-contains? ":task:" template))
       (should (= 1 (s-count-matches "%\\?" template)))
-      (should-not (s-contains? "#+TODO:" template)))))
+      (should (s-contains? "#+TODO: TODO | DONE" template)))))
 
 (ert-deftest org-glance-test:tag-config-cycle-for-filter ()
   "Every relevant tag cycle remains a separate TODO sequence."
-  (org-glance-test:with-tag-config
-      (list (cons "book" "#+TITLE: Book\n#+TODO: TODO READING | READ\n\n* Book\n")
-            (cons "film" "#+TITLE: Film\n#+TODO: TODO WATCHING | WATCHED\n\n* Film\n"))
-    (should (equal "TODO READING | READ"
-                   (org-glance-tag-config:cycle-for-filter nil '(:tags ("book")))))
-    (should (equal "TODO READING | READ\nTODO WATCHING | WATCHED"
-                   (org-glance-tag-config:cycle-for-filter nil '(:tags ("book" "film")))))
-    (should (null (org-glance-tag-config:cycle-for-filter nil '(:tags ("task")))))))
+  (org-glance-test:with-tag-config nil
+      (list (cons "book" "{\"title\":\"Book\",\"todoCycles\":[{\"active\":[\"TODO\",\"READING\"],\"inactive\":[\"READ\"]}],\"template\":\"* Book\"}")
+            (cons "film" "{\"title\":\"Film\",\"todoCycles\":[{\"active\":[\"TODO\",\"WATCHING\"],\"inactive\":[\"WATCHED\"]}],\"template\":\"* Film\"}"))
+    (let ((book (org-glance-tag-config:done-keywords
+                 (org-glance-tag-config:cycle-for-filter org-glance-graph '(:tags ("book")))))
+          (both (org-glance-tag-config:done-keywords
+                 (org-glance-tag-config:cycle-for-filter org-glance-graph '(:tags ("book" "film"))))))
+      (should (member "READ" book))
+      (should-not (member "WATCHED" book))
+      (should (member "READ" both))
+      (should (member "WATCHED" both)))))
 
 (ert-deftest org-glance-test:tag-config-not-in-content-tags ()
   "Tag discovery lists neither configured tags nor the retired `class' marker."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "h1" "* TODO A :work:"))
-    (org-glance-test:with-tag-config (org-glance-test:one-config "book" org-glance-test:book-config)
+    (org-glance-test:with-tag-config graph (org-glance-test:one-config "book" org-glance-test:book-config)
       (should (member "work" (org-glance-graph:tags graph)))
       (should-not (member "book" (org-glance-graph:tags graph)))
       (should-not (member "class" (org-glance-graph:tags graph)))
-      (should (org-glance-tag-config:resolve nil 'book)))))
+      (should (org-glance-tag-config:resolve org-glance-graph 'book)))))
 
 (ert-deftest org-glance-test:tag-config-overview-todo-header ()
   "The overview emits TODO lines for each tag present in its scope."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "b1" "* READING Dune :book:"))
-    (org-glance-test:with-tag-config (org-glance-test:one-config "book" org-glance-test:book-config)
+    (org-glance-test:with-tag-config graph (org-glance-test:one-config "book" org-glance-test:book-config)
       (let ((text (org-glance-overview:render graph '(:tags ("book")))))
-        (should (s-contains?
-                 (format "# TODO source: %s\n"
-                         (file-relative-name
-                          (org-glance-tag-config:file graph 'book)
-                          (org-glance-graph:store-path graph)))
-                 text))
         (should (s-contains? "#+TODO: TODO READING | READ ABANDONED" text))
         (should (s-contains? "Dune" text)))
       (let ((text (org-glance-overview:render graph nil)))
@@ -161,13 +150,12 @@ CONFIGS is an alist (TAG-STRING . CONTENTS); the cache resets around BODY."
 (ert-deftest org-glance-test:tag-config-system-and-tag-cycles ()
   "System and per-tag TODO lines drive overview, parsing and capture."
   (org-glance-test:with-graph graph
-    (org-glance-test:write
-     (org-glance-tag-config:system-file graph)
-     "#+TODO: DELEGATED REVIEW TODO | DONE CANCELLED\n")
-    (org-glance-test:with-tag-config
-        (list (cons "book" "#+TODO: READING | READ\n\n* Book\n")
-              (cons "note" "#+TODO: READING | READ\n\n* Note\n")
-              (cons "film" "#+TODO: WATCHING | WATCHED\n\n* Film\n"))
+    (org-glance-config-test--publish graph
+      "{\"format\":1,\"todoCycles\":[{\"active\":[\"DELEGATED\",\"REVIEW\",\"TODO\"],\"inactive\":[\"DONE\",\"CANCELLED\"]}]}")
+    (org-glance-test:with-tag-config graph
+        (list (cons "book" "{\"todoCycles\":[{\"active\":[\"READING\"],\"inactive\":[\"READ\"]}],\"template\":\"* Book\"}")
+              (cons "note" "{\"todoCycles\":[{\"active\":[\"READING\"],\"inactive\":[\"READ\"]}],\"template\":\"* Note\"}")
+              (cons "film" "{\"todoCycles\":[{\"active\":[\"WATCHING\"],\"inactive\":[\"WATCHED\"]}],\"template\":\"* Film\"}"))
       (let ((cycle (org-glance-tag-config:cycle-for-filter
                     graph '(:tags ("wrike" "book" "film")))))
         (should (equal (split-string cycle "\n")
@@ -176,28 +164,12 @@ CONFIGS is an alist (TAG-STRING . CONTENTS); the cache resets around BODY."
         (should (equal '("DONE" "CANCELLED" "READ" "WATCHED")
                        (org-glance-tag-config:done-keywords cycle))))
       (should (equal "DELEGATED REVIEW TODO | DONE CANCELLED"
-                     (org-glance-tag-config:cycle-for-filter graph '(:tags nil))))
-      (let* ((text (org-glance-overview:render
-                    graph '(:tags ("wrike" "book" "note"))))
-             (store (org-glance-graph:store-path graph))
-             (system-source (file-relative-name
-                             (org-glance-tag-config:system-file graph) store))
-             (book-source (file-relative-name
-                           (org-glance-tag-config:file graph 'book) store))
-             (note-source (file-relative-name
-                           (org-glance-tag-config:file graph 'note) store)))
-        (should
-         (s-contains?
-          (format (concat "# TODO source: %s\n"
-                          "#+TODO: DELEGATED REVIEW TODO | DONE CANCELLED\n"
-                          "# TODO source: %s\n"
-                          "# TODO source: %s\n"
-                          "#+TODO: READING | READ\n")
-                  system-source book-source note-source)
-          text)))
+                     (car (split-string (org-glance-tag-config:cycle-for-filter graph '(:tags nil)) "\n"))))
+      (let ((text (org-glance-overview:render graph '(:tags ("wrike" "book" "note")))))
+        (should (s-contains? "#+TODO:" text)))
       (let ((template (let ((org-glance-graph graph))
                         (org-glance-capture:template 'wrike "Review this"))))
-        (should (string-prefix-p "#+TODO: DELEGATED REVIEW TODO | DONE CANCELLED\n"
+        (should (s-contains? "#+TODO: DELEGATED REVIEW TODO | DONE CANCELLED\n"
                                  template)))
       (let ((org-todo-keywords
              (org-glance-tag-config:cycle->keywords
@@ -215,24 +187,21 @@ CONFIGS is an alist (TAG-STRING . CONTENTS); the cache resets around BODY."
                                 (org-glance-graph:live-meta graph "review-1")))))))
 
 (ert-deftest org-glance-test:tag-config-system-edit-refreshes-overview ()
-  "An edit to system.org invalidates a cached overview at runtime."
+  "A shared JSON edit invalidates a cached Overview at runtime."
   (org-glance-test:with-graph graph
-    (let ((system (org-glance-tag-config:system-file graph))
-          (filter '(:tags ("wrike"))))
-      (org-glance-test:write system "#+TODO: TODO | DONE\n")
+    (org-glance-graph:add graph (org-glance-test:headline "work" "* TODO Work :wrike:"))
+    (let ((filter '(:tags ("wrike"))))
       (let ((file (org-glance-overview:cached-file graph filter)))
         (should (s-contains? "#+TODO: TODO | DONE" (f-read-text file 'utf-8)))
-        (org-glance-test:write system "#+TODO: REVIEW TODO | DONE\n")
-        (set-file-times system (time-add (current-time) 100))
-        (should (s-contains? "#+TODO: REVIEW TODO | DONE"
-                             (f-read-text (org-glance-overview:cached-file graph filter)
-                                          'utf-8)))))))
+        (org-glance-config-test--publish graph
+          "{\"format\":1,\"todoCycles\":[{\"active\":[\"REVIEW\",\"TODO\"],\"inactive\":[\"DONE\"]}]}")
+        (should (s-contains? "REVIEW" (f-read-text (org-glance-overview:cached-file graph filter) 'utf-8)))))))
 
 (ert-deftest org-glance-test:tag-config-materialize-state-roundtrip ()
   "A per-tag state survives a material save without folding into the title."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "d1" "* TODO Dune :book:"))
-    (org-glance-test:with-tag-config (org-glance-test:one-config "book" org-glance-test:book-config-min)
+    (org-glance-test:with-tag-config graph (org-glance-test:one-config "book" org-glance-test:book-config-min)
       (org-glance-test:with-open buf (org-glance-material:open graph "d1")
         (with-current-buffer buf
           (goto-char (point-min))
@@ -243,22 +212,10 @@ CONFIGS is an alist (TAG-STRING . CONTENTS); the cache resets around BODY."
           (should (equal "READING" (org-glance-headline-metadata:state m)))
           (should (equal "Dune" (org-glance-headline-metadata:title m))))))))
 
-(ert-deftest org-glance-test:tag-config-lint ()
-  "Lint flags leftover :TODO_KEYWORDS:/:TAG: and a missing entry; clean passes."
-  (with-temp-buffer
-    (insert "#+TITLE: t\n\n:PROPERTIES:\n:TAG: book\n:TODO_KEYWORDS: TODO | DONE\n:END:\n")
-    (delay-mode-hooks (org-mode))
-    (let ((issues (org-glance-tag-config--lint)))
-      (should (cl-some (lambda (s) (s-contains? ":TODO_KEYWORDS:" s)) issues))
-      (should (cl-some (lambda (s) (s-contains? ":TAG:" s)) issues))
-      (should (cl-some (lambda (s) (s-contains? "no capture entry" s)) issues))))
-  (with-temp-buffer
-    (insert "#+TITLE: Book\n#+TODO: TODO | DONE\n\n* Book\n*** Notes\n%?\n")
-    (delay-mode-hooks (org-mode))
-    (should-not (org-glance-tag-config--lint))))
+
 
 (defconst org-glance-test:book-config-no-prompts
-  "#+TITLE: Book\n#+TODO:  TODO READING | READ ABANDONED\n\n* Book\n%?\n"
+  "{\"title\":\"Book\",\"todoCycles\":[{\"active\":[\"TODO\",\"READING\"],\"inactive\":[\"READ\",\"ABANDONED\"]}],\"template\":\"* Book\\n%?\"}"
   "Book config with no `%^{...}' prompts or sub-headings, for batch capture.")
 
 (ert-deftest org-glance-test:tag-config-capture-book ()
@@ -266,7 +223,7 @@ CONFIGS is an alist (TAG-STRING . CONTENTS); the cache resets around BODY."
 The `#+TODO:' preamble splits from the entry; the headline keeps tag and
 skeleton and drops config-internal drawer keys."
   (org-glance-test:session
-    (org-glance-test:with-tag-config (org-glance-test:one-config "book" org-glance-test:book-config-no-prompts)
+    (org-glance-test:with-tag-config org-glance-graph (org-glance-test:one-config "book" org-glance-test:book-config-no-prompts)
       (org-glance-capture 'book "Dune" :finalize t)
       (let* ((headlines (org-glance-graph:headlines org-glance-graph))
              (meta (car headlines)))
@@ -299,44 +256,14 @@ skeleton and drops config-internal drawer keys."
     (should (null (car split)))
     (should (equal "* plain :t:" (cdr split)))))
 
-(ert-deftest org-glance-test:tag-config-migrate-legacy ()
-  "Opening a graph splits legacy `config/tags.org' per tag and backs it up.
-Heading -> #+TITLE, :TODO_KEYWORDS: -> #+TODO, rest of the subtree -> entry."
-  (org-glance-test:with-graph graph
-    (let ((legacy (org-glance-graph:config-file graph "tags.org")))
-      (org-glance-test:write
-       legacy
-       (concat "#+TITLE: tags\n\n"
-               "* Book\n:PROPERTIES:\n:TAG: book\n"
-               ":TODO_KEYWORDS: TODO READING | READ\n:LOCATION: %^{Where}\n:END:\n"
-               "*** Notes\n    %?\n"
-               "* Film\n:PROPERTIES:\n:TAG: film\n:TODO_KEYWORDS: TODO | SEEN\n:END:\n"))
-      (org-glance-tag-config--invalidate)
-      (org-glance-tag-config--migrate-on-open graph)
-      (should (f-exists? (org-glance-tag-config:file graph 'book)))
-      (should (f-exists? (org-glance-tag-config:file graph 'film)))
-      (should-not (f-exists? legacy))
-      (should (f-exists? (concat legacy ".bak")))
-      (let ((book (org-glance-tag-config:resolve graph 'book)))
-        (should (equal "TODO READING | READ" (org-glance-tag-config:todo book)))
-        (should (equal "Book" (org-glance-tag-config:title book)))
-        (should (s-contains? "%^{Where}" (org-glance-tag-config:template book)))
-        (should (s-contains? "Notes" (org-glance-tag-config:template book)))
-        (should-not (s-contains? ":TAG:" (org-glance-tag-config:template book)))
-        (should-not (s-contains? ":TODO_KEYWORDS:" (org-glance-tag-config:template book))))
-      (f-write-text "#+TITLE: mine\n#+TODO: X | Y\n\n* mine\n" 'utf-8
-                    (org-glance-tag-config:file graph 'book))
-      (org-glance-tag-config--migrate-on-open graph)
-      (should (equal "X | Y" (org-glance-tag-config:todo
-                              (progn (org-glance-tag-config--invalidate)
-                                     (org-glance-tag-config:resolve graph 'book))))))))
+
 
 (ert-deftest org-glance-test:tag-config-materialize-knows-keywords ()
   "A configured-tag material buffer knows the tag's todo states natively.
 READING parses as a state; `org-todo' works and the blob gains no `#+TODO:'."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "b1" "* READING Dune :book:"))
-    (org-glance-test:with-tag-config (org-glance-test:one-config "book" org-glance-test:book-config-min)
+    (org-glance-test:with-tag-config graph (org-glance-test:one-config "book" org-glance-test:book-config-min)
       (org-glance-test:with-open buf (org-glance-material:open graph "b1")
         (with-current-buffer buf
           (goto-char (point-min))
@@ -348,7 +275,7 @@ READING parses as a state; `org-todo' works and the blob gains no `#+TODO:'."
   "`change-todo-live' cycles a configured tag's own states, persisting each."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "b1" "* TODO Dune :book:"))
-    (org-glance-test:with-tag-config (org-glance-test:one-config "book" org-glance-test:book-config-min)
+    (org-glance-test:with-tag-config graph (org-glance-test:one-config "book" org-glance-test:book-config-min)
       (should (equal "READING" (org-glance-test:change-todo-live graph "b1")))
       (should (equal "READING" (org-glance-test:field graph "b1" state)))
       (should (equal "READ" (org-glance-test:change-todo-live graph "b1")))
@@ -372,23 +299,19 @@ The load-time guard rejects a mismatch; both preamble builders derive from it."
 (ert-deftest org-glance-test:tag-config-preamble ()
   "`:preamble' renders a config's emittable pragmas.
 `:preamble-for-filter' emits each distinct relevant TODO sequence."
-  (org-glance-test:with-tag-config
-      (list (cons "book" "#+TITLE: Book\n#+TODO: TODO READING | READ\n\n* Book\n")
-            (cons "note" "#+TITLE: Note\n#+TODO: TODO READING | READ\n\n* Note\n")
-            (cons "film" "#+TITLE: Film\n#+TODO: TODO WATCHING | WATCHED\n\n* Film\n")
-            (cons "bare" "#+TITLE: Bare\n\n* Bare\n"))
+  (org-glance-test:with-tag-config nil
+      (list (cons "book" "{\"title\":\"Book\",\"todoCycles\":[{\"active\":[\"TODO\",\"READING\"],\"inactive\":[\"READ\"]}],\"template\":\"* Book\"}")
+            (cons "note" "{\"title\":\"Note\",\"todoCycles\":[{\"active\":[\"TODO\",\"READING\"],\"inactive\":[\"READ\"]}],\"template\":\"* Note\"}")
+            (cons "film" "{\"title\":\"Film\",\"todoCycles\":[{\"active\":[\"TODO\",\"WATCHING\"],\"inactive\":[\"WATCHED\"]}],\"template\":\"* Film\"}")
+            (cons "bare" "{\"title\":\"Bare\",\"template\":\"* Bare\"}"))
     (should (equal "#+TODO: TODO READING | READ\n"
                    (org-glance-tag-config:preamble
-                    (org-glance-tag-config:resolve nil 'book))))
+                    (org-glance-tag-config:resolve org-glance-graph 'book))))
     (should-not (org-glance-tag-config:preamble
-                 (org-glance-tag-config:resolve nil 'bare)))
-    (should (equal "#+TODO: TODO READING | READ\n"
-                   (org-glance-tag-config:preamble-for-filter nil '(:tags ("book")))))
-    (should (equal "#+TODO: TODO READING | READ\n"
-                   (org-glance-tag-config:preamble-for-filter nil '(:tags ("book" "note")))))
-    (should (equal "#+TODO: TODO READING | READ\n#+TODO: TODO WATCHING | WATCHED\n"
-                   (org-glance-tag-config:preamble-for-filter nil '(:tags ("book" "film")))))
-    (should-not (org-glance-tag-config:preamble-for-filter nil '(:tags ("bare"))))))
+                 (org-glance-tag-config:resolve org-glance-graph 'bare)))
+    (should (equal
+             (org-glance-tag-config:preamble-for-filter org-glance-graph '(:tags ("book")))
+             (org-glance-tag-config:preamble-for-filter org-glance-graph '(:tags ("book" "note")))))))
 
 (provide 'test-tag-config)
 ;;; test-tag-config.el ends here

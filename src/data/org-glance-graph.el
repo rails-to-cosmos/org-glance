@@ -729,26 +729,9 @@ Signal a `user-error' when ID has concurrent leaves of either kind."
 (defconst org-glance-graph--default-headline-history-depth 10)
 
 (cl-defun org-glance-graph--headline-history-depth (graph)
-  "Return GRAPH's configured immutable headline history depth."
-  (when-let* ((settings (org-glance-config:current graph)))
-    (cl-return-from org-glance-graph--headline-history-depth
-      (gethash "headlineHistoryDepth" (org-glance-settings:tree settings))))
-  (let ((path (org-glance-graph:config-file graph "system.org"))
-        (depth org-glance-graph--default-headline-history-depth)
-        (case-fold-search t))
-    (when (f-file? path)
-      (with-temp-buffer
-        (insert-file-contents path)
-        (goto-char (point-min))
-        (while (re-search-forward
-                "^#\\+GLANCE_HEADLINE_HISTORY_DEPTH:[ \t]*\\(.*\\)$"
-                nil t)
-          (let ((value (string-trim (match-string 1))))
-            (setq depth
-                  (if (string-match-p "\\`[0-9]+\\'" value)
-                      (string-to-number value)
-                    org-glance-graph--default-headline-history-depth))))))
-    depth))
+  "Return GRAPH's JSON-configured immutable headline history depth."
+  (gethash "headlineHistoryDepth"
+           (org-glance-settings:tree (org-glance-config:current graph))))
 
 (cl-defun org-glance-graph--version-history-for-write (dir id)
   "Observe ID in DIR, migrating its legacy root before returning History."

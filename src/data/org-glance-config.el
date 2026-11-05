@@ -435,8 +435,7 @@ DECLARATIONS retains source-owned cycle metadata."
   (let* ((meaning (org-glance-config:keywords settings file tags))
          (header (org-glance-config:header settings file tags declarations))
          (tokens (split-string (substring header (length "#+TODO: "))))
-         (raw (append '((("TODO") . ("DONE")))
-                      (org-glance-settings:cycles settings)
+         (raw (append (org-glance-settings:cycles settings)
                       (mapcan (lambda (tag)
                                 (copy-sequence
                                  (nth 2 (assoc (org-glance-config--tag-name tag)
@@ -459,7 +458,7 @@ DECLARATIONS retains source-owned cycle metadata."
                       (setq inactive (delq nil inactive)))
                     (push (cons 'sequence (append (mapcar #'decorate active) '("|")
                                                   (mapcar #'decorate inactive))) result))))
-      (dolist (cycle raw)
+      (dolist (cycle (delete-dups raw))
         (add (cl-remove-if-not (lambda (token) (member (word token) (car meaning))) (car cycle))
              (cl-remove-if-not (lambda (token) (member (word token) (cdr meaning))) (cdr cycle))))
       (add (cl-set-difference (car meaning) seen :test #'equal)
@@ -490,7 +489,8 @@ DECLARATIONS retains source-owned cycle metadata."
 TAGS may be a function reading the current buffer's tag names."
   (when (org-glance-config:current graph)
     (lambda ()
-      (let* ((settings (org-glance-config:current graph))
+      (let* ((org-element-use-cache nil)
+             (settings (org-glance-config:current graph))
              (declarations (org-glance-tag-config:todo-declarations
                             (buffer-substring-no-properties (point-min) (point-max))))
              (file (org-glance-tag-config:declaration-keywords declarations)))
@@ -507,7 +507,7 @@ TAGS may be a function reading the current buffer's tag names."
   "Functions called with GRAPH after a valid configuration replacement.")
 
 (defun org-glance-config:current (graph)
-  "Return GRAPH's published JSON settings, or nil on the legacy path."
+  "Return GRAPH's JSON settings, including defaults before first save."
   (when (org-glance-graph? graph)
     (when (eq :unread (org-glance-graph:-config graph))
       (org-glance-config:refresh graph))
@@ -515,7 +515,7 @@ TAGS may be a function reading the current buffer's tag names."
       (org-glance-config--observation-settings observation))))
 
 (defun org-glance-config:snapshot (graph)
-  "Return GRAPH's published JSON write snapshot, or nil."
+  "Return GRAPH's observed JSON write snapshot, including absent revision."
   (org-glance-config:current graph)
   (when-let* ((observation (org-glance-graph:-config graph)))
     (org-glance-config--observation-snapshot observation)))
@@ -527,7 +527,7 @@ TAGS may be a function reading the current buffer's tag names."
     (org-glance-config--observation-key observation)))
 
 (defun org-glance-config:presentation-key (graph)
-  "Return GRAPH's prepared presentation fingerprint, or nil for legacy settings."
+  "Return GRAPH's prepared presentation fingerprint."
   (org-glance-config:current graph)
   (when-let* ((observation (org-glance-graph:-config graph)))
     (org-glance-config--observation-presentation observation)))
@@ -540,6 +540,16 @@ TAGS may be a function reading the current buffer's tag names."
      :snapshot snapshot :settings settings
      :presentation (nth 3 fingerprints)
      :key (secure-hash 'sha256 (prin1-to-string (cl-subseq fingerprints 0 2))))))
+
+(defun org-glance-config--retired-inputs-p (root)
+  "Return non-nil when ROOT still contains retired settings inputs."
+  (cl-labels ((input-p (path)
+                (or (file-symlink-p path)
+                    (not (file-directory-p path))
+                    (cl-some #'input-p
+                             (directory-files path t directory-files-no-dot-files-regexp)))))
+    (let ((directory (expand-file-name ".org-glance/config" root)))
+      (and (file-directory-p directory) (input-p directory)))))
 
 (defun org-glance-config:refresh (graph &optional saved)
   "Observe GRAPH's JSON configuration and publish a valid coherent reload.
@@ -555,7 +565,12 @@ reading and matching its exact byte revision."
                               (org-glance-graph:directory graph) (car saved))
                            (org-glance-config-file:read
                             (org-glance-graph:directory graph))))
-               (unchanged (and (not (eq previous :unread))
+               (_ (when (and (null (org-glance-config-file:revision snapshot))
+                             (org-glance-config--retired-inputs-p
+                              (org-glance-graph:directory graph)))
+                    (org-glance-config--error
+                     "Retired settings remain; migrate .org-glance/config to config.json")))
+               (unchanged (and previous (not (eq previous :unread))
                                (equal (and previous (org-glance-config-file:revision
                                                      (org-glance-config--observation-snapshot previous)))
                                       (org-glance-config-file:revision snapshot))))
@@ -565,8 +580,7 @@ reading and matching its exact byte revision."
                             (equal (org-glance-config-file:revision snapshot)
                                    (org-glance-config-file:revision (car saved))))
                        (org-glance-config--prepare snapshot (cdr saved)))
-                      ((org-glance-config-file:revision snapshot)
-                       (org-glance-config--prepare snapshot))))
+                      (t (org-glance-config--prepare snapshot))))
                (settings (and next (org-glance-config--observation-settings next))))
           (unless (and (not (eq previous :unread))
                        (equal (and previous (org-glance-config-file:revision
@@ -599,8 +613,7 @@ reading and matching its exact byte revision."
 
 (cl-defun org-glance-config:set-tree-setting (graph key value &key expected)
   "Write known tree setting KEY to VALUE in GRAPH at revision EXPECTED."
-  (unless (org-glance-config:current graph)
-    (user-error "JSON activation requires a published config.json"))
+  (org-glance-config:current graph)
   (unless (member key '("inboxTag" "headlineHistoryDepth" "repositoryAutosync"
                         "repositoryRemote" "googleOAuthClientId" "defaultAgent"))
     (org-glance-config--error "Unknown tree setting"))

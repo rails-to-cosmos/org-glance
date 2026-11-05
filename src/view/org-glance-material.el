@@ -190,9 +190,9 @@ BRACKETP enables projection in descriptive links; source bytes stay intact."
                       (cons 'display font-lock-extra-managed-props)))
         (when-let* ((graph (or org-glance-material--graph
                               org-glance-view--graph org-glance-graph))
-                    (_ (setq org-glance-material--reference-graph graph))
+                    (reference-graph (setq org-glance-material--reference-graph graph))
                     (meta (org-glance-cache:headline
-                           graph (car (split-string path "[?]"))))
+                           reference-graph (car (split-string path "[?]"))))
                     ((org-glance-headline-metadata? meta)))
           (save-excursion
             (goto-char start)
