@@ -188,6 +188,39 @@
     (org-glance-cache:reconcile-inventory graph)
     (should (org-glance-cache--configuration-current-p graph))))
 
+(ert-deftest org-glance-config-test-worker-repairs-dependency-before-relay ()
+  "Repair stale dependencies before folding a pending external Snapshot."
+  (dolist (fingerprint '("" "peer" nil))
+    (org-glance-test:with-graph graph
+      (let* ((id "configuration-relay")
+             (family (org-glance-graph:headline-data-path graph id)))
+        (org-glance-graph:add graph
+          (org-glance-test:headline id "* Original"))
+        (org-glance-cache:reconcile-inventory graph t)
+        (let ((parent (car (org-glance-version:current family id))))
+          (org-glance-version:write-snapshot
+           family id (list (org-glance-version:id parent)) "glance"
+           (org-glance-test:org-with-id "* Updated" id) 10))
+        (org-glance-test:write
+         (org-glance-graph:external-path graph)
+         (concat (json-serialize (list :id id :at "2026-11-05T10:00:00Z"))
+                 "\n"))
+        (let ((db (sqlite-open (org-glance-cache:path graph))))
+          (unwind-protect
+              (if fingerprint
+                  (sqlite-execute
+                   db "UPDATE configuration_dependency SET fingerprint=?"
+                   (vector fingerprint))
+                (sqlite-execute db "DELETE FROM configuration_dependency"))
+            (sqlite-close db)))
+        (should-error (org-glance-cache:headlines graph))
+        (org-glance-cache:refresh-batch (org-glance-graph:directory graph))
+        (should (org-glance-cache--configuration-current-p graph))
+        (should (equal "Updated"
+                       (org-glance-headline-metadata:title
+                        (org-glance-cache:headline graph id))))
+        (should-not (org-glance-graph--external-pending-p graph))))))
+
 (ert-deftest org-glance-config-test-incremental-writer-cannot-mint-census-dependency ()
   (org-glance-test:with-graph graph
     (org-glance-config-test--publish graph "{\"format\":1}")

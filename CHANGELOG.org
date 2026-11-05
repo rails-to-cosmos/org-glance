@@ -5,6 +5,8 @@ Notable user-facing changes.  Versions date-based
 
 * Unreleased
 
+* 1.57.1.0.20261105.0
+
 ** Changed
 
 - Settings and table layouts use shared =config.json= defaults before first save; retired Org and =.eld= settings require explicit migration.
@@ -12,6 +14,7 @@ Notable user-facing changes.  Versions date-based
 
 ** Fixed
 
+- =org-glance-cache:refresh-batch= reconciles stale configuration dependencies before folding external notifications.
 - Shared JSON preserves exact large integers and duplicate-key refusal on Emacs 29.
 - Checkpoint gzip supports Emacs builds without native zlib.
 - Material context lookup preserves TODO meaning during save; explicit TODO cycles take precedence over fallback sequences.

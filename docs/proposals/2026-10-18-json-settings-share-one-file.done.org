@@ -21,6 +21,22 @@ four macOS-only skips. All 30 production modules compile without warnings on
 the three exercised runtimes. Exact large integers survive peer saves on Emacs
 29; checkpoint gzip works without optional native zlib.
 
+* Cache configuration recovery
+
+An existing cache with an empty, missing or obsolete configuration dependency
+requires a complete family reconciliation before notification folding can read
+Rows. =org-glance-cache:refresh-batch= performs that repair first; a current
+dependency retains notification-first ordering. Foreground reads remain passive.
+
+The previous worker order in =src/data/org-glance-cache.el=, function
+=org-glance-cache:refresh-batch=, is recorded in
+[[https://github.com/rails-to-cosmos/org-glance/commit/2a156b320bf2d34b1592da3288e307e32cb60e20][commit 2a156b3]].
+The regression =org-glance-config-test-worker-repairs-dependency-before-relay=
+covers empty, obsolete and absent receipts with a pending Snapshot notification.
+The warm-worker contract retains one relay fold and one reconciliation;
+=org-glance-test:external-snapshot-precedes-inventory-failure= preserves
+notification publication ahead of unrelated inventory failures.
+
 * Historical implementation evidence
 
 The [[file:../../../glance/docs/reports/partial/2026-10-19-json-settings-step-4-activation.md][initial activation slice]] now connects JSON-present startup authority,

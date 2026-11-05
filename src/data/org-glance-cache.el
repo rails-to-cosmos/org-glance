@@ -1394,6 +1394,8 @@ Return the number of families folded."
          (graph (org-glance-graph directory)))
     (if (file-exists-p (org-glance-cache:path graph))
         (progn
+          (unless (org-glance-cache--configuration-current-p graph)
+            (org-glance-cache--reconcile-now graph))
           (org-glance-graph:refresh-external graph)
           (org-glance-cache--reconcile-now graph))
       (prog1 (org-glance-cache--reconcile-now graph)
