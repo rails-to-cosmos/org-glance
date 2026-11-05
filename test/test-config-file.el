@@ -43,6 +43,30 @@
       (should (equal (org-glance-config-file:revision snapshot)
                      (org-glance-config-file:revision (org-glance-config-file:read root)))))))
 
+(ert-deftest org-glance-config-file-test-large-integers-survive-peer-writes ()
+  (org-glance-config-test--with-root
+    (let* ((number 123456789012345678901234567890)
+           (bytes "{\"format\":1,\"extension\":{\"number\":123456789012345678901234567890,\"negative\":-123456789012345678901234567890,\"text\":\"\\ud83d\\ude42\",\"null\":null,\"false\":false}}")
+           (object (org-glance-config-file:object (org-glance-config-file:decode bytes)))
+           (snapshot (org-glance-config-file:write root :change (lambda (_) object))))
+      (org-glance-config-file:write
+       root :expected (org-glance-config-file:revision snapshot)
+       :change (org-glance-config-test--put "peer" t))
+      (let* ((fresh (org-glance-config-file:read root))
+             (extension (gethash "extension" (org-glance-config-file:object fresh)))
+             (publications 0))
+        (should (= number (gethash "number" extension)))
+        (should (= (- number) (gethash "negative" extension)))
+        (should (equal "🙂" (gethash "text" extension)))
+        (should (eq :null (gethash "null" extension)))
+        (should (eq :false (gethash "false" extension)))
+        (cl-letf (((symbol-function 'org-glance-config-file--publish)
+                   (lambda (&rest _) (cl-incf publications))))
+          (org-glance-config-file:write
+           root :expected (org-glance-config-file:revision fresh)
+           :change (lambda (current) current)))
+        (should (= 0 publications))))))
+
 (ert-deftest org-glance-config-file-test-missing-read-is-passive ()
   (org-glance-config-test--with-root
     (let ((snapshot (org-glance-config-file:read root)))

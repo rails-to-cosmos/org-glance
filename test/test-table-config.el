@@ -32,16 +32,16 @@
         (should-error (org-glance-table-config:write root :snapshot snapshot :edits edits)
                       :type 'org-glance-config-conflict)
         (should (equal bytes (org-glance-table-config-test--bytes graph))))
-      (should-not (file-exists-p (org-glance-table--schema-file graph))))))
+      (should-not (file-exists-p (expand-file-name ".org-glance/config/table-columns.eld" (org-glance-graph:directory graph)))))))
 
 (ert-deftest org-glance-table-config-test-json-layout-is-atomic-and-preserves-peers ()
   (org-glance-test:with-graph graph
     (org-glance-table-config-test--publish
      graph "{\"format\":1,\"clients\":{\"glance\":{\"theme\":\"dark\"},\"orgGlance\":{\"tableColumns\":{\"book\":{\"columns\":[{\"property\":\"AUTHOR\",\"header\":\"Writer\"}],\"hidden\":[\"tags\"],\"extension\":true}}}}}")
-    (org-glance--eld-alist-set (org-glance-table--schema-file graph) "book"
+    (org-glance--eld-alist-set (expand-file-name ".org-glance/config/table-columns.eld" (org-glance-graph:directory graph)) "book"
                                '(:columns (("WRONG" . "Wrong"))))
     (let ((legacy (with-temp-buffer
-                    (insert-file-contents-literally (org-glance-table--schema-file graph))
+                    (insert-file-contents-literally (expand-file-name ".org-glance/config/table-columns.eld" (org-glance-graph:directory graph)))
                     (buffer-string))))
       (org-glance-graph:add
        graph (org-glance-test:headline-props
@@ -67,10 +67,10 @@
         (should (eq t (gethash "extension" schema)))
         (should (hash-table-p (gethash "tableViews" native))))
       (should (equal legacy (with-temp-buffer
-                              (insert-file-contents-literally (org-glance-table--schema-file graph))
+                              (insert-file-contents-literally (expand-file-name ".org-glance/config/table-columns.eld" (org-glance-graph:directory graph)))
                               (buffer-string))))
-      (should-not (file-exists-p (org-glance-table--config-file graph)))
-      (should-not (file-exists-p (org-glance-table--refs-file graph)))
+      (should-not (file-exists-p (expand-file-name ".org-glance/config/table-views.eld" (org-glance-graph:directory graph))))
+      (should-not (file-exists-p (expand-file-name ".org-glance/config/table-refs.eld" (org-glance-graph:directory graph))))
       (org-glance-test:with-table (graph 'book)
         (should (equal '("AUTHOR" "EXPECTED")
                        (mapcar #'car (plist-get (org-glance-table--schema-entry graph 'book)
@@ -98,7 +98,7 @@
       (should (equal '(("title" . desc-nulls-first)) table-view--sort-keys)))
     (org-glance-test:with-table (graph '(:id-any ("r2")) '(:anchor "c2" :dir relations))
       (should (member "tags" (org-glance-test:table-col-keys))))
-    (should-not (file-exists-p (org-glance-table--refs-file graph)))))
+    (should-not (file-exists-p (expand-file-name ".org-glance/config/table-refs.eld" (org-glance-graph:directory graph))))))
 
 (ert-deftest org-glance-table-config-test-stale-view-preserves-layout-and-peer-write ()
   (org-glance-test:with-graph graph
@@ -112,7 +112,8 @@
                     :expected (org-glance-config-file:revision snapshot)
                     :change (lambda (object) (puthash "peer" t object) object)))
              (bytes (org-glance-table-config-test--bytes graph)))
-        (table-view-add-column (org-glance-table--property-column graph "AUTHOR"))
+        (let ((debug-on-error nil))
+          (table-view-add-column (org-glance-table--property-column graph "AUTHOR")))
         (should (member "AUTHOR" (org-glance-test:table-col-keys)))
         (should-error (org-glance-table:apply-layout) :type 'org-glance-config-conflict)
         (should (eq old org-glance-table--settings-source))
@@ -121,7 +122,7 @@
         (should-not (equal (org-glance-config-file:revision peer)
                            (org-glance-config-file:revision snapshot)))))))
 
-(ert-deftest org-glance-table-config-test-legacy-view-refuses-a-new-json-authority ()
+(ert-deftest org-glance-table-config-test-observed-absence-refuses-a-peer-first-save ()
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "b1" "* TODO Book :book:"))
     (org-glance-test:with-table (graph 'book)
@@ -130,7 +131,7 @@
         (should-error (org-glance-table--config-put
                        graph 'book (org-glance-table--current-config))
                       :type 'org-glance-config-conflict)
-        (should-not (file-exists-p (org-glance-table--config-file graph)))
+        (should-not (file-exists-p (expand-file-name ".org-glance/config/table-views.eld" (org-glance-graph:directory graph))))
         (should (equal bytes (org-glance-table-config-test--bytes graph)))))))
 
 (ert-deftest org-glance-table-config-test-failed-write-retains-the-save-baseline ()
@@ -142,11 +143,13 @@
             (lock (concat (org-glance-config-file:path (org-glance-graph:directory graph)) ".lock")))
         (table-view-set-sort '(("title" . t)))
         (make-directory lock)
-        (unwind-protect (org-glance-table--persist-config) (delete-directory lock))
+        (unwind-protect
+            (let ((debug-on-error nil)) (org-glance-table--persist-config))
+          (delete-directory lock))
         (should (equal before org-glance-table--config-snapshot))
         (org-glance-table--persist-config)
         (should (equal org-glance-table--config-snapshot (org-glance-table--current-config)))
-        (should-not (file-exists-p (org-glance-table--config-file graph)))))))
+        (should-not (file-exists-p (expand-file-name ".org-glance/config/table-views.eld" (org-glance-graph:directory graph))))))))
 
 (ert-deftest org-glance-table-config-test-invalid-multi-edit-publishes-nothing ()
   (org-glance-test:with-graph graph
@@ -215,7 +218,7 @@
 
 (ert-deftest org-glance-table-config-test-invalid-json-never-reads-legacy-layouts ()
   (org-glance-test:with-graph graph
-    (org-glance--eld-alist-set (org-glance-table--config-file graph)
+    (org-glance--eld-alist-set (expand-file-name ".org-glance/config/table-views.eld" (org-glance-graph:directory graph))
                                (org-glance-filter:identity nil) '(:columns ("WRONG")))
     (org-glance-table-config-test--publish graph "{\"format\":1}")
     (org-glance-test:write

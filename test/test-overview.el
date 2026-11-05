@@ -22,8 +22,8 @@
     (org-glance-graph:add graph
       (org-glance-test:headline "one-read" "* TODO One read :work:"))
     (let ((reads 0)
-          (original (symbol-function 'org-glance-cache:headlines)))
-      (cl-letf (((symbol-function 'org-glance-cache:headlines)
+          (original (symbol-function 'org-glance-cache:overview-rows)))
+      (cl-letf (((symbol-function 'org-glance-cache:overview-rows)
                  (lambda (&rest args)
                    (cl-incf reads)
                    (apply original args))))
@@ -95,13 +95,67 @@
            (bytes (f-read-text file 'utf-8)))
       (org-glance-test:simulate-material-save
        graph "a" "* DONE Alpha\n:PROPERTIES:\n:ORG_GLANCE_ID: a\n:END:\n")
-      (cl-letf (((symbol-function 'org-glance-overview:render)
-                 (lambda (&rest _) (ert-fail "Bounded splice rendered every Row"))))
-        (should (eq 'incremental
-                    (org-glance-overview:update graph nil '("a")))))
+      (let ((queries nil) (opens 0) (begins 0)
+            (read (symbol-function 'org-glance-cache:overview-updates))
+            (open (symbol-function 'sqlite-open)) (execute (symbol-function 'sqlite-execute)))
+        (cl-letf (((symbol-function 'org-glance-overview:render)
+                   (lambda (&rest _) (ert-fail "Bounded splice rendered every Row")))
+                  ((symbol-function 'org-glance-cache:overview-updates)
+                   (lambda (owner ids)
+                     (push ids queries) (funcall read owner ids)))
+                  ((symbol-function 'sqlite-open)
+                   (lambda (&rest args) (cl-incf opens) (apply open args)))
+                  ((symbol-function 'sqlite-execute)
+                   (lambda (db sql &rest args)
+                     (when (equal sql "BEGIN") (cl-incf begins))
+                     (apply execute db sql args))))
+          (should (eq 'incremental (org-glance-overview:update graph nil '("a")))))
+        (should (equal '(("a")) queries))
+        (should (= 1 opens))
+        (should (= 1 begins)))
       (should (equal bytes (f-read-text file 'utf-8)))
       (should (string= (org-glance-overview:render graph)
                        (f-read-text (org-glance-overview:cached-file graph) 'utf-8))))))
+
+(ert-deftest org-glance-test:overview-splice-refuses-changed-source-context ()
+  "A changed source declaration cannot inherit another Row's certified header."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-test:headline "a" "* TODO Alpha")
+      (org-glance-test:headline "b" "* TODO Beta"))
+    (let* ((file (org-glance-overview:write graph))
+           (bytes (f-read-text file 'utf-8)))
+      (org-glance-test:simulate-material-save graph "a"
+        "#+TODO: NEXT | LATER\n* TODO Alpha\n:PROPERTIES:\n:ORG_GLANCE_ID: a\n:END:\n")
+      (should-error (org-glance-overview:update graph nil '("a")) :type 'org-glance-config-error)
+      (should (equal bytes (f-read-text file 'utf-8)))
+      (should-not (org-glance-overview--admit graph nil)))))
+
+(ert-deftest org-glance-test:overview-incoming-label-update-regenerates ()
+  "A changed relation target refreshes every affected exported label."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-test:headline "a" "* TODO Alpha")
+      (org-glance-test:headline "b" "* TODO Beta" "[[glance:a][Alpha]]"))
+    (let* ((file (org-glance-overview:write graph))
+           (bytes (f-read-text file 'utf-8)))
+      (org-glance-test:simulate-material-save graph "a"
+        "* TODO Changed\n:PROPERTIES:\n:ORG_GLANCE_ID: a\n:END:\n")
+      (should (eq 'full (org-glance-overview:update graph nil '("a"))))
+      (should (equal bytes (f-read-text file 'utf-8)))
+      (should (s-contains? "[[glance:a][Changed]]"
+               (f-read-text (org-glance-overview:cached-file graph) 'utf-8))))))
+
+(ert-deftest org-glance-test:overview-missing-update-falls-back-without-requery ()
+  "A missing update target triggers one full observation after admission refuses it."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "a" "* TODO Alpha"))
+    (org-glance-overview:write graph)
+    (let ((reads 0) (read (symbol-function 'org-glance-cache:overview-rows)))
+      (cl-letf (((symbol-function 'org-glance-cache:overview-rows)
+                 (lambda (&rest args) (cl-incf reads) (apply read args))))
+        (should (eq 'full (org-glance-overview:update graph nil '("missing")))))
+      (should (= 1 reads)))))
 
 (ert-deftest org-glance-test:overview-incremental-membership-flip-renders-full ()
   "A changed Row entering a filtered Overview takes the full-render path."

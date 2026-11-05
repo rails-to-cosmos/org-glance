@@ -61,7 +61,7 @@ chars of the SHA-1 of its `org-glance-filter:identity'.
            (receipt (json-parse-string
                      (f-read-text (org-glance-overview--spec-sidecar anchor) 'utf-8))))
       (when (and (vectorp receipt) (= (length receipt) 3)
-                 (equal (aref receipt 0) 3) (stringp (aref receipt 1))
+                 (equal (aref receipt 0) 4) (stringp (aref receipt 1))
                  (stringp (aref receipt 2))
                  (string-match-p "\\`[0-9a-f]\\{64\\}\\'" (aref receipt 2)))
         (cons receipt (expand-file-name (concat "artifacts/" (aref receipt 2) ".org")
@@ -96,7 +96,7 @@ chars of the SHA-1 of its `org-glance-filter:identity'.
     (when (org-glance-overview:spec-key filter)
       (org-glance--atomic-write
        (org-glance-overview--spec-sidecar anchor)
-       (decode-coding-string (json-serialize (vector 3 receipt digest)) 'utf-8 t)))
+       (decode-coding-string (json-serialize (vector 4 receipt digest)) 'utf-8 t)))
     file))
 
 (cl-defun org-glance-overview:render-headline (graph metadata &optional titles)
@@ -178,13 +178,13 @@ Prefix the pragmas FILTER's tags agree on; select by their cycle's done-set."
                     collect (org-glance-overview:render-headline
                              graph meta titles)))))
 
-(defun org-glance-overview--json-rows (graph filter settings)
+(cl-defun org-glance-overview--json-rows (graph filter settings &optional (rows nil rows-supplied-p))
   "Resolve GRAPH's FILTER against SETTINGS and return (ROWS . ORG-HEADER)."
   (let ((contexts (make-hash-table :test #'equal))
         (export-contexts (make-hash-table :test #'equal))
         (spec (org-glance-filter:normalize-spec filter))
         selected scopes)
-    (dolist (row (org-glance-cache:overview-rows graph filter))
+    (dolist (row (if rows-supplied-p rows (org-glance-cache:overview-rows graph filter)))
       (let* ((meta (car row)) (declarations (cdr row))
              (tags (org-glance-headline-metadata:tag-strings meta))
              (key (list tags (mapcar #'caddr declarations)))
@@ -215,19 +215,19 @@ Prefix the pragmas FILTER's tags agree on; select by their cycle's done-set."
 
 (defun org-glance-overview--dependency (graph filter)
   "Return FILTER's private Overview receipt for GRAPH's current context."
-  (let ((json (org-glance-config:current graph)))
-    (prin1-to-string
-     (list "overview/3" (org-glance-filter:identity filter)
-           (org-glance-config:cache-key graph) (org-glance-config:presentation-key graph)
-           (unless json (org-glance-tag-config:source-mtime graph))
-           (mapcar (lambda (path)
-                     (when-let* ((attributes (file-attributes path)))
-                       (list (file-attribute-modification-time attributes)
-                             (file-attribute-size attributes))))
-                   (list (org-glance-cache:path graph)
-                         (concat (org-glance-cache:path graph) "-wal")
-                         (org-glance-graph:headline-meta-path graph)
-                         (org-glance-graph:external-path graph)))))))
+  (json-serialize
+   (vector 5 (org-glance-filter:identity filter)
+           (org-glance-config:cache-key graph)
+           (org-glance-config:presentation-key graph)
+           (vconcat
+            (mapcar (lambda (path)
+                      (when-let* ((attributes (file-attributes path)))
+                        (vector (prin1-to-string (file-attribute-modification-time attributes))
+                                (file-attribute-size attributes))))
+                    (list (org-glance-cache:path graph)
+                          (concat (org-glance-cache:path graph) "-wal")
+                          (org-glance-graph:headline-meta-path graph)
+                          (org-glance-graph:external-path graph)))))))
 
 (cl-defun org-glance-overview:file (graph)
   "Return GRAPH's unfiltered local Overview publication anchor."
@@ -254,18 +254,12 @@ Exports themselves are immutable artifacts resolved through the SPEC manifest."
       (time-less-p src-mtime file-mtime)))
 
 (cl-defun org-glance-overview:fresh? (graph file)
-  "Non-nil if FILE exists and is newer than every source it renders from.
-The sources: GRAPH's `headlines.jsonl', its `EXTERNAL.jsonl' (an outside edit
-invalidates before it is folded in) and the per-tag config files."
+  "Return whether FILE is newer than GRAPH's metadata and relay files."
   (cl-check-type graph org-glance-graph)
   (when-let* ((mtime (org-glance--file-mtime file)))
-    (cl-every (lambda (src) (org-glance-overview--fresher-than? mtime src))
-              (list (org-glance--file-mtime
-                     (org-glance-graph:headline-meta-path graph))
-                    (org-glance--file-mtime
-                     (org-glance-graph:external-path graph))
-                    (unless (org-glance-config:current graph)
-                      (org-glance-tag-config:source-mtime graph))))))
+    (cl-every (lambda (source) (org-glance-overview--fresher-than? mtime source))
+              (list (org-glance--file-mtime (org-glance-graph:headline-meta-path graph))
+                    (org-glance--file-mtime (org-glance-graph:external-path graph))))))
 
 (cl-defun org-glance-overview--header-current? (file)
   "Non-nil if FILE begins with the prop-line of `org-glance-overview:header'."
@@ -294,38 +288,47 @@ Persistent filters atomically publish a manifest binding inputs to the artifact.
         (cons beg (point-max))))))
 
 (cl-defun org-glance-overview--splice (graph file ids)
-  "Publish a copy-on-write splice of IDS from unfiltered overview FILE.
-Return non-nil only when every replacement is structurally safe."
+  "Publish a copy-on-write splice of IDS from unfiltered Overview FILE.
+Each replacement must preserve its certified canonical Org header."
   (when (and (f-exists? file) ids)
-    (let ((receipt (org-glance-overview--dependency graph nil)))
-      (with-temp-buffer
-        (insert-file-contents file)
-        (let ((safe t))
-          (dolist (id ids)
+    (let* ((receipt (org-glance-overview--dependency graph nil))
+           (prepared (org-glance-overview--json-rows
+                      graph nil (org-glance-config:current graph)
+                      (org-glance-cache:overview-updates graph ids)))
+           (rows (car prepared))
+           (prefix (concat org-glance-overview:header (cdr prepared))))
+      (when (= (length rows) (length ids))
+        (with-temp-buffer
+          (insert-file-contents file)
+          (let ((safe (and (re-search-forward "^\\* " nil t)
+                           (equal prefix (buffer-substring-no-properties
+                                          (point-min) (match-beginning 0))))))
+            (dolist (meta rows)
+              (when safe
+                (let* ((id (org-glance-headline-metadata:id meta))
+                       (region (org-glance-overview--heading-region id)))
+                  (if region
+                      (progn
+                        (delete-region (car region) (cdr region))
+                        (goto-char (car region))
+                        (insert (org-glance-overview:render-headline graph meta)))
+                    (setq safe nil)))))
             (when safe
-              (let ((region (org-glance-overview--heading-region id))
-                    (meta (org-glance-cache:headline graph id)))
-                (if (and region
-                         (org-glance-headline-metadata? meta)
-                         (null (org-glance-cache:incoming-relations graph id)))
-                    (progn
-                      (delete-region (car region) (cdr region))
-                      (goto-char (car region))
-                      (insert (org-glance-overview:render-headline graph meta)))
-                  (setq safe nil)))))
-          (when safe
-            (org-glance-overview--publish graph nil receipt (buffer-string))
-            t))))))
+              (org-glance-overview--publish graph nil receipt (buffer-string))
+              t)))))))
 
 (cl-defun org-glance-overview:update (graph filter changed)
   "Refresh FILTER's cached Overview after CHANGED commits.
 Return `incremental' for a safe bounded splice and `full' after regeneration."
-  (let ((file (cdr (org-glance-overview--manifest graph filter))))
-    (if (and (not (org-glance-config:current graph))
-             (null (org-glance-filter:normalize-spec filter))
-             file (listp changed)
+  (let* ((manifest (org-glance-overview--manifest graph filter))
+         (held (and manifest (ignore-errors (json-parse-string (aref (car manifest) 1)))))
+         (current (json-parse-string (org-glance-overview--dependency graph filter))))
+    (if (and (null (org-glance-filter:normalize-spec filter))
+             (vectorp held) (= (length held) 5)
+             (equal (cl-subseq held 0 4) (cl-subseq current 0 4))
+             (listp changed)
              (condition-case nil
-                 (org-glance-overview--splice graph file changed)
+                 (org-glance-overview--splice graph (cdr manifest) changed)
                (error nil)))
         'incremental
       (org-glance-overview:write graph filter)

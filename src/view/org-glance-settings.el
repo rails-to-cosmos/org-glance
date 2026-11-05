@@ -40,8 +40,6 @@
 (defun org-glance-settings--observe (graph tag)
   "Prepare a validated settings draft for GRAPH and TAG."
   (let ((snapshot (org-glance-config-file:read (org-glance-graph:directory graph))))
-    (unless (org-glance-config-file:revision snapshot)
-      (user-error "Settings tables require a published config.json"))
     (org-glance-config:decode snapshot)
     (let ((base (org-glance-settings--scope snapshot tag)))
       (org-glance-settings--draft :graph graph :tag tag

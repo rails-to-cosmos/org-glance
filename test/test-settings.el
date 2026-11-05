@@ -49,7 +49,7 @@
 (ert-deftest org-glance-settings-test-scope-writer-preserves-peers-and-case ()
   (org-glance-test:with-graph graph
     (org-glance-settings-test--publish
-     graph "{\"format\":1,\"tags\":{\"Book\":{\"title\":\"Old\",\"template\":\"Keep\"},\"other\":{\"storage\":\"local\"}},\"clients\":{\"glance\":{\"theme\":\"dark\"}},\"extension\":42}")
+     graph "{\"format\":1,\"tags\":{\"Book\":{\"title\":\"Old\",\"template\":\"Keep\"},\"other\":{\"storage\":\"local\"}},\"clients\":{\"glance\":{\"theme\":\"dark\",\"keyBindings\":{\"table:next-row\":[\"v\"],\"future:command\":[\"C-c z\"]}}},\"extension\":42}")
     (let* ((before (org-glance-config-file:read (org-glance-graph:directory graph)))
            (values (org-glance-settings--scope before "book")))
       (puthash "title" "New 文" values)
@@ -60,6 +60,9 @@
         (should-not (gethash "book" tags))
         (should (equal "local" (gethash "storage" (gethash "other" tags))))
         (should (equal "dark" (gethash "theme" (gethash "glance" (gethash "clients" object)))))
+        (should (org-glance-config-file--equal
+                 (gethash "glance" (gethash "clients" object))
+                 (gethash "glance" (gethash "clients" (org-glance-config-file:object before)))))
         (should (= 42 (gethash "extension" object))))
       (should-error (org-glance-config:write-workflow graph "book" values
                                                     :expected (org-glance-config-file:revision before))
@@ -282,6 +285,37 @@
       (setq org-glance-settings--session nil)
       (should-error (org-glance-settings:visit graph "book") :type 'user-error)
       (should (equal text (buffer-string))))))
+
+(ert-deftest org-glance-settings-test-first-editor-save-publishes-shared-json ()
+  "A fresh tree opens Settings and saves through the shared JSON writer."
+  (org-glance-test:with-graph graph
+    (let* ((root (org-glance-graph:directory graph))
+           (path (org-glance-config-file:path root))
+           (source (expand-file-name "notes.org" root)))
+      (org-glance-test:write source "* TODO Keep exact bytes\n")
+      (should (org-glance-config:current graph))
+      (should-not (org-glance-config-file:revision (org-glance-config:snapshot graph)))
+      (save-window-excursion
+        (let ((buffer (org-glance-settings:visit graph "book")))
+          (unwind-protect
+              (with-current-buffer buffer
+                (puthash "title" "First book" (org-glance-settings-draft-values org-glance-settings--session))
+                (org-glance-settings--save nil nil)
+                (should (stringp (org-glance-config-file:revision (org-glance-config:snapshot graph))))
+                (should (equal "First book" (gethash "title" (gethash "book" (gethash "tags" (org-glance-settings-test--object graph)))))))
+            (when (buffer-live-p buffer) (kill-buffer buffer)))))
+      (should (file-exists-p path))
+      (should-not (file-exists-p (expand-file-name ".org-glance/config" root)))
+      (should (equal "* TODO Keep exact bytes\n" (f-read-text source 'utf-8-unix))))))
+
+(ert-deftest org-glance-settings-test-unmigrated-input-refuses-cold-open ()
+  "A retired settings file is retained while cold open refuses absent JSON."
+  (with-temp-directory root
+    (let ((legacy (expand-file-name ".org-glance/config/system.org" root)))
+      (org-glance-test:write legacy "#+TODO: PLAN | DONE\n")
+      (should-error (org-glance-graph root) :type 'org-glance-config-error)
+      (should-not (file-exists-p (org-glance-config-file:path root)))
+      (should (equal "#+TODO: PLAN | DONE\n" (f-read-text legacy 'utf-8-unix))))))
 
 (provide 'test-settings)
 ;;; test-settings.el ends here

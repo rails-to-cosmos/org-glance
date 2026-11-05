@@ -14,6 +14,13 @@
                (:conc-name org-glance-config-file:))
   revision object)
 
+(defconst org-glance-config-file--native-exact-json-p
+  (condition-case nil
+      (and (= 2 (length (json-parse-string "{\"x\":1,\"x\":2}" :object-type 'alist)))
+           (integerp (json-parse-string "123456789012345678901234567890")))
+    (json-error nil))
+  "Whether native JSON retains object pairs and oversized integers.")
+
 (defun org-glance-config-file:path (root)
   "Return ROOT's canonical configuration filename."
   (expand-file-name ".org-glance/config.json" root))
@@ -40,27 +47,72 @@
       (list (concat sign trimmed)
             (+ exponent (- (length fraction)) (- (length digits) (length trimmed)))))))
 
-(defun org-glance-config-file--numbers (text)
-  "Refuse numeric literals in TEXT that native JSON would silently round."
+(defun org-glance-config-file--each-number (text function)
+  "Call FUNCTION with each numeric literal in TEXT and its start and end."
   (let ((position 0) (size (length text)))
     (while (< position size)
       (let ((char (aref text position)))
         (cond
          ((= char ?\")
           (setq position (1+ position))
-          (while (/= (aref text position) ?\")
+          (while (and (< position size) (/= (aref text position) ?\"))
             (setq position (+ position (if (= (aref text position) ?\\) 2 1))))
-          (cl-incf position))
+          (setq position (min size (1+ position))))
          ((or (= char ?-) (and (>= char ?0) (<= char ?9)))
-          (string-match "-?[0-9]+\\(?:\\.[0-9]+\\)?\\(?:[eE][+-]?[0-9]+\\)?" text position)
-          (let ((literal (match-string 0 text)))
-            (setq position (match-end 0))
+          (if (and (string-match "-?[0-9]+\\(?:\\.[0-9]+\\)?\\(?:[eE][+-]?[0-9]+\\)?" text position)
+                   (= position (match-beginning 0)))
+              (let ((literal (match-string 0 text)) (start position)
+                    (end (match-end 0)))
+                (setq position end)
+                (funcall function literal start end))
+            (cl-incf position)))
+         (t (cl-incf position)))))))
+
+(defun org-glance-config-file--number-text (number)
+  "Return NUMBER's exact JSON spelling on the running Emacs."
+  (if (integerp number) (number-to-string number) (json-serialize number)))
+
+(defun org-glance-config-file--numbers (text)
+  "Refuse numeric literals in TEXT that native JSON would silently round."
+  (org-glance-config-file--each-number
+   text (lambda (literal _start _end)
+          (let ((number (if (string-match-p "\\`-?[0-9]+\\'" literal)
+                            (string-to-number literal) (json-parse-string literal))))
             (unless (equal (org-glance-config-file--decimal literal)
                            (org-glance-config-file--decimal
-                            (json-serialize (json-parse-string literal))))
+                            (org-glance-config-file--number-text number)))
               (signal 'org-glance-config-error
-                      '("config.json number cannot round-trip through both clients")))))
-         (t (cl-incf position)))))))
+                      '("config.json number cannot round-trip through both clients")))))))
+
+(defun org-glance-config-file--large-integer-p (value)
+  "Return whether VALUE exceeds the older native JSON integer range."
+  (and (integerp value)
+       (or (> value #x7fffffffffffffff) (< value (- #x8000000000000000)))))
+
+(defun org-glance-config-file--parse (text)
+  "Parse TEXT, preserving integers beyond older native JSON's range."
+  (if org-glance-config-file--native-exact-json-p
+      (json-parse-string text :object-type 'alist :null-object :null :false-object :false)
+    (let ((validated
+           (condition-case original
+               (json-parse-string text)
+             (json-error
+              (let ((start 0) pieces)
+                (org-glance-config-file--each-number
+                 text (lambda (literal begin end)
+                        (when (and (string-match-p "\\`-?\\(?:0\\|[1-9][0-9]*\\)\\'" literal)
+                                   (org-glance-config-file--large-integer-p (string-to-number literal)))
+                          (push (substring text start begin) pieces)
+                          (push "0" pieces)
+                          (setq start end))))
+                (unless pieces (signal (car original) (cdr original)))
+                (json-parse-string
+                 (apply #'concat (append (nreverse pieces) (list (substring text start))))))))))
+      (unless (hash-table-p validated)
+        (signal 'org-glance-config-error '("config.json requires an object with format 1")))
+      (let ((json-object-type 'alist) (json-array-type 'vector)
+            (json-key-type 'symbol) (json-null :null) (json-false :false))
+        (json-read-from-string text)))))
 
 (defun org-glance-config-file:decode (bytes)
   "Decode UTF-8 BYTES, rejecting duplicate keys and unsupported envelopes."
@@ -86,8 +138,7 @@
                (aset value index (convert (aref value index) (1+ depth)))))
             (t value))))
       (let* ((parsed (condition-case err
-                         (json-parse-string text :object-type 'alist
-                                            :null-object :null :false-object :false)
+                         (org-glance-config-file--parse text)
                        (json-error
                         (signal 'org-glance-config-error (list (error-message-string err))))))
              (object (org-glance-config-file--envelope (convert parsed 0))))
@@ -167,11 +218,36 @@ Reuse validated OBSERVED only when its exact byte revision still matches."
 
 (defun org-glance-config-file--serialize (object)
   "Encode OBJECT as UTF-8 JSON with a trailing newline."
-  (let ((json (json-serialize object :null-object :null :false-object :false)))
+  (let ((json (condition-case original
+                  (json-serialize object :null-object :null :false-object :false)
+                (error
+                 (unless (org-glance-config-file--large-integer-tree-p object)
+                   (signal (car original) (cdr original)))
+                 (let ((json-null :null) (json-false :false)
+                       (json-encoding-pretty-print nil))
+                   (json-encode object))))))
     (concat (if (multibyte-string-p json)
                 (encode-coding-string json 'utf-8-unix)
               json)
             "\n")))
+
+(defun org-glance-config-file--large-integer-tree-p (object)
+  "Validate OBJECT's JSON value types and detect an oversized integer."
+  (let (large)
+    (cl-labels ((visit (value depth)
+                 (when (> depth 128)
+                   (signal 'org-glance-config-error '("config.json nesting exceeds 128 levels")))
+                 (cond
+                  ((org-glance-config-file--large-integer-p value) (setq large t))
+                  ((or (numberp value) (stringp value) (memq value '(t :null :false))))
+                  ((hash-table-p value)
+                   (maphash (lambda (key field)
+                              (unless (stringp key) (error "JSON object key is not text"))
+                              (visit field (1+ depth))) value))
+                  ((vectorp value) (mapc (lambda (field) (visit field (1+ depth))) value))
+                  (t (error "Unsupported JSON value")))))
+      (visit object 0))
+    large))
 
 (defun org-glance-config-file--publish (path bytes)
   "Replace PATH atomically with BYTES, cleaning up a failed temporary write."
@@ -201,8 +277,8 @@ Reuse validated OBSERVED only when its exact byte revision still matches."
                   always (org-glance-config-file--equal a b))))
    ((and (numberp left) (numberp right))
     (or (equal left right)
-        (equal (org-glance-config-file--decimal (json-serialize left))
-               (org-glance-config-file--decimal (json-serialize right)))))
+        (equal (org-glance-config-file--decimal (org-glance-config-file--number-text left))
+               (org-glance-config-file--decimal (org-glance-config-file--number-text right)))))
    (t (equal left right))))
 
 (defun org-glance-config-file--prepare (current change)
@@ -216,8 +292,11 @@ Reuse validated OBSERVED only when its exact byte revision still matches."
     (if (and revision (equal before bytes))
         (cons current nil)
       (let ((candidate (org-glance-config-file:decode bytes))
-            (original (json-parse-string before
-                       :null-object :null :false-object :false)))
+            (original (if org-glance-config-file--native-exact-json-p
+                          (json-parse-string before :null-object :null :false-object :false)
+                        (let ((json-object-type 'hash-table) (json-array-type 'vector)
+                              (json-key-type 'string) (json-null :null) (json-false :false))
+                          (json-read-from-string (decode-coding-string before 'utf-8-unix))))))
         (if (and revision (org-glance-config-file--equal
                            original (org-glance-config-file:object candidate)))
             (progn (setf (org-glance-config-file:object current) original)

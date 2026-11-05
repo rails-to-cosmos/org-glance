@@ -115,17 +115,12 @@ LOCALIZE translates a portable path back into GRAPH."
   "Return GRAPH's independently observed portable authority path set."
   (let* ((root (file-name-as-directory (org-glance-graph:directory graph)))
          (data (org-glance-graph:data-path graph))
-         (system (org-glance-graph:config-file graph "system.org"))
-         (tags (org-glance-graph:config-file graph "tags"))
+         (configuration (org-glance-config-file:path root))
          (paths
           (append
            (list (org-glance-graph--manifest-path graph))
            (org-glance-graph--live-segments graph)
-           (when (file-regular-p system) (list system))
-           (when (and (not (and (boundp 'org-glance-tag-config-dir)
-                                org-glance-tag-config-dir))
-                      (file-directory-p tags))
-             (directory-files tags t "\\.org\\'"))
+           (when (file-regular-p configuration) (list configuration))
            (when (file-directory-p data)
              (directory-files-recursively
               data "\\(?:meta\\.json\\|data\\.org\\)\\'" nil)))))
@@ -142,21 +137,9 @@ LOCALIZE translates a portable path back into GRAPH."
      #'string<)))
 
 (cl-defun org-glance-checkpoint--configuration-files (graph)
-  "Return GRAPH's effective configuration as portable labels and paths."
-  (let* ((system (org-glance-graph:config-file graph "system.org"))
-         (tag-dir (if (and (boundp 'org-glance-tag-config-dir)
-                           (stringp org-glance-tag-config-dir))
-                      org-glance-tag-config-dir
-                    (org-glance-graph:config-file graph "tags")))
-         (files
-          (append
-           (when (file-regular-p system) (list (cons "system.org" system)))
-           (when (file-directory-p tag-dir)
-             (mapcar
-              (lambda (path)
-                (cons (concat "tags/" (file-name-nondirectory path)) path))
-              (directory-files tag-dir t "\\.org\\'"))))))
-    (sort files (lambda (left right) (string< (car left) (car right))))))
+  "Return GRAPH's explicit JSON configuration as a portable label and path."
+  (let ((path (org-glance-config-file:path (org-glance-graph:directory graph))))
+    (when (file-regular-p path) (list (cons "config.json" path)))))
 
 (cl-defun org-glance-checkpoint--projection (graph)
   "Return GRAPH's semantic projection contract."
@@ -213,12 +196,17 @@ LOCALIZE translates a portable path back into GRAPH."
       (error "org-glance: checkpoint gzip compression failed"))
     (buffer-string)))
 
+(declare-function zlib-decompress-region "decompress.c" (start end))
+
 (cl-defun org-glance-checkpoint--decompress (bytes)
   "Return decompressed checkpoint BYTES."
   (with-temp-buffer
     (set-buffer-multibyte nil)
     (insert bytes)
-    (unless (zlib-decompress-region (point-min) (point-max))
+    (unless (if (fboundp 'zlib-decompress-region)
+                (zlib-decompress-region (point-min) (point-max))
+              (eq 0 (call-process-region (point-min) (point-max)
+                                         "gzip" t t nil "-d" "-c")))
       (error "org-glance: checkpoint gzip decompression failed"))
     (buffer-string)))
 

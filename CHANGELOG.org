@@ -5,6 +5,17 @@ Notable user-facing changes.  Versions date-based
 
 * Unreleased
 
+** Changed
+
+- Settings and table layouts use shared =config.json= defaults before first save; retired Org and =.eld= settings require explicit migration.
+- JSON startup follows the configured background reconciliation policy; Overview retains bounded updates when canonical context is unchanged.
+
+** Fixed
+
+- Shared JSON preserves exact large integers and duplicate-key refusal on Emacs 29.
+- Checkpoint gzip supports Emacs builds without native zlib.
+- Material context lookup preserves TODO meaning during save; explicit TODO cycles take precedence over fallback sequences.
+
 * 1.57.0.0.20261104.0
 
 ** Changed

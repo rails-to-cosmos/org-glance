@@ -984,14 +984,9 @@ Paths are sorted, distinct, relative to GRAPH, and exclude local cache state."
             (append
              (list (org-glance-graph--manifest-path graph))
              (org-glance-graph--live-segments graph)
-             (let ((system (org-glance-graph:config-file graph "system.org"))
-                   (tags (org-glance-graph:config-file graph "tags")))
-               (append
-                (when (file-regular-p system) (list system))
-                (when (and (not (and (boundp 'org-glance-tag-config-dir)
-                                     org-glance-tag-config-dir))
-                           (file-directory-p tags))
-                  (directory-files tags t "\\.org\\'"))))
+             (let ((configuration (org-glance-config-file:path
+                                   (org-glance-graph:directory graph))))
+               (when (file-regular-p configuration) (list configuration)))
              (mapcar #'car (sqlite-select db "SELECT path FROM source"))
              (mapcar #'car
                      (sqlite-select
@@ -1490,7 +1485,7 @@ INITIAL queues startup work without consuming the first post-open refresh."
 (cl-defun org-glance-cache--refresh-on-open (graph)
   "Refresh GRAPH according to the current startup execution policy."
   (org-glance-cache--migrate graph)
-  (if (or org-glance-cache--refresh-synchronously (org-glance-config:current graph))
+  (if org-glance-cache--refresh-synchronously
       (org-glance-cache--reconcile-now graph)
     (org-glance-cache:refresh-async graph t)))
 
@@ -1600,7 +1595,9 @@ Keep the first stored row, matching the ordinary point-read policy."
          (family-clause
           (mapconcat
            (lambda (_tag)
-             "EXISTS (SELECT 1 FROM json_each(headline_projection.record_payload,'$.tags') WHERE lower(json_each.value)=?)")
+             "EXISTS (SELECT 1 FROM
+json_each(headline_projection.record_payload,'$.tags')
+WHERE lower(json_each.value)=?)")
            tags " AND "))
          (tag-params (apply #'vector tags))
          (ordinary (org-glance-cache--ordinary-rows db tags))
@@ -1657,11 +1654,9 @@ Keep the first stored row, matching the ordinary point-read policy."
             (org-glance-cache:headlines graph))))
     (cl-remove-if-not (org-glance-filter:predicate spec) candidates)))
 
-(defun org-glance-cache:overview-rows (graph filter)
-  "Return (METADATA . DECLARATIONS) candidates in one committed GRAPH frame.
-FILTER preselects tags; the consumer resolves its per-Row state predicate."
-  (let ((org-glance-cache--context-receipts (make-hash-table :test #'eq))
-        (tags (org-glance-filter:tags (org-glance-filter:normalize-spec filter))))
+(defun org-glance-cache--overview-observe (graph select)
+  "Return SELECT's Rows and source declarations from one admitted GRAPH snapshot."
+  (let ((org-glance-cache--context-receipts (make-hash-table :test #'eq)))
     (org-glance-cache--read-db
      graph
      (lambda (db)
@@ -1671,8 +1666,25 @@ FILTER preselects tags; the consumer resolves its per-Row state predicate."
                      (error "Overview context requires a complete cache census for %s"
                             (org-glance-headline-metadata:id metadata)))
                    (cons metadata declarations)))
-               (if tags (org-glance-cache--tag-candidates db tags)
-                 (org-glance-cache--read-projection db)))))))
+               (funcall select db))))))
+
+(defun org-glance-cache:overview-rows (graph filter)
+  "Return (METADATA . DECLARATIONS) candidates in one committed GRAPH frame.
+FILTER preselects tags; the consumer resolves each Row's state predicate."
+  (let ((tags (org-glance-filter:tags (org-glance-filter:normalize-spec filter))))
+    (org-glance-cache--overview-observe
+     graph (lambda (db) (if tags (org-glance-cache--tag-candidates db tags)
+                         (org-glance-cache--read-projection db))))))
+
+(defun org-glance-cache:overview-updates (graph ids)
+  "Observe exact IDS and their contexts for a bounded Overview update in GRAPH.
+Refuse Rows with incoming relation labels that require broader regeneration."
+  (org-glance-cache--overview-observe
+   graph
+   (lambda (db)
+     (unless (cl-some (lambda (id) (org-glance-cache--incoming-relations db id)) ids)
+       (cl-remove-if-not #'org-glance-headline-metadata?
+                         (mapcar (lambda (id) (org-glance-cache--headline db id)) ids))))))
 
 (cl-defun org-glance-cache--ordinary-headline (db id)
   "Return ordinary compatibility-WAL ID from DB, or nil."
@@ -1682,12 +1694,9 @@ FILTER preselects tags; the consumer resolves its per-Row state predicate."
                          (vector id)))))
     (org-glance-cache--decode-metadata (car row))))
 
-(cl-defun org-glance-cache:headline (graph id)
-  "Return ID from GRAPH's committed projection, `tombstone', or nil."
-  (org-glance-cache--read-db
-   graph
-   (lambda (db)
-     (let* ((exact (car (sqlite-select
+(cl-defun org-glance-cache--headline (db id)
+  "Return ID's effective Row from the committed DB snapshot."
+  (let* ((exact (car (sqlite-select
                          db
                          "SELECT record_payload FROM headline_projection WHERE logical_id || '/' || event_id=? AND role IN ('current','conflict','recovery','rejected') LIMIT 1"
                          (vector id))))
@@ -1713,7 +1722,11 @@ FILTER preselects tags; the consumer resolves its per-Row state predicate."
         (projected
          (org-glance-graph--prefer-family-metadata projected ordinary))
         (family nil)
-        (t ordinary))))))
+        (t ordinary))))
+
+(cl-defun org-glance-cache:headline (graph id)
+  "Return ID from GRAPH's committed projection, `tombstone', or nil."
+  (org-glance-cache--read-db graph (lambda (db) (org-glance-cache--headline db id))))
 
 (cl-defun org-glance-cache:logical-id (graph id)
   "Return the logical headline ID addressed by projection Row ID in GRAPH."
@@ -1801,19 +1814,18 @@ longer match the digest admitted by the pinned projection."
               ((equal expected (org-glance-cache--file-digest path))))
     path))
 
+(defun org-glance-cache--incoming-relations (db id)
+  "Return indexed (SOURCE-ID . KIND) relations targeting ID in snapshot DB."
+  (mapcar
+   (lambda (row) (cons (car row) (cadr row)))
+   (sqlite-select
+    db
+    "SELECT DISTINCT source.org_id,edge.kind FROM headline AS target JOIN edge ON edge.dst=target.id JOIN headline AS source ON edge.src=source.id WHERE target.org_id=? ORDER BY source.org_id,edge.kind"
+    (vector id))))
+
 (cl-defun org-glance-cache:incoming-relations (graph id)
   "Return indexed (SOURCE-ID . KIND) relations targeting ID in GRAPH."
-  (or
-   (org-glance-cache--read-db
-    graph
-    (lambda (db)
-      (mapcar
-       (lambda (row) (cons (car row) (cadr row)))
-       (sqlite-select
-        db
-        "SELECT DISTINCT source.org_id,edge.kind FROM headline AS target JOIN edge ON edge.dst=target.id JOIN headline AS source ON edge.src=source.id WHERE target.org_id=? ORDER BY source.org_id,edge.kind"
-        (vector id)))))
-   nil))
+  (org-glance-cache--read-db graph (lambda (db) (org-glance-cache--incoming-relations db id))))
 
 (cl-defun org-glance-cache--persisted-revived-family-ids (db)
   "Return family IDs whose current event descends from a Tombstone in DB."
