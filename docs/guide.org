@@ -168,12 +168,14 @@ In a materialized buffer:
 | =C-u @= | same, plus a reference kind (=roasted by=, …)    |
 | =C-c @= | table of everything this headline relates to   |
 
-The =LOGBOOK= also shows live relation entries.  Plain links use =Refers to=
+The =LOGBOOK= also contains editable relation entries. Plain links use =Refers to=
 and =Referred by=; typed links capitalize the kind, such as =Blocked by
 [[glance:abc][TODO Other headline]] at [2026-01-01 Thu 12:00]=.  The timestamp is
-the current source snapshot's creation time.  These entries refresh from the
-graph on open, revert and save through display overlays. They preserve authored
-text and undo, and stay out of the stored headline.
+the source snapshot's creation time when the entry was added. Open and revert
+append missing entries while preserving existing descriptions and timestamps.
+New entries mark the buffer modified. Edit, undo and save them as ordinary Org
+text; saving retains the drawer. Logbook links remain bookkeeping; body links
+define the graph's relations.
 
 A relation table lists both directions in one view — the headlines this one refers to AND the ones referring to it — and its =Relation= column names each row's direction and kind (=> roasted by=, =<=).  =@= on a row in the table or the overview opens the same view for that headline.
 

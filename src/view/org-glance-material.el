@@ -140,8 +140,6 @@ Set it with `org-glance-material:set-project-dir' (`C-c d').")
   "Non-nil after the contents handler returns successfully for this save.")
 (defvar-local org-glance-material--saving nil
   "Non-nil throughout Emacs's save hooks and material publication.")
-(defvar-local org-glance-material--relation-overlay nil
-  "Overlay displaying live relation logbook entries.")
 
 (cl-defun org-glance-material:buffer (graph id)
   "Return GRAPH's live logical editor for ID without loading content."
@@ -377,9 +375,7 @@ SEAL encrypts crypt blocks for publication; nil retains editing presentation."
     (when concurrent
       (display-warning 'org-glance "Content saved with concurrent versions; reconcile before saving again"))
     (condition-case nil
-        (progn
-          (org-glance-material--reload-context org-glance-material--graph)
-          (org-glance-material--refresh-derived-relations))
+        (org-glance-material--reload-context org-glance-material--graph)
       ((error quit)
        (org-glance-view--mark-stale)
        (display-warning 'org-glance "Material saved; display refresh failed")))))
@@ -876,7 +872,7 @@ The publication serializer supplies them on every save.")
 
 (cl-defun org-glance-material--relation-line
     (graph id &key kind direction stamp)
-  "Return one derived logbook line for ID in DIRECTION in GRAPH.
+  "Return one logbook line for ID in DIRECTION in GRAPH.
 KIND supplies its relation label and STAMP names the source snapshot time."
   (let ((label (if kind
                    (s-capitalize (org-glance--kind-pretty kind))
@@ -920,7 +916,7 @@ KIND supplies its relation label and STAMP names the source snapshot time."
   "Return the first heading's own LOGBOOK drawer element, or nil."
   (save-excursion
     (org-glance-material--goto-first-heading)
-    (let* ((root (org-element-at-point))
+    (let* ((root (org-element-map (org-element-parse-buffer) 'headline #'identity nil t))
            (root-beg (org-element-property :begin root)))
       (org-element-map root 'drawer
         (lambda (drawer)
@@ -933,7 +929,7 @@ KIND supplies its relation label and STAMP names the source snapshot time."
         nil t))))
 
 (cl-defun org-glance-material--relation-insert-position ()
-  "Return the position for a fresh derived LOGBOOK in this material buffer."
+  "Return the position for a fresh LOGBOOK in this material buffer."
   (save-excursion
     (org-glance-material--goto-first-heading)
     (forward-line 1)
@@ -943,51 +939,43 @@ KIND supplies its relation label and STAMP names the source snapshot time."
       (forward-line 1))
     (point)))
 
-(defun org-glance-material--relation-display (text)
-  "Return relation TEXT with descriptive, clickable reference links."
-  (let ((cursor 0) (graph org-glance-material--graph))
-    (while (string-match org-link-bracket-re text cursor)
-      (let* ((begin (match-beginning 0))
-             (end (match-end 0))
-             (label (or (match-string 2 text) (match-string 1 text)))
-             (link (substring-no-properties text begin end))
-             (target (car (split-string
-                           (string-remove-prefix "glance:" (match-string 1 text)) "[?]")))
-             (map (make-sparse-keymap))
-             (open (lambda (_event)
-                     (interactive "e")
-                     (switch-to-buffer (org-glance-material:open graph target)))))
-        (define-key map [mouse-1] open)
-        (define-key map [mouse-2] open)
-        (add-text-properties begin end
-                             (list 'display label 'face 'org-link 'mouse-face 'highlight
-                                   'follow-link t 'keymap map 'help-echo link) text)
-        (setq cursor end))))
-  text)
+(defun org-glance-material--relation-entry-key (line)
+  "Return LINE's relation label and target, ignoring description and time."
+  (when (string-match org-link-bracket-re line)
+    (let ((label (substring line 0 (match-beginning 0)))
+          (target (match-string 1 line)))
+      (cons (string-trim label) target))))
 
-(cl-defun org-glance-material--refresh-derived-relations ()
-  "Display current relation logbook entries without changing authored text."
+(cl-defun org-glance-material--insert-relation-entries ()
+  "Append missing relation entries as ordinary editable LOGBOOK text.
+Preserve existing entries and record insertions in the normal undo history."
   (when (and org-glance-material--graph org-glance-material--id)
     (save-restriction
       (widen)
       (save-excursion
-        (let* ((lines (org-glance-material--relation-lines
-                       org-glance-material--graph org-glance-material--id))
-               (drawer (org-glance-material--own-logbook))
-               (position (if drawer
-                             (progn
-                               (goto-char (org-element-property :end drawer))
-                               (line-beginning-position 0))
-                           (org-glance-material--relation-insert-position))))
-          (unless (overlayp org-glance-material--relation-overlay)
-            (setq org-glance-material--relation-overlay
-                  (make-overlay position position nil t t)))
-          (move-overlay org-glance-material--relation-overlay position position)
-          (overlay-put org-glance-material--relation-overlay 'after-string
-                       (unless (string-empty-p lines)
-                         (org-glance-material--relation-display
-                          (if drawer lines
-                            (concat ":LOGBOOK:\n" lines ":END:\n"))))))))))
+        (let* ((lines (split-string
+                      (org-glance-material--relation-lines
+                       org-glance-material--graph org-glance-material--id) "\n" t))
+               (drawer (and lines (org-glance-material--own-logbook)))
+               (existing (make-hash-table :test #'equal)))
+          (when drawer
+            (dolist (line (split-string
+                          (buffer-substring-no-properties
+                           (org-element-property :begin drawer)
+                           (org-element-property :end drawer)) "\n" t))
+              (puthash (org-glance-material--relation-entry-key line) t existing)))
+          (setq lines (cl-delete-if
+                       (lambda (line)
+                         (gethash (org-glance-material--relation-entry-key line) existing))
+                       lines))
+          (when lines
+            (goto-char (if drawer
+                           (org-element-property :contents-end drawer)
+                         (org-glance-material--relation-insert-position)))
+            (unless (bolp) (insert "\n"))
+            (unless drawer (insert ":LOGBOOK:\n"))
+            (insert (string-join lines "\n") "\n")
+            (unless drawer (insert ":END:\n"))))))))
 
 (cl-defun org-glance-material--line-key (line)
   "Return the uppercase property key of drawer LINE, or nil."
@@ -1102,7 +1090,7 @@ INITIAL retains the verified initial text and any Org mode hook edits."
     (set-buffer-modified-p modified)
     (goto-char (point-min))
     (org-glance-material--reload-context org-glance-material--graph)
-    (org-glance-material--refresh-derived-relations)))
+    (org-glance-material--insert-relation-entries)))
 
 (cl-defun org-glance-material--revert (ignore-auto noconfirm)
   "Load the current snapshot, passing IGNORE-AUTO through indirect views.
@@ -1130,7 +1118,7 @@ NOCONFIRM permits discarding a dirty draft."
                         (plist-get org-glance-material--base :digest)))
             (progn
               (setq org-glance-material--base state)
-              (org-glance-material--refresh-derived-relations))
+              (org-glance-material--insert-relation-entries))
           (org-glance-material--load-source state)
           (goto-char (min position (point-max)))))
       (org-glance-view:mark-fresh))))

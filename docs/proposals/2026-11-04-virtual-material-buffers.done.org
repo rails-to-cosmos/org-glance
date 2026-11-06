@@ -32,7 +32,7 @@ finish the required family projection before reporting mutation success.
 
 Invariants 21 and 27 now describe serializer-supplied managed properties and
 metadata derived from sealed publication bytes before success. Invariant 38
-uses relation display overlays; invariant 48 owns logical editor identity and
+uses ordinary editable relation logbook entries; invariant 48 owns logical editor identity and
 receipt recovery.
 
 * Buffer identity and state
@@ -72,9 +72,9 @@ and tombstones. The base digest identifies the source payload; the draft
 digest identifies the exact encoded bytes to publish.
 
 Maintain a monotonic authored revision through change hooks. Normalization,
-undo and indirect-buffer text edits advance it. Relation logbook lines use a
-buffer-local overlay, and reference labels use display properties. Their
-refresh preserves authored text, the modified flag and undo. Explicit crypt
+undo and indirect-buffer text edits advance it. Relation logbook additions are
+ordinary text edits, and reference labels use display properties. Open and
+revert add missing entries; save preserves the drawer. Explicit crypt
 presentation changes preserve the authored dirty state. The serializer returns
 the revision captured with its text; edits during password entry remain dirty.
 
@@ -416,8 +416,9 @@ receipt's exact source, including during concurrent publication.
 =org-glance-material--serialize= supplies managed properties, newline provenance
 and scratch sealing. Ordinary transforms request its editing presentation;
 crypt transforms request sealed input. Typed crypt blocks seal before writing,
-and malformed or removed secrecy markers refuse publication. Relation lines
-are clickable overlay text and contribute zero authored bytes or undo entries.
+and malformed or removed secrecy markers refuse publication. Relation entries
+are ordinary LOGBOOK text; adding or editing them participates in undo and
+publication, and their links use normal Org navigation.
 
 =basic-save-buffer= advice guards recursive saves and classifies after-save
 notification errors after completed publication. File attachment and ordinary

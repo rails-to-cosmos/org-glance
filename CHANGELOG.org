@@ -5,6 +5,12 @@ Notable user-facing changes.  Versions date-based
 
 * Unreleased
 
+* 1.57.4.0.20261106.0
+
+** Changed
+
+- =org-glance-material:open= and revert add ordinary editable LOGBOOK entries; saves preserve logbook edits.
+
 * 1.57.3.0.20261106.0
 
 ** Fixed

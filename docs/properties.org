@@ -145,11 +145,12 @@ reads the resulting JSON. Existing JSON skips legacy inputs entirely.
 
 * Crypt blocks and materialization
 
-Material buffers project current outgoing and incoming graph relations into
-the root headline's =LOGBOOK=.  Plain entries are =Refers to= / =Referred by=;
-typed entries capitalize the kind.  Each entry carries its current source
-snapshot's creation timestamp.  The projection refreshes on open, revert and
-save, and the save hooks remove it before writing the source blob.
+Material buffers append missing outgoing and incoming relation entries to the
+root headline's ordinary editable =LOGBOOK= on open and revert. Plain entries
+are =Refers to= / =Referred by=; typed entries capitalize the kind. New entries
+carry the source snapshot's creation timestamp. Existing descriptions and
+timestamps persist; additions participate in normal undo and save. Log drawers
+remain excluded from content hashes and derived link and relation metadata.
 
 A headline whose blob carries sealed =#+begin_crypt= blocks materializes
 AS-IS: the ciphertext is what you see, no password is requested, and the

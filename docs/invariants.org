@@ -743,7 +743,8 @@ today, up from 50.
     [[https://github.com/rails-to-cosmos/org-glance/blob/32d20f3a939fa56ca1a86ce1a3f52ebb7a7e0b39/src/data/org-glance-core.el#L1-L8][core boundary at 32d20f3, lines 1–8]] and
     [[file:proposals/2026-06-07-generalize-core-v2-module.done.org::*Problem][the module proposal]].
 
-38. *Material relations are display overlays.* Open, revert and save derive outgoing and incoming logbook lines from committed metadata; plain edges render as =Refers to= / =Referred by=, typed edges capitalize their kind, and timestamps come from committed source events; authored text, undo and reference link bytes persist.
+38. *Material LOGBOOK entries are ordinary editable text.* Open and revert append missing outgoing and incoming entries by label and target; existing descriptions and timestamps persist, insertions mark the buffer modified and participate in undo, and save preserves the drawer; plain edges use =Refers to= / =Referred by=, typed edges capitalize their kind, and new timestamps come from committed source events.
+    =material-relation-logbook-deduplication-work= bounds 1,000 entries at 2,002 key evaluations with zero text changes; =test/bench-material.el= retains two family observations per save across plain and crypt fixtures of 10/50/100 families and depths 1/12/40.
 
 39. *Immutable version metadata is shared with Glance.*  New writes use schema 2
     with explicit =Snapshot= or =Tombstone= events. Schema 1 remains readable and

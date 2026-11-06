@@ -160,7 +160,7 @@ a save persists to the graph and survives re-materializing."
     (should (string= "DONE" (org-glance-test:field graph "e2e1" state)))))
 
 (ert-deftest org-glance-test:material-relations-actualize-in-logbook ()
-  "Materialization shows live relation lines and keeps them out of the blob."
+  "Relation entries are editable saved text whose links remain bookkeeping."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
       (org-glance-test:headline "a" "* TODO Alpha"
@@ -176,13 +176,13 @@ a save persists to the graph and survives re-materializing."
       (should (s-contains?
                ":LOGBOOK:\n- Referred by [[glance:a][TODO Alpha]]\n:END:"
                (replace-regexp-in-string
-                " at \\[[^]]+\\]" "" (org-glance-test:material-display))))
+                " at \\[[^]]+\\]" "" (buffer-string))))
       (should (string-match-p
                "- Referred by \\[\\[glance:a\\]\\[TODO Alpha\\]\\] at \\[[-0-9]+ [[:alpha:]]+ [0-9:]+\\]"
-               (org-glance-test:material-display)))
-      (should-not (buffer-modified-p)))
+               (buffer-string)))
+      (should (buffer-modified-p)))
     (org-glance-test:with-material (buffer graph "a")
-      (let ((shown (org-glance-test:material-display)))
+      (let ((shown (buffer-string)))
         (should (s-contains? "- Kept" shown))
         (should (s-contains? "- Refers to [[glance:b][TODO Bee]]" shown))
         (should (s-contains?
@@ -191,35 +191,42 @@ a save persists to the graph and survives re-materializing."
         (should (s-contains? "- Reviewed by [[glance:e][TODO Echo]]" shown))
         (should (string-match-p
                  "\\] at \\[[-0-9]+ [[:alpha:]]+ [0-9:]+\\]" shown))
+        (should (buffer-modified-p)))
+      (goto-char (point-min))
+      (search-forward "[[glance:b][TODO Bee]]")
+      (should-not (get-text-property (point) 'read-only))
+      (replace-match "[[glance:b][Saved label]]" t t)
+      (cl-letf (((symbol-function 'org-glance-material--insert-relation-entries)
+                 (lambda () (ert-fail "Save rewrote the logbook"))))
+        (org-glance-test:save))
+      (should (s-contains? "[[glance:b][Saved label]]"
+                          (org-glance-graph:get-content graph "a")))
+      (let ((saved (buffer-string)))
+        (revert-buffer t t)
+        (should (equal saved (buffer-string)))
         (should-not (buffer-modified-p)))
       (goto-char (point-min))
-      (search-forward ":END:\n")
       (search-forward "[[glance:b][Bee]]")
       (replace-match "[[glance:d][Delta]]" t t)
-      (let ((original (symbol-function 'format-time-string))
-            (created "2030-01-02T03:04:00Z"))
-        (cl-letf (((symbol-function 'format-time-string)
-                   (lambda (format &optional time zone)
-                     (if (equal format "%Y-%m-%dT%H:%M:%SZ")
-                         created
-                       (funcall original format time zone)))))
-          (org-glance-test:save))
-        (should
-         (s-contains?
-          (concat "- Refers to [[glance:d][TODO Delta]] at "
-                  (funcall original "[%Y-%m-%d %a %H:%M]"
-                           (date-to-time created)))
-          (org-glance-test:material-display))))
-      (should-not (s-contains? "- Refers to [[glance:b][TODO Bee]]" (org-glance-test:material-display)))
-      (should (s-contains? "- Refers to [[glance:d][TODO Delta]]" (org-glance-test:material-display)))
+      (org-glance-test:save)
+      (should (s-contains? "- Refers to [[glance:b][Saved label]]" (buffer-string)))
+      (should-not (s-contains? "- Refers to [[glance:d][TODO Delta]]" (buffer-string)))
+      (should-not (buffer-modified-p))
+      (revert-buffer t t)
+      (should (buffer-modified-p))
+      (should (s-contains? "- Refers to [[glance:d][TODO Delta]]" (buffer-string)))
+      (org-glance-test:save)
       (should-not (buffer-modified-p)))
     (let ((blob (org-glance-graph:get-content graph "a")))
       (should (s-contains? "- Kept" blob))
       (should (s-contains? "[[glance:d][Delta]]" blob))
-      (should-not (s-contains? "Refers to" blob))
-      (should-not (s-contains? "Referred by" blob))
-      (should-not (s-contains? "- Blocked by" blob))
-      (should-not (s-contains? "- Reviewed by" blob)))))
+      (should (s-contains? "- Refers to [[glance:b][Saved label]]" blob))
+      (should (s-contains? "- Referred by" blob))
+      (should (s-contains? "- Blocked by" blob))
+      (should (s-contains? "- Reviewed by" blob)))
+    (should (equal '(("d") ("c" . "blocked-by"))
+                   (org-glance-headline-metadata:relations
+                    (org-glance-cache:headline graph "a"))))))
 
 (ert-deftest org-glance-test:material-relation-direction-follows-body-link ()
   "Show the body-link owner as referring and its target as referred to."
@@ -228,11 +235,61 @@ a save persists to the graph and survives re-materializing."
       (org-glance-test:headline "a" "* A" "[[glance:b][B]]")
       (org-glance-test:headline "b" "* B"))
     (org-glance-test:with-material (_buffer graph "a")
-      (should (s-contains? "- Refers to [[glance:b][B]]" (org-glance-test:material-display)))
-      (should-not (s-contains? "- Referred by [[glance:b][B]]" (org-glance-test:material-display))))
+      (should (s-contains? "- Refers to [[glance:b][B]]" (buffer-string)))
+      (should-not (s-contains? "- Referred by [[glance:b][B]]" (buffer-string))))
     (org-glance-test:with-material (_buffer graph "b")
-      (should (s-contains? "- Referred by [[glance:a][A]]" (org-glance-test:material-display)))
-      (should-not (s-contains? "- Refers to [[glance:a][A]]" (org-glance-test:material-display))))))
+      (should (s-contains? "- Referred by [[glance:a][A]]" (buffer-string)))
+      (should-not (s-contains? "- Refers to [[glance:a][A]]" (buffer-string))))))
+
+(ert-deftest org-glance-test:material-relation-logbook-preserves-drawers ()
+  "Append to the root drawer while preserving child drawers and surrounding text."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-test:headline "a" "* A" ":LOGBOOK:" "- Kept" ":END:" ""
+                                 "[[glance:b][B]]" "** Child"
+                                 ":LOGBOOK:" "- Child entry" ":END:")
+      (org-glance-test:headline "b" "* B"))
+    (org-glance-test:with-material (_buffer graph "a")
+      (should (string-match-p "- Kept\n- Refers to.*\n:END:\n\n" (buffer-string)))
+      (should (string-match-p "\\*\\* Child\n:LOGBOOK:\n- Child entry\n:END:" (buffer-string)))
+      (let ((first (buffer-string)))
+        (org-glance-material--insert-relation-entries)
+        (should (equal first (buffer-string)))))))
+
+(ert-deftest org-glance-test:material-relation-logbook-deduplication-work ()
+  "Match existing entries once while preserving descriptions and timestamps."
+  (org-glance-test:with-graph graph
+    (let* ((count 1000)
+           (entries (cl-loop for index below count
+                             collect (format "- Refers to [[glance:n%d][Saved]] at [old]" index)))
+           (fresh (replace-regexp-in-string "Saved\\|old" "Current" (string-join entries "\n"))))
+      (org-glance-graph:add graph
+        (org-glance-test:headline "a" "* A" ":LOGBOOK:"
+          (string-join entries "\n") ":END:" "body"))
+      (org-glance-test:with-material (_buffer graph "a")
+        (let ((text (buffer-string)) (calls 0)
+              (key (symbol-function 'org-glance-material--relation-entry-key)))
+          (cl-letf (((symbol-function 'org-glance-material--relation-lines)
+                     (lambda (&rest _) fresh))
+                    ((symbol-function 'org-glance-material--relation-entry-key)
+                     (lambda (line) (cl-incf calls) (funcall key line))))
+            (org-glance-material--insert-relation-entries))
+          (should (equal text (buffer-string)))
+          (should-not (buffer-modified-p))
+          (should (<= calls (+ (* 2 count) 2))))))))
+
+(ert-deftest org-glance-test:material-relation-logbook-after-unterminated-heading ()
+  "Separate a new LOGBOOK from a heading without a final newline."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-test:headline "a" "* A" "[[glance:b][B]]")
+      (org-glance-test:headline "b" "* B"))
+    (org-glance-test:with-material (_buffer graph "a")
+      (erase-buffer)
+      (insert "* A")
+      (org-glance-material--insert-relation-entries)
+      (should (string-prefix-p "* A\n:LOGBOOK:\n" (buffer-string)))
+      (should (org-glance-material--own-logbook)))))
 
 (ert-deftest org-glance-test:material-open-missing ()
   "Materializing an unknown id errors."

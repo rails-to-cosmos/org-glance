@@ -54,15 +54,21 @@ Inserting/killing a reference is an ordinary body edit: save → new content has
 → metadata recomputed — edges can never drift from content; atomic commit, WAL,
 compaction, reindex backfill all apply unchanged.
 
-** Material logbook projection
+** Material logbook entries
 
-Material buffers derive current outgoing and incoming relation entries in the
-root headline's =LOGBOOK= on open, revert and save.  Plain links use =Refers to=
+Material buffers append missing outgoing and incoming relation entries to the
+root headline's ordinary editable =LOGBOOK= on open and revert. Plain links use =Refers to=
 and =Referred by=; typed links capitalize =<type>=.  Each entry carries the
-current source snapshot's creation timestamp, except synthetic legacy roots.
-The projection is read-only and removed before every write, leaving the blob as
-the sole canonical edge source.  Incoming entries carry a plain =glance:= link
-so parsing the projection cannot reverse the source edge.
+source snapshot's creation timestamp at insertion, except synthetic legacy roots.
+Existing entries match by relation label and target, preserving edited link
+descriptions and timestamps. Additions mark the editor modified and participate
+in undo. Saving persists the text; log drawers remain excluded from derived
+link and relation metadata. Reference links use Org's normal fontification and
+navigation.
+
+The former overlay display in =src/view/org-glance-material.el=, function
+=org-glance-material--refresh-derived-relations=, is recorded in
+[[https://github.com/rails-to-cosmos/org-glance/commit/83e55dce79e004fd1ecfd75b4064afa2524c61ac][commit 83e55dc]].
 
 ** =@= in the material buffer
 

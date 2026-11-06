@@ -182,10 +182,7 @@ evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
     instance and one open pass.
 37. `org-glance-core` is a one-way base module and never requires top-level
     `org-glance.el`.
-38. Material relation logbook entries derive live on open, revert and save through display overlays, preserving authored text and undo. Plain
-    edges use `Refers to` / `Referred by`; typed edges capitalize `<type>`; each
-    entry carries its current source snapshot creation time, except legacy roots.
-    Reference display uses current target state and title; authored link bytes persist.
+38. Material LOGBOOK entries are ordinary editable text; open and revert append missing relation entries by label and target, preserving existing descriptions and timestamps; insertion participates in undo and save. Plain edges use `Refers to` / `Referred by`; typed edges capitalize `<type>`; new entries use source snapshot creation times, except legacy roots. Reference display uses current target state and title; authored link bytes persist.
 39. Immutable headline-version metadata carries a UUIDv7 id, logical headline id,
     kind, sorted parents, SHA-256 content digest, UTC creation time, and producer.
     Its compact JSON field order and trailing newline are canonical across Glance and

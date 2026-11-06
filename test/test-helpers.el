@@ -143,16 +143,6 @@ Negative SECONDS makes existing caches read fresh; positive, stale."
   (format "%s\n:PROPERTIES:\n:ORG_GLANCE_ID: %s\n:END:\n%s"
           heading id (if body (concat body "\n") "")))
 
-(defun org-glance-test:material-display ()
-  "Return authored text with its derived relation display inserted."
-  (let ((text (buffer-string))
-        (overlay org-glance-material--relation-overlay))
-    (if (not (overlayp overlay)) text
-      (let ((offset (- (overlay-start overlay) (point-min))))
-        (concat (substring text 0 offset)
-                (overlay-get overlay 'after-string)
-                (substring text offset))))))
-
 (cl-defmacro org-glance-test:with-material ((buffer graph id &rest opts) &rest body)
   "Materialize ID from GRAPH into BUFFER and run BODY there.
 OPTS pass to `org-glance-material:open'; exit explicitly discards BUFFER."
