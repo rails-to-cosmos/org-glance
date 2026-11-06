@@ -5,6 +5,12 @@ Notable user-facing changes.  Versions date-based
 
 * Unreleased
 
+* 1.57.2.0.20261106.0
+
+** Added
+
+- Graph startup offers to migrate retired Org settings and table layouts into =config.json=; declining uses defaults with a warning.
+
 * 1.57.1.0.20261105.0
 
 ** Changed

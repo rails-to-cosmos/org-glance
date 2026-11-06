@@ -12,14 +12,35 @@ and retired to private checksummed backups. Fourteen layouts and three PLAN
 scopes pass against the installed package. The headless daemon was restarted;
 graphical Emacs was not restarted. All three current agent roles are preserved.
 
-Fresh trees use production defaults and first saves publish only JSON. Legacy
-Org settings, layout ELD fallback and dedicated writers are removed. Native
+Fresh trees use production defaults and first saves publish only JSON. Retired
+Org settings and layouts offer a confirmed JSON import on interactive startup;
+decline and batch startup ignore them with one warning per session. Native
 context preserves declared TODO cycles; Overview uses bounded updates when its
 canonical context is unchanged. Normal background cache reconciliation remains
 configurable. Emacs 29/30 each pass 326 relevant cases; Emacs 31 passes 708 with
 four macOS-only skips. All 30 production modules compile without warnings on
 the three exercised runtimes. Exact large integers survive peer saves on Emacs
 29; checkpoint gzip works without optional native zlib.
+
+* Confirmed startup migration
+
+Absent JSON with retired inputs prompts once per tree per session. Confirmation
+imports system and tag workflows, tree settings, views, state colors and native
+table layouts through the shared revision-checked writer. Original files remain
+in place; existing JSON takes precedence and requires zero legacy enumeration.
+An absent system TODO declaration imports global Emacs TODO sequences with
+explicit inactive boundaries; declared legacy active-only cycles stay active.
+Decline, cancellation and batch startup use defaults and warn. Failed imports
+warn and use defaults, or adopt JSON published concurrently by another client.
+An unsaved JSON draft prevents migration publication.
+
+The former cold-open refusal in =src/data/org-glance-config.el=, function
+=org-glance-config:refresh=, is recorded in
+[[https://github.com/rails-to-cosmos/org-glance/commit/b8b6b9ed37e178548adfd8fa740e190474f8c5e2][commit b8b6b9e]].
+Import conversion lives in =src/data/org-glance-config-migrate.el=; layout
+validation reuses =org-glance-table-config:encode=. Unknown input files remain
+in place and produce a warning. Invalid, circular or multi-form layouts refuse
+import and leave JSON absent.
 
 * Cache configuration recovery
 

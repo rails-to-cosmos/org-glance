@@ -308,14 +308,199 @@
       (should-not (file-exists-p (expand-file-name ".org-glance/config" root)))
       (should (equal "* TODO Keep exact bytes\n" (f-read-text source 'utf-8-unix))))))
 
-(ert-deftest org-glance-settings-test-unmigrated-input-refuses-cold-open ()
-  "A retired settings file is retained while cold open refuses absent JSON."
+(ert-deftest org-glance-settings-test-unmigrated-input-decline-uses-defaults ()
+  "Declining migration retains retired inputs and warns once per session."
   (with-temp-directory root
-    (let ((legacy (expand-file-name ".org-glance/config/system.org" root)))
+    (let ((legacy (expand-file-name ".org-glance/config/system.org" root))
+          (org-glance-config--migration-offered (make-hash-table :test 'equal))
+          (noninteractive nil)
+          (prompts 0) (warnings 0))
       (org-glance-test:write legacy "#+TODO: PLAN | DONE\n")
-      (should-error (org-glance-graph root) :type 'org-glance-config-error)
+      (cl-letf (((symbol-function 'yes-or-no-p)
+                 (lambda (&rest _) (cl-incf prompts) nil))
+                ((symbol-function 'display-warning)
+                 (lambda (&rest _) (cl-incf warnings))))
+        (let ((graph (org-glance-graph root)))
+          (cl-letf (((symbol-function 'org-glance-config--retired-inputs-p)
+                     (lambda (&rest _) (ert-fail "Decline rescanned retired files"))))
+            (dotimes (_ 3) (org-glance-config:refresh graph)))
+          (should-not (org-glance-settings:cycles (org-glance-config:current graph)))
+          (should-not (org-glance-graph:-config-error graph))))
+      (should (= prompts 1))
+      (should (= warnings 1))
       (should-not (file-exists-p (org-glance-config-file:path root)))
       (should (equal "#+TODO: PLAN | DONE\n" (f-read-text legacy 'utf-8-unix))))))
+
+(ert-deftest org-glance-settings-test-unmigrated-batch-never-prompts ()
+  "Batch startup ignores retired settings with a warning and no stdin read."
+  (with-temp-directory root
+    (org-glance-test:write (expand-file-name ".org-glance/config/system.org" root)
+                          "#+TODO: PLAN | DONE\n")
+    (let ((noninteractive t) (warnings 0))
+      (cl-letf (((symbol-function 'yes-or-no-p)
+                 (lambda (&rest _) (ert-fail "Batch migration prompted")))
+                ((symbol-function 'display-warning)
+                 (lambda (&rest _) (cl-incf warnings))))
+        (should (org-glance-config:current (org-glance-graph root))))
+      (should (= warnings 1))
+      (should-not (file-exists-p (org-glance-config-file:path root))))))
+
+(ert-deftest org-glance-settings-test-unmigrated-prompt-failure-uses-defaults ()
+  "Cancellation or an unavailable prompt permits startup with a warning."
+  (dolist (condition '(quit error))
+    (with-temp-directory root
+      (org-glance-test:write (expand-file-name ".org-glance/config/system.org" root)
+                            "#+TODO: PLAN | DONE\n")
+      (let ((noninteractive nil) (warnings 0))
+        (cl-letf (((symbol-function 'yes-or-no-p)
+                   (lambda (&rest _) (signal condition nil)))
+                  ((symbol-function 'display-warning)
+                   (lambda (&rest _) (cl-incf warnings))))
+          (should (org-glance-config:current (org-glance-graph root))))
+        (should (= warnings 1))
+        (should-not (file-exists-p (org-glance-config-file:path root)))))))
+
+(ert-deftest org-glance-settings-test-unmigrated-input-confirm-imports ()
+  "Confirmed migration preserves workflows, layouts and original files."
+  (with-temp-directory root
+    (let* ((directory (expand-file-name ".org-glance/config" root))
+           (system (expand-file-name "system.org" directory))
+           (tag (expand-file-name "tags/book.org" directory))
+           (columns (expand-file-name "table-columns.eld" directory))
+           (views (expand-file-name "table-views.eld" directory))
+           (refs (expand-file-name "table-refs.eld" directory))
+           (noninteractive nil) (prompts 0))
+      (org-glance-test:write system
+       "#+TODO: PLAN(p) | FINISHED(f)\n#+GLANCE_HEADLINE_HISTORY_DEPTH: 0\n#+GLANCE_DEFAULT_FILTER: tag:book\n#+GLANCE_REPOSITORY_AUTOSYNC: yes\n#+GLANCE_STATE_COLORS: dark PLAN=#abcdef\n")
+      (org-glance-test:write tag
+       "#+TITLE: Books\n#+TODO: READING | READ\n* READING %?\n")
+      (org-glance-test:write columns
+       "((\"book\" :columns ((\"AUTHOR\" . \"Author\")) :hidden (\"State\")))")
+      (org-glance-test:write views
+       "((\"(:tags (book))\" :columns (\"Title\" \"State\") :sort ((\"Title\" . t)))) ; layout\n")
+      (org-glance-test:write refs
+       "((\"anchor/book\" :columns nil :hidden nil :order (\"Title\") :sort ((\"Title\")) :applied 12))")
+      (cl-letf (((symbol-function 'yes-or-no-p)
+                 (lambda (&rest _) (cl-incf prompts) t)))
+        (let* ((graph (org-glance-graph root))
+               (settings (org-glance-config:current graph))
+               (snapshot (org-glance-config:snapshot graph))
+               (book (cadr (assoc "book" (org-glance-settings:tags settings)))))
+          (should (org-glance-config-file:revision snapshot))
+          (should (equal '((("PLAN(p)") "FINISHED(f)")) (org-glance-settings:cycles settings)))
+          (should (= 0 (org-glance-graph--headline-history-depth graph)))
+          (should (eq t (gethash "repositoryAutosync" (org-glance-settings:tree settings))))
+          (should (equal "tag:book" (gethash "default" (org-glance-settings:views settings))))
+          (should (equal "#abcdef" (gethash "PLAN" (gethash "dark" (org-glance-settings:colors settings)))))
+          (should (equal "Books" (org-glance-tag-config:title book)))
+          (should (equal "* READING %?" (org-glance-tag-config:template book)))
+          (should (equal '(("book" :columns (("AUTHOR" . "Author")) :hidden ("State")))
+                         (org-glance-table-config:entries snapshot :section "tableColumns")))
+          (should (equal '(("(:tags (book))" :columns ("Title" "State") :sort (("Title" . t))))
+                         (org-glance-table-config:entries snapshot :section "tableViews")))
+          (should (equal '(("anchor/book" :columns nil :hidden nil :order ("Title")
+                             :sort (("Title")) :applied 12))
+                         (org-glance-table-config:entries snapshot :section "tableRefs")))
+          (org-glance-config:refresh graph)))
+      (should (= 1 prompts))
+      (dolist (file (list system tag columns views refs)) (should (file-exists-p file))))))
+
+(ert-deftest org-glance-settings-test-unmigrated-invalid-input-warns-and-defaults ()
+  "An import failure retains every input and permits startup with defaults."
+  (dolist (text '("((\"book\" :hidden (\"State\"))) (message \"extra\")"
+                  "((\"book\" :hidden (\"State\"))) ("
+                  "#1=(#1#)"))
+    (with-temp-directory root
+      (let ((noninteractive nil) (warnings 0)
+            (file (expand-file-name ".org-glance/config/table-columns.eld" root)))
+        (org-glance-test:write file text)
+        (cl-letf (((symbol-function 'yes-or-no-p) (lambda (&rest _) t))
+                  ((symbol-function 'display-warning)
+                   (lambda (&rest _) (cl-incf warnings))))
+          (should (org-glance-config:current (org-glance-graph root))))
+        (should (= warnings 1))
+        (should-not (file-exists-p (org-glance-config-file:path root)))
+        (should (equal text (f-read-text file 'utf-8-unix)))))))
+
+(ert-deftest org-glance-settings-test-migration-keeps-peer-json ()
+  "A JSON publication during confirmation takes precedence over migration."
+  (with-temp-directory root
+    (let ((noninteractive nil) (warnings 0)
+          (json "{\"format\":1,\"todoCycles\":[{\"active\":[\"PEER\"]}]}"))
+      (org-glance-test:write (expand-file-name ".org-glance/config/system.org" root)
+                            "#+TODO: OLD | DONE\n")
+      (cl-letf (((symbol-function 'yes-or-no-p)
+                 (lambda (&rest _)
+                   (org-glance-test:write (org-glance-config-file:path root) json) t))
+                ((symbol-function 'display-warning)
+                 (lambda (&rest _) (cl-incf warnings))))
+        (let ((settings (org-glance-config:current (org-glance-graph root))))
+          (should (equal '((("PEER"))) (org-glance-settings:cycles settings)))))
+      (should (= warnings 1))
+      (should (equal json (f-read-text (org-glance-config-file:path root) 'utf-8-unix))))))
+
+(ert-deftest org-glance-settings-test-migration-preserves-emacs-fallback ()
+  "Import global Emacs sequences and active-only tag cycles with their meaning."
+  (with-temp-directory root
+    (let ((noninteractive nil)
+          (org-todo-keywords '((sequence "WAIT(w)" "END(e)"))))
+      (org-glance-test:write (expand-file-name ".org-glance/config/tags/project.org" root)
+       "#+begin_src org\n#+TODO: FAKE | NO\n,* Fake template\n#+end_src\n#+TODO: PLAN\n* %?\n")
+      (cl-letf (((symbol-function 'yes-or-no-p) (lambda (&rest _) t)))
+        (let* ((settings (org-glance-config:current (org-glance-graph root)))
+               (entry (assoc "project" (org-glance-settings:tags settings))))
+          (should (equal '((("WAIT(w)") "END(e)")) (org-glance-settings:cycles settings)))
+          (should (equal '((("PLAN"))) (nth 2 entry)))
+          (should (equal "* %?" (org-glance-tag-config:template (cadr entry)))))))))
+
+(ert-deftest org-glance-settings-test-migration-keeps-unsaved-json-draft ()
+  "A dirty JSON draft prevents migration publication and remains editable."
+  (with-temp-directory root
+    (org-glance-test:write (expand-file-name ".org-glance/config/system.org" root)
+                          "#+TODO: PLAN | DONE\n")
+    (with-temp-buffer
+      (setq buffer-file-name (org-glance-config-file:path root))
+      (insert "Unfinished JSON draft")
+      (let ((noninteractive nil) (warnings 0))
+        (cl-letf (((symbol-function 'yes-or-no-p) (lambda (&rest _) t))
+                  ((symbol-function 'display-warning)
+                   (lambda (&rest _) (cl-incf warnings))))
+          (should (org-glance-config:current (org-glance-graph root))))
+        (should (= warnings 1))
+        (should-not (file-exists-p buffer-file-name))
+        (should (buffer-modified-p))
+        (should (equal "Unfinished JSON draft" (buffer-string)))))))
+
+(ert-deftest org-glance-settings-test-migration-refuses-linked-inputs ()
+  "A linked retired input remains untouched and falls back to defaults."
+  (with-temp-directory root
+    (let ((file (expand-file-name "outside.org" root))
+          (link (expand-file-name ".org-glance/config/system.org" root))
+          (noninteractive nil) (warnings 0))
+      (org-glance-test:write file "#+TODO: OUTSIDE | DONE\n")
+      (make-directory (file-name-directory link) t)
+      (make-symbolic-link file link)
+      (cl-letf (((symbol-function 'yes-or-no-p) (lambda (&rest _) t))
+                ((symbol-function 'display-warning)
+                 (lambda (&rest _) (cl-incf warnings))))
+        (should (org-glance-config:current (org-glance-graph root))))
+      (should (= warnings 1))
+      (should (file-symlink-p link))
+      (should-not (file-exists-p (org-glance-config-file:path root))))))
+
+(ert-deftest org-glance-settings-test-json-authority-skips-migration-work ()
+  "Published JSON avoids legacy enumeration, parsing and prompts on refresh."
+  (with-temp-directory root
+    (org-glance-test:write (org-glance-config-file:path root) "{\"format\":1}")
+    (org-glance-test:write (expand-file-name ".org-glance/config/system.org" root)
+                          "#+TODO: IGNORED | DONE\n")
+    (cl-letf (((symbol-function 'org-glance-config--retired-inputs-p)
+               (lambda (&rest _) (ert-fail "JSON refresh enumerated retired settings")))
+              ((symbol-function 'yes-or-no-p)
+               (lambda (&rest _) (ert-fail "JSON refresh prompted for migration"))))
+      (let ((graph (org-glance-graph root)))
+        (dotimes (_ 20) (org-glance-config:refresh graph))
+        (should-not (org-glance-settings:cycles (org-glance-config:current graph)))))))
 
 (provide 'test-settings)
 ;;; test-settings.el ends here

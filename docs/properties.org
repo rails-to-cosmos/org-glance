@@ -37,10 +37,9 @@ Set in a headline's =:PROPERTIES:= drawer.
 
 * TODO configuration
 
-On the legacy path, =<store>/config/system.org= supplies the graph-wide =#+TODO:= sequence.
-Each applicable =config/tags/<tag>.org= adds a separate =#+TODO:= sequence after it.
-Overview comments before each sequence name every contributing config file.
-Overviews, captures, material buffers and state pickers read the same sequences.
+Confirmed startup migration reads =config/system.org= and =config/tags/<tag>.org=
+through =org-glance-config-migrate--org= and writes their TODO sequences, titles
+and templates to =config.json=. Runtime readers use JSON and source declarations.
 
 JSON-present trees resolve TODO context from shared settings and source
 declarations. Native Overview emits compatible resolved sequences from cached
@@ -122,10 +121,27 @@ Org link types org-glance registers; all follow with the ordinary =C-c C-o=.
   Active-only legacy sequences use the shared default inactive keywords in
   generated Org presentation; configuration and Snapshot source stay exact.
 - =#+GLANCE_HEADLINE_HISTORY_DEPTH:= — the number of immutable generations
-  retained after a successful graph write.  It lives in =config/system.org=,
-  defaults to =10=, and =0= keeps unlimited history.  Retention leaves a
-  concurrent-leaf family unchanged and is read by
-  =org-glance-graph--headline-history-depth=.
+  projected after a successful graph write; migration reads it from
+  =config/system.org= into =tree.headlineHistoryDepth=, read by
+  =org-glance-graph--headline-history-depth=; default =10=, =0= exposes all history.
+
+* Retired settings import
+
+=org-glance-config-migrate--system= reads the following legacy keywords only
+after confirmation and sets their JSON equivalents; =org-glance-config:decode=
+reads the resulting JSON. Existing JSON skips legacy inputs entirely.
+
+- =#+GLANCE_INBOX_TAG:= sets =tree.inboxTag=.
+- =#+GLANCE_REPOSITORY_AUTOSYNC:= sets =tree.repositoryAutosync=.
+- =#+GLANCE_REPOSITORY_REMOTE:= sets =tree.repositoryRemote=.
+- =#+GLANCE_GOOGLE_OAUTH_CLIENT_ID:= sets =tree.googleOAuthClientId=.
+- =#+GLANCE_DEFAULT_AGENT:= sets =tree.defaultAgent=.
+- =#+GLANCE_DEFAULT_FILTER:= sets =views.default=.
+- =#+GLANCE_AGENDA_FILTER:= sets =views.agenda=.
+- =#+GLANCE_ARCHIVE_FILTER:= sets =views.archive=.
+- =#+GLANCE_NOTIFICATIONS_FILTER:= sets =views.notifications=.
+- =#+GLANCE_STATE_COLORS:= sets =stateColors= by theme from =STATE=COLOR= pairs.
+- =#+GLANCE_STORAGE:= in tag files sets =tags.<tag>.storage= through =org-glance-config-migrate--org=.
 
 * Crypt blocks and materialization
 

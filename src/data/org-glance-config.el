@@ -3,6 +3,11 @@
 (require 'org-glance-config-file)
 (require 'org-glance-tag-config)
 
+(declare-function org-glance-config-migrate:import "org-glance-config-migrate")
+
+(defvar org-glance-config--migration-offered (make-hash-table :test 'equal)
+  "Directories already offered retired settings migration this session.")
+
 (cl-defstruct (org-glance-settings (:constructor org-glance-settings--make)
                                    (:conc-name org-glance-settings:))
   tree cycles template tags storage views colors diagnostics)
@@ -551,6 +556,33 @@ TAGS may be a function reading the current buffer's tag names."
     (let ((directory (expand-file-name ".org-glance/config" root)))
       (and (file-directory-p directory) (input-p directory)))))
 
+(defun org-glance-config--offer-migration (root snapshot)
+  "Offer ROOT's retired settings migration once and return a JSON SNAPSHOT.
+Warn and retain SNAPSHOT on decline or batch startup."
+  (if (or (org-glance-config-file:revision snapshot)
+          (gethash root org-glance-config--migration-offered)
+          (not (org-glance-config--retired-inputs-p root)))
+      snapshot
+    (puthash root t org-glance-config--migration-offered)
+    (if (and (not noninteractive)
+             (condition-case nil
+                 (yes-or-no-p
+                  (format "Migrate retired settings in %s to config.json (keep originals)? " root))
+               ((error quit) nil)))
+        (condition-case err
+            (progn
+              (require 'org-glance-config-migrate)
+              (org-glance-config-migrate:import root))
+          (error
+           (display-warning
+            'org-glance
+            (format "Settings migration failed: %s; retired settings ignored"
+                    (error-message-string err)))
+           (org-glance-config-file:read root)))
+      (display-warning
+       'org-glance "Retired settings ignored; using config.json defaults")
+      snapshot)))
+
 (defun org-glance-config:refresh (graph &optional saved)
   "Observe GRAPH's JSON configuration and publish a valid coherent reload.
 Cold errors signal.  Reload errors retain the last good settings and warn.
@@ -565,11 +597,8 @@ reading and matching its exact byte revision."
                               (org-glance-graph:directory graph) (car saved))
                            (org-glance-config-file:read
                             (org-glance-graph:directory graph))))
-               (_ (when (and (null (org-glance-config-file:revision snapshot))
-                             (org-glance-config--retired-inputs-p
-                              (org-glance-graph:directory graph)))
-                    (org-glance-config--error
-                     "Retired settings remain; migrate .org-glance/config to config.json")))
+               (snapshot (org-glance-config--offer-migration
+                          (org-glance-graph:directory graph) snapshot))
                (unchanged (and previous (not (eq previous :unread))
                                (equal (and previous (org-glance-config-file:revision
                                                      (org-glance-config--observation-snapshot previous)))
