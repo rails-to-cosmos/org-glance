@@ -802,16 +802,19 @@ today, up from 50.
     Pinned by =shared-cache-inventory-finds-a-relay-free-snapshot= and
     =shared-cache-commit-failure-reaches-the-writer=.
 
-42. *Automatic family reconciliation does not enter interactive reads.*  Graph
+42. *Compatible cache reads remain passive.*  Graph
     open and the coordinator timer queue one batch Emacs process per graph.
     Startup does not consume the first post-open request; steady-state requests
-    are limited to one per minute. Cache-backed UI and compatibility-WAL reads
+    are limited to one per minute. Compatible cache-backed UI and compatibility-WAL reads
     serve their committed generations without surveying relay files,
     requesting maintenance, or entering a census, History fold, cache
     transaction, or cooperative-yield mode. Local publication remains a
     synchronous commit boundary. Explicit cache refresh and inventory
     reconciliation remain synchronous maintenance operations. Failed workers
-    consume the refresh interval before every automatic retry. Pinned by
+    consume the refresh interval before every automatic retry.
+    A configuration mismatch closes the reader, waits for its active worker, refreshes settings, reconciles once and retries a fresh snapshot; nested repair refuses and failure names =org-glance-reindex=.
+    Timer work for that graph waits until the synchronous repair leaves; compatible worker publications prevent duplicate rebuilds.
+    Pinned by
     =graph-open-queues-cache-refresh-off-caller-thread=,
     =cache-refresh-async-uses-an-isolated-emacs-process=,
     =cache-refresh-batch-does-not-queue-another-worker=,
@@ -825,6 +828,11 @@ today, up from 50.
     =warm-proof-requires-a-coherent-cache-generation=,
     =warm-proof-requires-an-org-glance-family-projection=,
     =headline-read-never-enters-reconciliation=,
+    =org-glance-config-test-peer-generation-reconciles-on-read=,
+    =org-glance-config-test-read-repair-refreshes-settings-after-closing-reader=,
+    =org-glance-config-test-read-repair-reuses-active-worker=,
+    =org-glance-config-test-read-repair-prevents-recursion=,
+    =org-glance-config-test-read-repair-failure-has-an-action=,
     =cache-refresh-never-yields-on-the-caller-thread= and
     =explicit-refresh-detects-after-nonblocking-read=.
     Enforced by

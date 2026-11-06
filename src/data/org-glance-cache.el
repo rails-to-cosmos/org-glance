@@ -22,6 +22,12 @@
 (require 'org-glance-filter)
 (require 'org-glance-version)
 
+(define-error 'org-glance-cache-configuration-stale
+  "Cached rows require configuration reconciliation")
+
+(defvar org-glance-cache--configuration-repairs nil
+  "Graphs whose configuration dependencies are being repaired synchronously.")
+
 (defconst org-glance-cache:version 10
   "Private org-glance cache schema version.")
 
@@ -177,7 +183,30 @@
         (when db (sqlite-close db))))))
 
 (cl-defun org-glance-cache--read-db (graph fn &optional configuration-independent)
-  "Call FN against GRAPH's last committed cache without taking a write lock."
+  "Call FN against GRAPH's committed cache, repairing stale configuration once.
+Close the stale read before repair and retry in a fresh pinned snapshot.
+CONFIGURATION-INDEPENDENT bypasses dependency checks for maintenance reads."
+  (condition-case nil
+      (org-glance-cache--read-db-once graph fn configuration-independent)
+    (org-glance-cache-configuration-stale
+     (when (or org-glance-cache--staging-path
+               (memq graph org-glance-cache--configuration-repairs))
+       (signal 'org-glance-cache-configuration-stale nil))
+     (let ((org-glance-cache--configuration-repairs
+            (cons graph org-glance-cache--configuration-repairs)))
+       (message "org-glance: reconciling cache configuration; waiting for current rows...")
+       (condition-case err
+           (org-glance-cache--repair-configuration graph)
+         (error
+          (user-error "Automatic cache reconciliation failed: %s; run M-x org-glance-reindex and retry"
+                      (error-message-string err))))
+       (condition-case nil
+           (org-glance-cache--read-db-once graph fn configuration-independent)
+         (org-glance-cache-configuration-stale
+          (user-error "Cache configuration changed again; run M-x org-glance-reindex and retry")))))))
+
+(cl-defun org-glance-cache--read-db-once (graph fn configuration-independent)
+  "Call FN in GRAPH's pinned read, respecting CONFIGURATION-INDEPENDENT."
   (let ((path (org-glance-cache:path graph)))
     (when (and (sqlite-available-p) (file-exists-p path))
       (let ((db (sqlite-open path)))
@@ -194,7 +223,7 @@
                              (held (sqlite-select db "SELECT format,fingerprint FROM configuration_dependency WHERE singleton=1")))
                         (when (and (or key (and held (not (equal "" (cadar held)))))
                                    (not (equal held (list (list 1 (or key ""))))))
-                          (error "org-glance: cached Rows require configuration reconciliation"))))
+                          (signal 'org-glance-cache-configuration-stale nil))))
                     (funcall fn db))
                 (sqlite-commit db)))
           (sqlite-close db))))))
@@ -710,6 +739,20 @@
   "Return non-nil when GRAPH's committed cache uses its current configuration."
   (org-glance-cache--read-db
    graph (apply-partially #'org-glance-cache--configuration-current-on-db graph) t))
+
+(cl-defun org-glance-cache--repair-configuration (graph)
+  "Wait for GRAPH's active worker, refresh settings and repair stale rows."
+  (let ((active (gethash graph org-glance-cache--refresh-processes)))
+    (when (processp active)
+      (while (process-live-p active)
+        (accept-process-output active 0.1))))
+  (org-glance-config:refresh graph)
+  (unless (org-glance-cache--configuration-current-p graph)
+    (condition-case err
+        (org-glance-cache:reconcile-inventory graph t)
+      (error
+       (unless (org-glance-cache--configuration-current-p graph)
+         (signal (car err) (cdr err)))))))
 
 (cl-defun org-glance-cache--inventory-proof-current-p (graph)
   "Return non-nil when GRAPH's last directory-entry proof remains current."
@@ -1440,7 +1483,8 @@ Return the number of families folded."
 INITIAL queues startup work without consuming the first post-open refresh."
   (let ((active (gethash graph org-glance-cache--refresh-processes))
         (now (float-time)))
-    (unless (or (and (processp active) (process-live-p active))
+    (unless (or (memq graph org-glance-cache--configuration-repairs)
+                (and (processp active) (process-live-p active))
                 (< (- now
                       (gethash graph org-glance-cache--refresh-failed-at
                                most-negative-fixnum))
@@ -1496,7 +1540,8 @@ INITIAL queues startup work without consuming the first post-open refresh."
   (maphash
    (lambda (_directory graph)
      (condition-case err
-         (when (file-directory-p (org-glance-graph:directory graph))
+         (when (and (not (memq graph org-glance-cache--configuration-repairs))
+                    (file-directory-p (org-glance-graph:directory graph)))
            (org-glance-config:refresh graph)
            (org-glance-cache:refresh-async
             graph (org-glance-graph--external-pending-p graph)))

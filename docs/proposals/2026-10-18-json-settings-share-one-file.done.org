@@ -47,7 +47,16 @@ import and leave JSON absent.
 An existing cache with an empty, missing or obsolete configuration dependency
 requires a complete family reconciliation before notification folding can read
 Rows. =org-glance-cache:refresh-batch= performs that repair first; a current
-dependency retains notification-first ordering. Foreground reads remain passive.
+dependency retains notification-first ordering. Compatible foreground reads
+remain passive. A configuration mismatch closes the read, waits for an active
+worker, observes current JSON and repairs the dependency before retrying once.
+This exceptional read can wait for a complete census. A worker publication
+already using the observed settings avoids another rebuild. Failed repair
+names =org-glance-reindex= as a recovery action.
+
+The former foreground refusal in =src/data/org-glance-cache.el=, function
+=org-glance-cache--read-db=, is recorded in
+[[https://github.com/rails-to-cosmos/org-glance/commit/f423c7db142c595d974e87c2d5ed96033f7674bc][commit f423c7d]].
 
 The previous worker order in =src/data/org-glance-cache.el=, function
 =org-glance-cache:refresh-batch=, is recorded in

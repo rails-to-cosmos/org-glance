@@ -4,6 +4,7 @@
 (require 'org-glance-tag-config)
 
 (declare-function org-glance-config-migrate:import "org-glance-config-migrate")
+(declare-function org-glance-cache--configuration-current-p "org-glance-cache")
 
 (defvar org-glance-config--migration-offered (make-hash-table :test 'equal)
   "Directories already offered retired settings migration this session.")
@@ -619,7 +620,8 @@ reading and matching its exact byte revision."
             (when (and (not (eq previous :unread))
                        (fboundp 'org-glance-cache:reconcile-inventory)
                        (file-exists-p (org-glance-cache:path graph))
-                       (not (equal old-key (org-glance-config:cache-key graph))))
+                       (not (equal old-key (org-glance-config:cache-key graph)))
+                       (not (org-glance-cache--configuration-current-p graph)))
               (org-glance-cache:reconcile-inventory graph t))
             (when next
               (dolist (diagnostic (org-glance-settings:diagnostics settings))

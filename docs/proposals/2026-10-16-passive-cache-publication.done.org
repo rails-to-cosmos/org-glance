@@ -16,8 +16,14 @@ second producer database is required.
 
 * Implementation
 
-- =org-glance-cache--read-db= is query-only and snapshot-pinned. A newly created
+- =org-glance-cache--read-db-once= is query-only and snapshot-pinned. A newly created
   live file with no published compatible schema returns empty recovery reads.
+- =org-glance-cache--read-db= closes a configuration-incompatible reader, repairs
+  the dependency and retries once in a fresh snapshot; compatible reads retain
+  their passive path. An active worker finishes first, and its compatible
+  publication supplies the retry without a second rebuild. Timer work for the
+  same graph waits until synchronous repair leaves. Failure names
+  =org-glance-reindex=; staging reads and nested repairs refuse recursion.
 - Incremental headline and family projection prepare SQL values before the
   live transaction. Retained-event guards remain inside publication.
 - Bulk refresh and reconciliation use a clone. Integrity, foreign keys,

@@ -176,17 +176,140 @@
         (org-set-regexps-and-options)
         (should (equal before (buffer-string)))))))
 
-(ert-deftest org-glance-config-test-peer-generation-requires-reconciliation ()
+(defun org-glance-config-test--cache-dependency (graph fingerprint)
+  "Replace GRAPH's cached FINGERPRINT, deleting its receipt when nil."
+  (let ((db (sqlite-open (org-glance-cache:path graph))))
+    (unwind-protect
+        (if fingerprint
+            (sqlite-execute db "UPDATE configuration_dependency SET fingerprint=?"
+                            (vector fingerprint))
+          (sqlite-execute db "DELETE FROM configuration_dependency"))
+      (sqlite-close db))))
+
+(ert-deftest org-glance-config-test-peer-generation-reconciles-on-read ()
+  "Read every row after one automatic repair of an incompatible dependency."
+  (dolist (fingerprint '("" "peer" nil))
+    (org-glance-test:with-graph graph
+      (org-glance-graph:add graph (org-glance-test:headline "cached" "* TODO Cached"))
+      (org-glance-cache:reconcile-inventory graph t)
+      (org-glance-config-test--cache-dependency graph fingerprint)
+      (let ((repairs 0)
+            (reconcile (symbol-function 'org-glance-cache:reconcile-inventory)))
+        (cl-letf (((symbol-function 'org-glance-cache:reconcile-inventory)
+                   (lambda (&rest args) (cl-incf repairs) (apply reconcile args))))
+          (dotimes (_ 2)
+            (let ((rows (org-glance-cache:headlines graph)))
+              (should (= 1 (length rows)))
+              (should (equal "Cached" (org-glance-headline-metadata:title (car rows)))))))
+        (should (= 1 repairs)))
+      (should (org-glance-cache--configuration-current-p graph)))))
+
+(ert-deftest org-glance-config-test-read-repair-refreshes-settings-after-closing-reader ()
+  "Reparse with current settings after closing the failed reader exactly once."
   (org-glance-test:with-graph graph
-    (org-glance-config-test--publish graph "{\"format\":1}")
+    (org-glance-graph:add graph (org-glance-test:headline "cached" "* PLAN Title"))
     (org-glance-cache:reconcile-inventory graph t)
-    (let ((db (sqlite-open (org-glance-cache:path graph))))
+    (org-glance-config-test--cache-dependency graph "peer")
+    (org-glance-test:write (org-glance-config-file:path dir)
+     "{\"format\":1,\"todoCycles\":[{\"active\":[\"PLAN\"]}]}")
+    (let ((open (symbol-function 'sqlite-open))
+          (reconcile (symbol-function 'org-glance-cache:reconcile-inventory))
+          held-db (repairs 0))
+      (cl-letf (((symbol-function 'sqlite-open)
+                 (lambda (&rest args)
+                   (let ((db (apply open args)))
+                     (unless held-db (setq held-db db)) db)))
+                ((symbol-function 'make-process)
+                 (lambda (&rest _) (ert-fail "Repair spawned a competing worker")))
+                ((symbol-function 'org-glance-cache:reconcile-inventory)
+                 (lambda (&rest args)
+                   (cl-incf repairs)
+                   (should-error (sqlite-select held-db "SELECT 1"))
+                   (org-glance-cache:refresh-async graph t)
+                   (org-glance-cache--inventory-tick)
+                   (apply reconcile args))))
+        (let ((row (org-glance-cache:headline graph "cached")))
+          (should (equal "Title" (org-glance-headline-metadata:title row)))
+          (should (equal "PLAN" (org-glance-headline-metadata:state row)))))
+      (should (= 1 repairs)))))
+
+(ert-deftest org-glance-config-test-read-repair-failure-has-an-action ()
+  "Bound repair attempts and retain a manual action when recovery fails."
+  (dolist (failure '(nil t))
+    (org-glance-test:with-graph graph
+      (org-glance-cache:reconcile-inventory graph t)
+      (org-glance-config-test--cache-dependency graph "peer")
+      (let ((repairs 0))
+        (cl-letf (((symbol-function 'org-glance-cache:reconcile-inventory)
+                   (lambda (&rest _)
+                     (cl-incf repairs)
+                     (when failure (error "Source changed")))))
+          (let ((error (should-error
+                        (org-glance-cache--read-db
+                         graph (lambda (_) (ert-fail "Read incompatible rows")))
+                        :type 'user-error)))
+            (should (string-match-p "M-x org-glance-reindex" (error-message-string error)))
+            (when failure
+              (should (string-match-p "Source changed" (error-message-string error))))))
+        (should (= 1 repairs)))
+      (should-not (memq graph org-glance-cache--configuration-repairs))
+      (should-not (org-glance-cache--configuration-current-p graph))
+      (should-not (org-glance-cache:headlines graph))
+      (should (org-glance-cache--configuration-current-p graph)))))
+
+(ert-deftest org-glance-config-test-read-repair-reuses-active-worker ()
+  "Wait for an active worker and adopt its settings without a second rebuild."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "cached" "* PLAN Title"))
+    (org-glance-cache:reconcile-inventory graph t)
+    (org-glance-config-test--cache-dependency graph "peer")
+    (org-glance-test:write (org-glance-config-file:path dir)
+     "{\"format\":1,\"todoCycles\":[{\"active\":[\"PLAN\"]}]}")
+    (let* ((org-glance-cache--refresh-processes (make-hash-table :test #'eq))
+           (buffer (generate-new-buffer " *org-glance-config-worker-test*"))
+           (process (make-process
+                     :name "org-glance-config-worker-test" :buffer buffer
+                     :command (org-glance-cache--worker-command graph)
+                     :connection-type 'pipe :noquery t :sentinel #'ignore)))
+      (puthash graph process org-glance-cache--refresh-processes)
       (unwind-protect
-          (sqlite-execute db "UPDATE configuration_dependency SET fingerprint='peer'")
-        (sqlite-close db)))
-    (should-error (org-glance-cache:headlines graph))
-    (org-glance-cache:reconcile-inventory graph)
-    (should (org-glance-cache--configuration-current-p graph))))
+          (cl-letf (((symbol-function 'org-glance-cache:reconcile-inventory)
+                     (lambda (&rest _) (ert-fail "Read duplicated the worker rebuild"))))
+            (let ((row (org-glance-cache:headline graph "cached")))
+              (should (equal "PLAN" (org-glance-headline-metadata:state row)))
+              (should (equal "Title" (org-glance-headline-metadata:title row))))
+            (should (= 0 (process-exit-status process)))
+            (should (org-glance-cache--configuration-current-p graph)))
+        (when (process-live-p process) (delete-process process))
+        (kill-buffer buffer)))))
+
+(ert-deftest org-glance-config-test-read-repair-prevents-recursion ()
+  "Refuse nested repairs and stale staging reads before starting maintenance."
+  (org-glance-test:with-graph graph
+    (org-glance-cache:reconcile-inventory graph t)
+    (org-glance-config-test--cache-dependency graph "peer")
+    (cl-letf (((symbol-function 'org-glance-cache:reconcile-inventory)
+               (lambda (&rest _) (ert-fail "Nested read started a rebuild"))))
+      (let ((org-glance-cache--configuration-repairs (list graph)))
+        (should-error (org-glance-cache:headlines graph)
+                      :type 'org-glance-cache-configuration-stale))
+      (let ((org-glance-cache--staging-path (org-glance-cache:path graph)))
+        (should-error (org-glance-cache:headlines graph)
+                      :type 'org-glance-cache-configuration-stale)))))
+
+(ert-deftest org-glance-config-test-read-repair-adopts-a-winning-publication ()
+  "A compatible competing publication permits the read after a lost build."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "cached" "* TODO Cached"))
+    (org-glance-cache:reconcile-inventory graph t)
+    (org-glance-config-test--cache-dependency graph "peer")
+    (let ((reconcile (symbol-function 'org-glance-cache:reconcile-inventory)))
+      (cl-letf (((symbol-function 'org-glance-cache:reconcile-inventory)
+                 (lambda (&rest args)
+                   (apply reconcile args)
+                   (error "Live generation changed before publication"))))
+        (should (equal "Cached" (org-glance-headline-metadata:title
+                                 (org-glance-cache:headline graph "cached"))))))))
 
 (ert-deftest org-glance-config-test-worker-repairs-dependency-before-relay ()
   "Repair stale dependencies before folding a pending external Snapshot."
@@ -213,7 +336,7 @@
                    (vector fingerprint))
                 (sqlite-execute db "DELETE FROM configuration_dependency"))
             (sqlite-close db)))
-        (should-error (org-glance-cache:headlines graph))
+        (should-not (org-glance-cache--configuration-current-p graph))
         (org-glance-cache:refresh-batch (org-glance-graph:directory graph))
         (should (org-glance-cache--configuration-current-p graph))
         (should (equal "Updated"
@@ -233,8 +356,7 @@
           (sqlite-close db)))
       (org-glance-cache:reconcile-families graph (list id))
       (should-not (org-glance-cache--configuration-current-p graph))
-      (should-error (org-glance-cache:headlines graph))
-      (org-glance-cache:reconcile-inventory graph)
+      (should (= 1 (length (org-glance-cache:headlines graph))))
       (should (org-glance-cache--configuration-current-p graph)))))
 
 (ert-deftest org-glance-config-test-publication-rejects-changed-json-revision ()
