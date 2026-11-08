@@ -125,6 +125,9 @@ Newest first.
 
 Each is part of the [[file:proposals/2026-07-06-performance-audit.org][performance audit]].
 
+- [[file:proposals/2026-11-08-performance-gate-measures-the-live-path.proposed.org][The performance gate measures the path the UI runs]] — =get-headline= reads
+  one id instead of scanning the whole cache; every bench harness gets a runner
+  and a synthetic store, and the gate names its failing arm.
 - [[file:proposals/2026-07-06-lazy-property-columns.proposed.org][Lazy value-fn for custom property columns]] — parse only visible rows for a
   displayed property column.
 - [[file:proposals/2026-07-06-table-paging.proposed.org][Table paging / windowing]] — render a screen-sized page at a time.

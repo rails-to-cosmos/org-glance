@@ -1,0 +1,224 @@
+#+TITLE: The performance gate measures the path the UI runs
+#+DATE: 2026-11-08
+
+Status: *proposed*.
+
+Part of the [[file:2026-07-06-performance-audit.org][performance audit]].  A review of the
+measurement setup — harnesses, in-suite contracts, =org-glance-perf-mode= and the
+=CLAUDE.md= commit gate — found one O(N²) read on a public API, and six gaps in the
+setup that let it print its own regression unnoticed.
+
+* Problem
+
+** A point read costs a full cache scan
+
+=org-glance-graph:get-headline=
+([[https://github.com/rails-to-cosmos/org-glance/commit/39ac2bc12337e6acaa30b1f6ef8149c54b1fc394][39ac2bc]],
+=src/data/org-glance-graph.el= lines 914-945) calls =org-glance-cache:authority=
+once per id.  Authority
+([[https://github.com/rails-to-cosmos/org-glance/commit/39ac2bc12337e6acaa30b1f6ef8149c54b1fc394][39ac2bc]],
+=src/data/org-glance-cache.el= lines 1999-2019) is uncached: two full-table
+=SELECT=s, =--decode-metadata= on *every* projection Row, then =assoc= and
+=cl-remove-if-not= over the two returned lists.  A loop over ids is =O(N²)=.
+
+Linux, Emacs 31.1, synthetic graphs from =org-glance-test:with-graph=, 100 random
+ids per size and 100 authority calls:
+
+| N   | =get-headline= ms/call | of which =authority= | =cache:headline= ms/call |
+|-----+------------------------+----------------------+--------------------------|
+| 200 |                   4.52 |                 3.80 |                    0.132 |
+| 400 |                   9.40 |                 8.98 |                    0.221 |
+| 800 |                  22.49 |                20.74 |                    0.204 |
+
+Authority is 84-92% of the call.  The indexed-shape point read
+=org-glance-cache:headline= is flat at this scale and ~100× cheaper at N = 800.
+
+=org-glance-graph:live-meta= prefers =org-glance-cache:headline= when the cache
+module is loaded, which is always in the shipped package, so the UI mostly
+escapes.  =get-headline= remains the public tri-state API named by invariant 30,
+reachable by plugins (invariant 26) and used by =graph--tombstone-spec=.
+=org-glance-graph:headlines= calls authority once and folds into hash tables,
+which is the correct shape.
+
+Second-order: both reads scan.  =headline_projection= carries one partial index,
+=(logical_id) WHERE event_id IS NULL=, which neither =WHERE logical_id=? AND role
+IN (…)= nor the computed predicate =WHERE logical_id || '/' || event_id=?= can
+use; an expression predicate is unindexable as written.  What separates the two
+readers today is the elisp-side decode of every Row, not the SQL.
+
+** The wired-up benchmark measures the compatibility path
+
+=eask bench= / =make bench= runs =test/bench-graph.el= alone, and its headline Row
+times =graph:get-headline= — the WAL/authority reader invariant 35 keeps "until
+the coordinated stage-5 cutover" — rather than the committed SQLite read the UI
+performs.  Its =warm get-by-id x1000= Row prints 18,984.0 ms for 1,000 lookups on
+a 1,000-headline graph.
+
+No bench-graph number is recorded in =docs/= or =CHANGELOG.org=, so that Row is
+indistinguishable from a healthy run.  The three harnesses that *do* carry
+recorded baselines in [[file:../invariants.org][invariants.org]] — material, interactive, clipboard — are
+the three with no runner.
+
+** Three of four elisp harnesses have no runner
+
+- =test/bench-material.el= — =invariants.org= line 979 records what it reports and
+  never how to run it.
+- =test/bench-interactive.el= — one hand-written =eask emacs --batch= incantation,
+  =docs/guide.org= line 416.
+- =test/bench-cache-readers.el= — nothing.
+
+The commit gate asks for "the applicable performance contract for each changed
+behavior"; three of its four commands are undiscoverable.
+
+** Two harnesses run only against one private store
+
+=bench-interactive= and =bench-cache-readers= take a directory.  The documented
+call names =~/sync/views= (7,157 Rows) in a public repository, and
+=invariants.org= line 1006 keys its numbers to that store.  No second machine and
+no container reproduces them.  =bench-graph= already generates synthetic
+headlines.
+
+** Frozen A/B arms rot
+
+=bench-interactive.el= embeds =--reference-candidates=, a reimplementation of the
+superseded label algorithm, as its baseline arm; it duplicates
+=org-glance-material:label=, the =·= disambiguation and the =s-left 8= suffix.  The
+next legitimate change to candidate building fails its "equal projection" check
+for a reason unrelated to latency.  =bench-cache-readers= fakes its baseline by
+binding =org-glance-cache--staging-path=.  =test/bench-clipboard.py= has the
+durable form: =--baseline 9ea4ae0=, measured against a real commit.
+
+** The gate's latency arm cannot fail
+
+The work-counter arm is sound and runs inside =eask test=:
+=virtual-save-family-work-contract=, =extract-table-warm-work-contract=,
+=org-glance-config-file-test-warm-read-work=,
+=cache-decodes-equal-payloads-once-per-snapshot=,
+=material-candidates-linear-label-counting=.
+
+The latency arm asserts nothing anywhere — =bench-graph.el= states it outright —
+and the only wall-clock code inside the suite prints JSON behind
+=GLANCE_CONFIG_BENCH=.  Wall-clock gates are flaky, so that split is defensible;
+what follows from it is that =invariants.org='s millisecond tables are a log of
+record and nothing re-checks them.  =get-headline= carries no work-counter
+contract either, which is how the scan above stayed invisible.
+
+** =perf-mode= measures its own start message
+
+=org-glance-perf--command= captures =start=, =gc-start= and =gc-count=, then calls
+=(message "… start")= inside the measured region
+([[https://github.com/rails-to-cosmos/org-glance/commit/39ac2bc12337e6acaa30b1f6ef8149c54b1fc394][39ac2bc]],
+=src/data/org-glance-perf.el= lines 68-76).  The trailing report is already
+excluded: =end= and =gc-seconds= are captured before it.  Every reported command
+total carries one =message= plus, interactively, its echo-area redisplay.
+
+** =perf-mode= hardcodes a plugin's internals
+
+=org-glance-perf--commands= and =--stages= name =agnostic-llm--menu-open-session=,
+=agnostic-llm--session-shell-command=, =agnostic-llm--open-vterm=,
+=agnostic-llm--named-session=, =agnostic-llm-menu=, =vterm= and =org-glance-llm--*=.
+Invariant 23 puts LLM enforcement in the external plugin repository and invariant
+26 has plugins self-register their UI.  With no registration point the plugin
+cannot add a stage without patching core.
+
+** Minor
+
+1. =GLANCE_CONFIG_BENCH= set without =GLANCE_CONFIG_READ_FIXTURE= reaches
+   =copy-file= with nil and signals =wrong-type-argument= (=test/test-config-file.el=
+   line 97).
+2. Three env-var conventions for one job: =OG_BENCH_QUICK= / =OG_BENCH_LARGE=,
+   =GLANCE_CONFIG_BENCH= / =GLANCE_CONFIG_READ_FIXTURE=, =ORG_GLANCE_TEST_XVFB=.
+3. =bench-interactive='s fingerprint check compares the last-written pair alone
+   (=aset= overwrites each sample), so a mid-run divergence is invisible;
+   =bench-cache-readers= checks every round.
+4. The =Containerfile= exists for pinned-Emacs reproducibility and runs the ERT
+   suite only.
+5. =OG_BENCH_LARGE= survives in one old =CHANGELOG.org= line; the tiers are absent
+   from =docs/guide.org=.
+6. Every bench run opens with a =lexical-binding= cookie warning for
+   =test/test-helpers.el=.
+
+* Design
+
+1. *Authority leaves the per-id path.*  =get-headline= reads its family state and
+   its projected Rows by id, in the shape =org-glance-cache--headline= already
+   uses, and decodes the matched payload alone.  The tri-state contract
+   (nil / =tombstone= / metadata), the revived-id exception and
+   =--prefer-family-metadata= precedence are unchanged; =graph--tombstone-spec=
+   keeps sharing the guard (invariant 30).  =graph:headlines= keeps its single
+   authority call.
+2. *One index, one stored column.*  Add
+   =headline_projection(logical_id, role)=.  The =logical_id || '/' || event_id=
+   predicate gets a stored addressable column or a two-step lookup, so the Row
+   address is indexable.
+3. *A work-counter contract for the point read.*  =get-headline= over 100 ids
+   performs one family read and one payload decode per id, and zero full-projection
+   decodes.  This is the test that turns red if authority returns to the hot path.
+4. *Every harness gets a runner.*  =eask bench [name]= dispatches over
+   =graph=, =material=, =interactive= and =readers=, defaulting to all of them;
+   Makefile targets mirror it.  =docs/guide.org= documents the names and the tiers.
+5. *Every harness runs without a private store.*  =bench-interactive= and
+   =bench-readers= build their store from =bench-graph='s synthetic generator when
+   no directory is given.  The private-store call stays available as an argument,
+   and =~/sync/views= leaves =docs/guide.org=.
+6. *Baselines are commits.*  =--reference-candidates= and the
+   =--staging-path= baseline arm are deleted; both harnesses measure current
+   behavior once and compare across commits, as =bench-clipboard.py= does.  The
+   fingerprint check runs every round.
+7. *The gate states its two arms.*  =CLAUDE.md= names the work-counter contracts
+   as the failing arm and =invariants.org='s tables as the log of record, with the
+   bench command for each changed behavior.
+8. *=perf-mode= measures the command.*  =start=, =gc-start= and =gc-count= move
+   below the start message.
+9. *Plugins register their own stages.*  =--commands= and =--stages= become
+   defcustoms with an append entry point; the =agnostic-llm= and =org-glance-llm=
+   names move to the plugin repository.
+10. *The minor items close as a class.*  One env-var prefix (=OG_=), a skip for
+    the absent fixture, a =lexical-binding= cookie in =test/test-helpers.el=, and a
+    =Containerfile= bench command beside its test command.
+
+Items 1-3 are the defect and its contract; 4-7 are the setup; 8-10 are the
+instrument.  Each lands on its own.
+
+* Files
+
+- =src/data/org-glance-graph.el= — =get-headline= by-id reads.
+- =src/data/org-glance-cache.el= — schema index, addressable column, by-id family
+  and projection reads.
+- =src/data/org-glance-perf.el= — measurement window, defcustom stage lists.
+- =test/bench-graph.el= — exported synthetic generator; the =get-by-id= Row names
+  the reader it times.
+- =test/bench-interactive.el=, =test/bench-cache-readers.el= — baseline arms
+  deleted, synthetic default store, per-round fingerprints.
+- =test/test-graph.el= — the point-read work contract.
+- =test/test-config-file.el= — fixture skip.
+- =test/test-helpers.el= — =lexical-binding= cookie.
+- =Eask=, =Makefile=, =Containerfile= — bench dispatch.
+- =CLAUDE.md=, =docs/guide.org=, =docs/invariants.org=, =CHANGELOG.org= — the two
+  arms, the runner names, the recorded numbers.
+
+* LOC estimate
+
+Moderate.  ~80 LOC in =graph.el= / =cache.el= for the by-id reads and the schema,
+~60 for the work contract, ~40 removed from the two harnesses' baseline arms,
+~60 across =Eask= / =Makefile= / =perf.el=.  Net near zero.
+
+* Risk
+
+Item 1 rewrites a tri-state read that =graph:delete= and the external fold share.
+The existing invariant-30 tests plus the new work contract cover it; a wrong
+answer is a correctness failure rather than a slow one, so it fails loudly.
+Item 2 changes the cache schema, which is org-glance's private local projection
+(invariant 35) and rebuildable.  Items 4-10 are tooling and prose.
+
+The 18,984 ms Row stands until item 1 lands; recording bench-graph's table
+(item 7) before the fix gives the before-column.
+
+* Method
+
+=OG_BENCH_QUICK=1 make bench= for the harness Row.  The scaling table came from
+a probe over =org-glance-test:with-graph= at N = 200/400/800, 100 random ids per
+size, =benchmark-run= on =get-headline=, =cache:headline= and 100 bare
+=cache:authority= calls, Emacs 31.1 on Linux.  The setup findings came from
+reading =Eask=, =Makefile=, =Containerfile=, the four harnesses, the env-var
+gating across =test/=, and grepping =docs/= for every recorded number.
