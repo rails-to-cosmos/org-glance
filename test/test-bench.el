@@ -15,17 +15,23 @@
 
 (ert-deftest org-glance-test:bench-measures-only-work-and-counts-iterations ()
   "Exclude preparation and observers while preserving samples and work counts."
-  (let ((clock 0.0) (calls 0) record)
+  (let ((clock 0.0) (calls 0) (prepared 0) (fingerprints 0) (counted 0) record)
     (cl-letf (((symbol-function 'float-time) (lambda (&rest _) clock))
               ((symbol-function 'garbage-collect) (lambda () (cl-incf clock 50)))
               ((symbol-function 'org-glance-bench:emit)
                (lambda (_harness _operation value) (setq record value))))
       (org-glance-bench:measure
        "sample" "timed" (lambda () (cl-incf calls) (cl-incf clock 0.1))
-       :samples 3 :iterations 2 :before (lambda () (cl-incf clock 100))
-       :fingerprint (lambda (_result) (cl-incf clock 200) "stable")
-       :counters (lambda (_result) (cl-incf clock 300) (list :calls calls)))
+       :samples 3 :iterations 2
+       :before (lambda () (cl-incf prepared) (cl-incf clock 100))
+       :fingerprint (lambda (_result)
+                      (cl-incf fingerprints) (cl-incf clock 200) "stable")
+       :counters (lambda (_result)
+                   (cl-incf counted) (cl-incf clock 300) (list :calls calls)))
       (should (= calls 6))
+      (should (= prepared 3))
+      (should (= fingerprints 3))
+      (should (= counted 3))
       (should (= (length (plist-get record :samples-ms)) 3))
       (should (< (abs (- 100 (plist-get record :median-ms))) 0.0001))
       (should (equal [(:calls 2) (:calls 4) (:calls 6)] (plist-get record :work))))))

@@ -1,8 +1,6 @@
 ;;; overview-export-peer.el --- Concurrent export peer -*- lexical-binding: t -*-
 (unless (fboundp 'org-glance-test:org-with-id)
   (load (expand-file-name "../test-helpers.el" (file-name-directory load-file-name)) nil t))
-(unless (fboundp 'org-glance-config-test--publish)
-  (load (expand-file-name "../test-config.el" (file-name-directory load-file-name)) nil t))
 
 (defun org-glance-test-overview-wait (root name)
   "Wait for scheduling barrier NAME in disposable ROOT."
@@ -18,7 +16,7 @@
 (defun org-glance-test-overview-change (graph kind)
   "Publish a real presentation or family-only change KIND to GRAPH."
   (if (eq kind 'presentation)
-      (org-glance-config-test--publish graph
+      (org-glance-test:publish-config graph
        "{\"format\":1,\"todoCycles\":[{\"active\":[\"PLAN(q)\"]}]}")
     (let* ((id "export-row") (family (org-glance-graph:headline-data-path graph id)))
       (org-glance-version:write-snapshot family id

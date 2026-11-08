@@ -325,13 +325,6 @@ LOCALIZE translates a portable path back into GRAPH."
                   (vconcat
                    (org-glance-checkpoint--inventory graph paths))))))))
 
-(cl-defun org-glance-checkpoint--prefix-digest (path bytes)
-  "Return the SHA-256 of PATH's first BYTES bytes."
-  (with-temp-buffer
-    (set-buffer-multibyte nil)
-    (insert-file-contents-literally path nil 0 bytes)
-    (secure-hash 'sha256 (current-buffer))))
-
 (cl-defun org-glance-checkpoint--tail-source-p (graph descriptor)
   "Return non-nil when GRAPH is an append-only family tail of DESCRIPTOR."
   (let* ((root (org-glance-graph:directory graph))
@@ -351,7 +344,7 @@ LOCALIZE translates a portable path back into GRAPH."
           (if (equal relative open)
               (and (>= (file-attribute-size (file-attributes path)) bytes)
                    (equal digest
-                          (org-glance-checkpoint--prefix-digest path bytes)))
+                          (org-glance-cache--file-digest path bytes)))
             (equal digest (org-glance-cache--file-digest path)))))
       files)
      (cl-every

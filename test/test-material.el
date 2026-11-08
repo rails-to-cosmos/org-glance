@@ -767,7 +767,7 @@ synchronously, discarding none, and leaves `post-command-hook' clean."
   (let ((org-todo-keywords '((sequence "TODO" "DONE(!)")))
         (org-log-into-drawer nil) (this-command 'org-glance-test-bulk))
     (org-glance-test:with-graph graph
-      (org-glance-config-test--publish graph
+      (org-glance-test:publish-config graph
         "{\"format\":1,\"todoCycles\":[{\"active\":[\"TODO\"],\"inactive\":[\"DONE(!)\"]}]}")
       (org-glance-graph:add graph
                             (org-glance-test:headline "l1" "* TODO A")

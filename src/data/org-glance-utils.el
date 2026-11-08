@@ -133,10 +133,6 @@ or rename that fails removes the temp file."
   (f-mkdir-full-path (f-dirname path))
   (org-glance--atomic-write path (prin1-to-string form)))
 
-(cl-defun org-glance--eld-alist-ref (path key)
-  "Return KEY's value in the alist at .eld PATH (`equal' keys), or nil."
-  (alist-get key (org-glance--read-eld path) nil nil #'equal))
-
 (cl-defun org-glance--eld-alist-set (path key value)
   "Upsert KEY -> VALUE in the alist at .eld PATH; a nil VALUE drops KEY."
   (let ((all (cl-remove key (org-glance--read-eld path) :key #'car :test #'equal)))

@@ -39,6 +39,12 @@
   (f-mkdir-full-path (f-dirname path))
   (f-write-text text 'utf-8 path))
 
+(cl-defun org-glance-test:publish-config (graph text)
+  "Publish JSON TEXT in GRAPH and refresh its live observation."
+  (org-glance-test:write
+   (org-glance-config-file:path (org-glance-graph:directory graph)) text)
+  (org-glance-config:refresh graph))
+
 (cl-defun org-glance-test:conflict-open (ours theirs)
   "Return text git left conflict-marked with OURS over THEIRS.
 OURS and THEIRS are newline-terminated line strings; the sole marker speller."

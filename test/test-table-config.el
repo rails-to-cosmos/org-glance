@@ -3,12 +3,6 @@
 (require 'test-helpers)
 (require 'org-glance-table-config)
 
-(defun org-glance-table-config-test--publish (graph text)
-  "Publish JSON TEXT and observe its settings in GRAPH."
-  (org-glance-test:write
-   (org-glance-config-file:path (org-glance-graph:directory graph)) text)
-  (org-glance-config:refresh graph))
-
 (defun org-glance-table-config-test--bytes (graph)
   "Return GRAPH's exact shared configuration bytes."
   (with-temp-buffer
@@ -36,7 +30,7 @@
 
 (ert-deftest org-glance-table-config-test-json-layout-is-atomic-and-preserves-peers ()
   (org-glance-test:with-graph graph
-    (org-glance-table-config-test--publish
+    (org-glance-test:publish-config
      graph "{\"format\":1,\"clients\":{\"glance\":{\"theme\":\"dark\"},\"orgGlance\":{\"tableColumns\":{\"book\":{\"columns\":[{\"property\":\"AUTHOR\",\"header\":\"Writer\"}],\"hidden\":[\"tags\"],\"extension\":true}}}}}")
     (org-glance--eld-alist-set (expand-file-name ".org-glance/config/table-columns.eld" (org-glance-graph:directory graph)) "book"
                                '(:columns (("WRONG" . "Wrong"))))
@@ -83,7 +77,7 @@
 
 (ert-deftest org-glance-table-config-test-json-reference-layout-preserves-sort-and-scope ()
   (org-glance-test:with-graph graph
-    (org-glance-table-config-test--publish graph "{\"format\":1}")
+    (org-glance-test:publish-config graph "{\"format\":1}")
     (org-glance-test:ref-fixture graph)
     (let ((before (org-glance-table-config-test--bytes graph)))
       (org-glance-test:with-table (graph '(:id-any ("r1")) '(:anchor "c1" :dir relations))
@@ -102,7 +96,7 @@
 
 (ert-deftest org-glance-table-config-test-stale-view-preserves-layout-and-peer-write ()
   (org-glance-test:with-graph graph
-    (org-glance-table-config-test--publish graph "{\"format\":1}")
+    (org-glance-test:publish-config graph "{\"format\":1}")
     (org-glance-graph:add graph (org-glance-test:headline "b1" "* TODO Book :book:"))
     (org-glance-test:with-table (graph 'book)
       (let* ((old org-glance-table--settings-source)
@@ -126,7 +120,7 @@
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "b1" "* TODO Book :book:"))
     (org-glance-test:with-table (graph 'book)
-      (org-glance-table-config-test--publish graph "{\"format\":1}")
+      (org-glance-test:publish-config graph "{\"format\":1}")
       (let ((bytes (org-glance-table-config-test--bytes graph)))
         (should-error (org-glance-table--config-put
                        graph 'book (org-glance-table--current-config))
@@ -136,7 +130,7 @@
 
 (ert-deftest org-glance-table-config-test-failed-write-retains-the-save-baseline ()
   (org-glance-test:with-graph graph
-    (org-glance-table-config-test--publish graph "{\"format\":1}")
+    (org-glance-test:publish-config graph "{\"format\":1}")
     (org-glance-graph:add graph (org-glance-test:headline "b1" "* TODO Book :book:"))
     (org-glance-test:with-table (graph 'book)
       (let ((before (copy-tree org-glance-table--config-snapshot))
@@ -153,7 +147,7 @@
 
 (ert-deftest org-glance-table-config-test-invalid-multi-edit-publishes-nothing ()
   (org-glance-test:with-graph graph
-    (org-glance-table-config-test--publish graph "{\"format\":1}")
+    (org-glance-test:publish-config graph "{\"format\":1}")
     (let ((before (org-glance-table-config-test--bytes graph))
           (snapshot (org-glance-config:snapshot graph)))
       (should-error
@@ -168,7 +162,7 @@
 
 (ert-deftest org-glance-table-config-test-no-op-and-reset-keep-exact-bytes ()
   (org-glance-test:with-graph graph
-    (org-glance-table-config-test--publish graph "{\"format\":1,\"clients\":{\"glance\":{\"keep\":true}}}")
+    (org-glance-test:publish-config graph "{\"format\":1,\"clients\":{\"glance\":{\"keep\":true}}}")
     (let* ((root (org-glance-graph:directory graph))
            (first (org-glance-table-config:write
                    root :snapshot (org-glance-config:snapshot graph)
@@ -204,7 +198,7 @@
 (ert-deftest org-glance-table-config-test-explicit-apply-reports-a-busy-writer ()
   (dolist (json '(nil t))
     (org-glance-test:with-graph graph
-      (when json (org-glance-table-config-test--publish graph "{\"format\":1}"))
+      (when json (org-glance-test:publish-config graph "{\"format\":1}"))
       (org-glance-graph:add graph (org-glance-test:headline "b1" "* TODO Book :book:"))
       (org-glance-test:with-table (graph 'book)
         (let ((before (copy-tree org-glance-table--config-snapshot))
@@ -220,7 +214,7 @@
   (org-glance-test:with-graph graph
     (org-glance--eld-alist-set (expand-file-name ".org-glance/config/table-views.eld" (org-glance-graph:directory graph))
                                (org-glance-filter:identity nil) '(:columns ("WRONG")))
-    (org-glance-table-config-test--publish graph "{\"format\":1}")
+    (org-glance-test:publish-config graph "{\"format\":1}")
     (org-glance-test:write
      (org-glance-config-file:path (org-glance-graph:directory graph))
      "{\"format\":1,\"clients\":{\"orgGlance\":{\"tableViews\":[]}}}")
@@ -229,7 +223,7 @@
 
 (ert-deftest org-glance-table-config-test-nested-extensions-survive-no-op-and-identity-edits ()
   (org-glance-test:with-graph graph
-    (org-glance-table-config-test--publish
+    (org-glance-test:publish-config
      graph "{\"format\":1,\"clients\":{\"orgGlance\":{\"tableRefs\":{\"scope\":{\"columns\":[{\"property\":\"A\",\"header\":\"First\",\"future\":{\"value\":1}},{\"property\":\"B\",\"header\":\"Second\",\"future\":2},{\"property\":\"D\",\"header\":\"Removed\",\"future\":4}],\"sort\":[{\"column\":\"A\",\"direction\":\"asc\",\"future\":1},{\"column\":\"B\",\"direction\":\"desc\",\"nulls\":\"first\",\"future\":2},{\"column\":\"D\",\"direction\":\"asc\",\"future\":4}],\"outer\":true}}}}}")
     (let* ((root (org-glance-graph:directory graph))
            (snapshot (org-glance-config:snapshot graph))
@@ -266,7 +260,7 @@
 
 (ert-deftest org-glance-table-config-test-ambiguous-nested-identities-publish-nothing ()
   (org-glance-test:with-graph graph
-    (org-glance-table-config-test--publish graph "{\"format\":1}")
+    (org-glance-test:publish-config graph "{\"format\":1}")
     (let ((before (org-glance-table-config-test--bytes graph)))
       (dolist (edit '(("tableColumns" "book" (:columns (("A" . "One") ("A" . "Two"))))
                       ("tableViews" "book" (:sort (("title" . t) ("title"))))))
@@ -275,7 +269,7 @@
                        :edits (list edit))
                       :type 'org-glance-config-error)
         (should (equal before (org-glance-table-config-test--bytes graph)))))
-    (org-glance-table-config-test--publish
+    (org-glance-test:publish-config
      graph "{\"format\":1,\"clients\":{\"orgGlance\":{\"tableColumns\":{\"book\":{\"columns\":[{\"property\":\"A\",\"header\":\"One\",\"future\":1},{\"property\":\"A\",\"header\":\"Two\",\"future\":2}]}}}}}")
     (let ((before (org-glance-table-config-test--bytes graph)))
       (should-error (org-glance-table-config:write
@@ -286,7 +280,7 @@
 
 (ert-deftest org-glance-table-config-test-prepared-refresh-reuses-validation ()
   (org-glance-test:with-graph graph
-    (org-glance-table-config-test--publish graph "{\"format\":1}")
+    (org-glance-test:publish-config graph "{\"format\":1}")
     (let* ((org-glance-table--settings-source
             (cons graph (org-glance-config:snapshot graph)))
            (org-glance-table--reading-source nil)
@@ -315,7 +309,7 @@
 
 (ert-deftest org-glance-table-config-test-delayed-receipt-observes-newer-bytes ()
   (org-glance-test:with-graph graph
-    (org-glance-table-config-test--publish graph "{\"format\":1}")
+    (org-glance-test:publish-config graph "{\"format\":1}")
     (let* ((root (org-glance-graph:directory graph))
            (key (org-glance-config:cache-key graph))
            (receipt (org-glance-table-config--write
@@ -337,7 +331,7 @@
 
 (ert-deftest org-glance-table-config-test-preparation-failure-retains-saved-receipt ()
   (org-glance-test:with-graph graph
-    (org-glance-table-config-test--publish graph "{\"format\":1}")
+    (org-glance-test:publish-config graph "{\"format\":1}")
     (let* ((initial (org-glance-config:snapshot graph))
            (org-glance-table--settings-source (cons graph initial))
            (org-glance-table--reading-source nil)

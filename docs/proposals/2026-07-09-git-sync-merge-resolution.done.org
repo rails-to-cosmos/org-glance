@@ -36,7 +36,7 @@ Latest-wins for an id is by *physical position* — segment order in the MANIFES
 then line order within a file (=org-glance-graph--latest-records= folds
 oldest→newest and keeps the last write per id).  The =seq= field is never read
 for ordering or dedup; it only reseeds the in-memory counter at open
-(=--max-seq=) and feeds =--heal='s debris test.
+(=--read-state='s =:max-seq=) and feeds =--heal='s debris test.
 
 So unioning both sides' lines is exactly the intended merge: every record from
 both histories is kept, and the reader collapses duplicate ids to the

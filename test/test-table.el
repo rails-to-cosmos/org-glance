@@ -501,7 +501,7 @@ own filter; an action-triggered reload keeps them."
 (ert-deftest org-glance-test:table-bulk-state-prompt-is-org-native ()
   "The bulk prompt is org's fast selection over the tag's `#+TODO:' keywords."
   (org-glance-test:with-graph graph
-    (org-glance-config-test--publish graph
+    (org-glance-test:publish-config graph
       "{\"format\":1,\"tags\":{\"book\":{\"todoCycles\":[{\"active\":[\"TODO\",\"READING\"],\"inactive\":[\"READ\"]}]}}}")
     (let (seen)
       (cl-letf (((symbol-function 'org-fast-todo-selection)
@@ -553,7 +553,7 @@ relies on `org-add-log-note' switching buffers for real."
   (let ((org-todo-keywords '((sequence "TODO" "DONE(!)")))   ; `!' logs a timestamp
         (org-log-into-drawer nil) (this-command 'org-glance-test-bulk))
     (org-glance-test:with-graph graph
-      (org-glance-config-test--publish graph
+      (org-glance-test:publish-config graph
         "{\"format\":1,\"todoCycles\":[{\"active\":[\"TODO\"],\"inactive\":[\"DONE(!)\"]}]}")
       (org-glance-graph:add graph
                             (org-glance-test:headline "g1" "* TODO A")

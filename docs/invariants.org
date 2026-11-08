@@ -1045,3 +1045,10 @@ three saves per fixture. Baseline:
 - The material harness records family observations and GC for each operation batch; its runner oracle requires zero open/lookup observations and six observations across three saves.
 - Cold-fold timing across six compiled process pairs has mean paired delta +0.523 ms with an exact-bootstrap 95% interval of −3.652 to +4.792 ms; its full-projection work is unchanged.
 - Five compiled process pairs against =530d439= retain zero family observations for editor open/lookup and two per save; exact-bootstrap 95% intervals for all six plain/crypt lifecycle timing differences include zero.
+
+* Simplification test evidence
+
+- =bench-measures-only-work-and-counts-iterations= requires preparation, fingerprinting and counters exactly once per sample; removing preparation fails it.
+- =extract-table-warm-work-contract= requires exactly one clipboard publication of the selected cached value; removing extraction fails it while blob reads and parses remain forbidden.
+- Fourteen sampled runtime mutations across benchmark, timing, point-read and extraction contracts are killed; two surviving omissions required stronger assertions and no tests were removed.
+- After reverting query-helper indirection, seven alternating compiled process pairs at N=100 retain equal work and fingerprints; paired-bootstrap 95% intervals for all nine graph workload differences include zero.

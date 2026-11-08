@@ -111,9 +111,7 @@ def compare(baseline, current):
         raise ValueError('Baseline and current workload inventories differ')
     result = []
     for record in current:
-        old = previous.get(key(record))
-        if old is None:
-            raise ValueError(f'Baseline omitted workload {key(record)}')
+        old = previous[key(record)]
         result.append({'harness': record['harness'], 'operation': record['operation'],
                        'size': record['size'], 'baseline_ms': old['median-ms'],
                        'current_ms': record['median-ms'],
@@ -122,8 +120,6 @@ def compare(baseline, current):
                        'fingerprints_equal': (old['fingerprint'] == record['fingerprint']
                                               if old.get('fingerprint') and record.get('fingerprint')
                                               else None)})
-    if len(result) != len(previous):
-        raise ValueError('Baseline and current workload inventories differ')
     return result
 
 

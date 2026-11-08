@@ -275,7 +275,7 @@ equal to the one already there and changes no answer."
   "A state only a tag's `#+TODO:' cycle declares is re-derived as a STATE,
 never folded into the title."
   (org-glance-test:with-graph graph
-    (org-glance-config-test--publish graph "{\"format\":1,\"tags\":{\"book\":{\"todoCycles\":[{\"active\":[\"TODO\",\"READING\"],\"inactive\":[\"READ\"]}]}}}")
+    (org-glance-test:publish-config graph "{\"format\":1,\"tags\":{\"book\":{\"todoCycles\":[{\"active\":[\"TODO\",\"READING\"],\"inactive\":[\"READ\"]}]}}}")
     (org-glance-graph:add graph (org-glance-test:headline "id1" "* foo :book:"))
     (org-glance-test:edit-blob graph "id1" "* foo" "* READING foo")
     (org-glance-test:external-write graph "id1")

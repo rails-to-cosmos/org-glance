@@ -3,11 +3,6 @@
 (require 'test-helpers)
 (require 'org-glance-settings)
 
-(defun org-glance-settings-test--publish (graph text)
-  "Publish JSON TEXT in GRAPH and observe it."
-  (org-glance-test:write (org-glance-config-file:path (org-glance-graph:directory graph)) text)
-  (org-glance-config:refresh graph))
-
 (defun org-glance-settings-test--object (graph)
   "Read GRAPH's saved configuration object."
   (org-glance-config-file:object (org-glance-config-file:read (org-glance-graph:directory graph))))
@@ -16,7 +11,7 @@
   "Open TAG's settings over JSON in a disposable GRAPH, then run BODY."
   (declare (indent 2))
   `(org-glance-test:with-graph graph
-     (org-glance-settings-test--publish graph ,json)
+     (org-glance-test:publish-config graph ,json)
      (save-window-excursion
        (let ((buffer (org-glance-settings:visit graph ,tag)))
          (unwind-protect
@@ -48,7 +43,7 @@
 
 (ert-deftest org-glance-settings-test-scope-writer-preserves-peers-and-case ()
   (org-glance-test:with-graph graph
-    (org-glance-settings-test--publish
+    (org-glance-test:publish-config
      graph "{\"format\":1,\"tags\":{\"Book\":{\"title\":\"Old\",\"template\":\"Keep\"},\"other\":{\"storage\":\"local\"}},\"clients\":{\"glance\":{\"theme\":\"dark\",\"keyBindings\":{\"table:next-row\":[\"v\"],\"future:command\":[\"C-c z\"]}}},\"extension\":42}")
     (let* ((before (org-glance-config-file:read (org-glance-graph:directory graph)))
            (values (org-glance-settings--scope before "book")))
@@ -101,7 +96,7 @@
   (org-glance-settings-test--with-editor "book" "{\"format\":1}"
     (let ((session org-glance-settings--session))
       (puthash "title" "Draft" (org-glance-settings-draft-values session))
-      (org-glance-settings-test--publish graph "{\"format\":1,\"tags\":{\"book\":{\"title\":\"Peer\"}}}")
+      (org-glance-test:publish-config graph "{\"format\":1,\"tags\":{\"book\":{\"title\":\"Peer\"}}}")
       (should-error (org-glance-settings--save nil nil) :type 'org-glance-config-conflict)
       (should (equal "Draft" (gethash "title" (org-glance-settings-draft-values session))))
       (should (equal "Peer" (gethash "title" (gethash "book" (gethash "tags" (org-glance-settings-test--object graph))))))
@@ -116,7 +111,7 @@
 (ert-deftest org-glance-settings-test-rebase-keeps-draft-and-adopts-unedited-peer-fields ()
   (org-glance-settings-test--with-editor "book" "{\"format\":1,\"tags\":{\"book\":{\"title\":\"Old\"}}}"
     (puthash "title" "Draft" (org-glance-settings-draft-values org-glance-settings--session))
-    (org-glance-settings-test--publish
+    (org-glance-test:publish-config
      graph "{\"format\":1,\"tags\":{\"book\":{\"title\":\"Peer\",\"template\":\"Peer template\"}}}")
     (cl-letf (((symbol-function 'completing-read)
                (lambda (_prompt choices _predicate require-match &rest _)
@@ -241,7 +236,7 @@
     (cl-letf (((symbol-function 'completing-read) (lambda (&rest _) "")))
       (let ((session org-glance-settings--session))
         (puthash "title" "Draft" (org-glance-settings-draft-values session))
-        (org-glance-settings-test--publish graph "{\"format\":1,\"tags\":{\"book\":{\"title\":\"Peer\"}}}")
+        (org-glance-test:publish-config graph "{\"format\":1,\"tags\":{\"book\":{\"title\":\"Peer\"}}}")
         (should-error (org-glance-settings--reload nil nil) :type 'user-error)
         (should (eq session org-glance-settings--session))
         (should (equal "Draft" (gethash "title" (org-glance-settings-draft-values session))))))))

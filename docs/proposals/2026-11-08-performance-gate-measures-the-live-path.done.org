@@ -288,3 +288,33 @@ open/lookup counters remain zero and three saves account for six observations.
 The reader-reuse predecessor had already added a guide command and an open-count
 oracle before this proposal started; this work supplies the named synthetic
 runner and commit comparisons that were still missing.
+
+* Simplification review
+
+The three review angles covered shared work, dead code and test efficacy.
+The cleanup shares the raw/prefix SHA-256 helper. The view delegates its metadata guard to
+=graph:live-meta=. Two unused private helpers and redundant comparison guards
+are removed. JSON fixtures share =org-glance-test:publish-config=; the export
+peer loads only the helper library it uses.
+
+Fourteen runtime mutations exercise benchmark preparation/fingerprints/counts,
+timing reports/stages/registration, indexed addresses, point-read work, revival,
+payload decoding, WAL precedence and table extraction. Skipping preparation and
+extraction initially survived; the existing tests now assert callback counts
+and clipboard publication outside the mock. All fourteen mutations are killed.
+No test was removed. Source/test/tool LOC falls from 30,167 to 30,142.
+
+Explicit Git staging fixtures and handwritten immutable-event fixtures remain:
+their staging sets and authored bytes are part of their individual contracts.
+Public wrappers, macro-expanded assertions, error-demotion tests and platform
+skips remain. Existing invariants cover the reviewed rules.
+
+The current-row and ordered-projection query-helper extractions were reverted:
+six process pairs retained equal work but showed a small cold-fold/UI timing
+increase. The performance gate takes precedence over their nine-line saving.
+
+The revised cleanup passes seven alternating compiled process pairs at N=100:
+all nine workload differences have paired-bootstrap 95% intervals containing
+zero, and all work counters and result fingerprints match. The full gate has
+760 tests, 754 passes and six environment skips; the pinned Emacs 29.1 image
+compiles cleanly and emits all 17 records across four synthetic harnesses.

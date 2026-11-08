@@ -205,8 +205,7 @@ another view.  STALE-FN and RELOAD-FN register pull refresh, else `g' only."
 
 (cl-defun org-glance-view:live-metadata (graph id)
   "Return the live headline metadata for ID in GRAPH; `user-error' if gone."
-  (or (let ((metadata (org-glance-cache:headline graph id)))
-        (and (org-glance-headline-metadata? metadata) metadata))
+  (or (org-glance-graph:live-meta graph id)
       (user-error "%s" org-glance-view--stale-message)))
 
 (add-hook 'org-glance-graph-after-commit-functions

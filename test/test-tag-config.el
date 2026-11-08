@@ -150,7 +150,7 @@
 (ert-deftest org-glance-test:tag-config-system-and-tag-cycles ()
   "System and per-tag TODO lines drive overview, parsing and capture."
   (org-glance-test:with-graph graph
-    (org-glance-config-test--publish graph
+    (org-glance-test:publish-config graph
       "{\"format\":1,\"todoCycles\":[{\"active\":[\"DELEGATED\",\"REVIEW\",\"TODO\"],\"inactive\":[\"DONE\",\"CANCELLED\"]}]}")
     (org-glance-test:with-tag-config graph
         (list (cons "book" "{\"todoCycles\":[{\"active\":[\"READING\"],\"inactive\":[\"READ\"]}],\"template\":\"* Book\"}")
@@ -193,7 +193,7 @@
     (let ((filter '(:tags ("wrike"))))
       (let ((file (org-glance-overview:cached-file graph filter)))
         (should (s-contains? "#+TODO: TODO | DONE" (f-read-text file 'utf-8)))
-        (org-glance-config-test--publish graph
+        (org-glance-test:publish-config graph
           "{\"format\":1,\"todoCycles\":[{\"active\":[\"REVIEW\",\"TODO\"],\"inactive\":[\"DONE\"]}]}")
         (should (s-contains? "REVIEW" (f-read-text (org-glance-overview:cached-file graph filter) 'utf-8)))))))
 

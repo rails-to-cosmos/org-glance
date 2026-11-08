@@ -4,15 +4,9 @@
          (expand-file-name "test-config-env.el" (file-name-directory load-file-name)))
 (require 'org-glance-config)
 
-(defun org-glance-config-test--publish (graph text)
-  "Publish JSON TEXT in GRAPH and refresh its live observation."
-  (org-glance-test:write
-   (org-glance-config-file:path (org-glance-graph:directory graph)) text)
-  (org-glance-config:refresh graph))
-
 (ert-deftest org-glance-config-test-finalize-allocates-notification-locally ()
   (org-glance-test:with-graph graph
-    (org-glance-config-test--publish graph "{\"format\":1}")
+    (org-glance-test:publish-config graph "{\"format\":1}")
     (let ((org-glance-graph graph))
       (org-glance-capture 'notification "New notice" :finalize t))
     (let* ((rows (org-glance-graph:headlines graph))
@@ -28,7 +22,7 @@
 
 (ert-deftest org-glance-config-test-finalize-ingest-failure-retains-draft ()
   (org-glance-test:with-graph graph
-    (org-glance-config-test--publish graph "{\"format\":1}")
+    (org-glance-test:publish-config graph "{\"format\":1}")
     (let ((org-glance-graph graph))
       (org-glance-capture 'notification "Recover this notice")
       (let* ((target (or (buffer-base-buffer) (current-buffer)))
@@ -58,7 +52,7 @@
   (dolist (pair '(("ΑΣ" . "ΑΣ") ("straße" . "STRASSE") ("STRASSE" . "straße")
                   ("Σ" . "ς") ("Ꭰ" . "ꭰ")))
     (org-glance-test:with-graph graph
-      (org-glance-config-test--publish graph
+      (org-glance-test:publish-config graph
        (format "{\"format\":1,\"tags\":{\"%s\":{\"storage\":\"local\"}}}" (car pair)))
       (org-glance-test:capture graph (format "* Local title :%s:\n" (cdr pair)))
       (let* ((row (car (org-glance-graph:headlines graph)))
@@ -79,17 +73,17 @@
   (org-glance-test:with-graph graph
     (org-glance-test:write
      (f-join dir ".org-glance" "config" "system.org") "#+TODO: OLD | PLAN\n")
-    (org-glance-config-test--publish graph
+    (org-glance-test:publish-config graph
      "{\"format\":1,\"todoCycles\":[{\"active\":[\"PLAN\"]}],\"tree\":{\"headlineHistoryDepth\":3}}")
     (let ((settings (org-glance-config:current graph)))
       (should (= 3 (org-glance-graph--headline-history-depth graph)))
       (should (string-match-p "PLAN" (org-glance-tag-config:cycle-for-filter graph nil)))
       (should-not (string-match-p "OLD" (org-glance-tag-config:cycle-for-filter graph nil)))
       (cl-letf (((symbol-function 'display-warning) #'ignore))
-        (org-glance-config-test--publish graph "{broken"))
+        (org-glance-test:publish-config graph "{broken"))
       (should (eq settings (org-glance-config:current graph)))
       (should (org-glance-graph:-config-error graph))
-      (org-glance-config-test--publish graph "{\"format\":1}")
+      (org-glance-test:publish-config graph "{\"format\":1}")
       (should-not (org-glance-graph:-config-error graph)))))
 
 (ert-deftest org-glance-config-test-cold-invalid-does-not-fallback ()
@@ -99,7 +93,7 @@
 
 (ert-deftest org-glance-config-test-runtime-writes-pin-and-preserve ()
   (org-glance-test:with-graph graph
-    (org-glance-config-test--publish graph
+    (org-glance-test:publish-config graph
      "{\"format\":1,\"clients\":{\"other\":{\"keep\":true}}}")
     (let* ((before (org-glance-config:snapshot graph))
            (revision (org-glance-config-file:revision before)))
@@ -114,7 +108,7 @@
 
 (ert-deftest org-glance-config-test-presentation-reload-does-not-reparse ()
   (org-glance-test:with-graph graph
-    (org-glance-config-test--publish graph "{\"format\":1}")
+    (org-glance-test:publish-config graph "{\"format\":1}")
     (let ((id "json-warm"))
       (org-glance-version:write-snapshot (org-glance-graph:headline-data-path graph id)
        id nil "test" (org-glance-test:org-with-id "* TODO Warm" id) 10))
@@ -125,7 +119,7 @@
                  (lambda (&rest _) (ert-fail "Presentation reload reparsed a Snapshot")))
                 ((symbol-function 'org-glance-cache:reconcile-inventory)
                  (lambda (&rest _) (ert-fail "Presentation reload rebuilt the cache"))))
-        (org-glance-config-test--publish graph
+        (org-glance-test:publish-config graph
          "{\"format\":1,\"template\":\"* TODO New\",\"tree\":{\"headlineHistoryDepth\":0}}"))
       (should (equal key (org-glance-config:cache-key graph)))
       (should (org-glance-cache--configuration-current-p graph))
@@ -144,14 +138,14 @@
 
 (ert-deftest org-glance-config-test-classification-rebuilds-an-atomic-generation ()
   (org-glance-test:with-graph graph
-    (org-glance-config-test--publish graph "{\"format\":1}")
+    (org-glance-test:publish-config graph "{\"format\":1}")
     (let* ((id "json-reclassify")
            (family (org-glance-graph:headline-data-path graph id)))
       (org-glance-version:write-snapshot family id nil "test"
        (org-glance-test:org-with-id "* PLAN Title" id) 10)
       (org-glance-cache:reconcile-inventory graph t)
       (should (equal "PLAN Title" (org-glance-headline-metadata:title (org-glance-cache:headline graph id))))
-      (org-glance-config-test--publish graph
+      (org-glance-test:publish-config graph
        "{\"format\":1,\"todoCycles\":[{\"active\":[\"PLAN\"]}]}")
       (should-not (org-glance-graph:-config-error graph))
       (should (org-glance-cache--configuration-current-p graph))
@@ -161,7 +155,7 @@
 
 (ert-deftest org-glance-config-test-native-context-keeps-cycles-and-source ()
   (org-glance-test:with-graph graph
-    (org-glance-config-test--publish graph
+    (org-glance-test:publish-config graph
      "{\"format\":1,\"todoCycles\":[{\"active\":[\"PLAN(p)\",\"WORK(w)\"],\"inactive\":[\"FINISHED(f)\"]}]}")
     (with-temp-buffer
       (insert "#+TODO: WAIT(q) | END(e)\n* PLAN Title\n")
@@ -344,7 +338,7 @@
 
 (ert-deftest org-glance-config-test-incremental-writer-cannot-mint-census-dependency ()
   (org-glance-test:with-graph graph
-    (org-glance-config-test--publish graph "{\"format\":1}")
+    (org-glance-test:publish-config graph "{\"format\":1}")
     (let ((id "json-incremental"))
       (org-glance-version:write-snapshot (org-glance-graph:headline-data-path graph id)
        id nil "test" (org-glance-test:org-with-id "* TODO Title" id) 10)
@@ -359,7 +353,7 @@
 
 (ert-deftest org-glance-config-test-publication-rejects-changed-json-revision ()
   (org-glance-test:with-graph graph
-    (org-glance-config-test--publish graph "{\"format\":1}")
+    (org-glance-test:publish-config graph "{\"format\":1}")
     (org-glance-cache:reconcile-inventory graph t)
     (let ((org-glance-cache--recovery-publication-hook
            (lambda ()
@@ -372,7 +366,7 @@
 
 (ert-deftest org-glance-config-test-unchanged-observation-reuses-typed-settings ()
   (org-glance-test:with-graph graph
-    (org-glance-config-test--publish graph "{\"format\":1}")
+    (org-glance-test:publish-config graph "{\"format\":1}")
     (let ((before (org-glance-config:current graph)))
       (cl-letf (((symbol-function 'org-glance-config:decode)
                  (lambda (&rest _) (ert-fail "Unchanged JSON decoded again"))))
@@ -380,7 +374,7 @@
 
 (ert-deftest org-glance-config-test-notifications-remain-local-and-capture-uses-json ()
   (org-glance-test:with-graph graph
-    (org-glance-config-test--publish graph
+    (org-glance-test:publish-config graph
      "{\"format\":1,\"template\":\"* PLAN %TITLE% :%TAGS%:\\n#+begin_src org\\n#+TODO: FAKE | FALSE\\n#+end_src\",\"todoCycles\":[{\"active\":[\"PLAN\"]}]}")
     (let* ((org-glance-graph graph)
            (template (org-glance-capture:template 'notification "Title"))
@@ -392,7 +386,7 @@
 
 (ert-deftest org-glance-config-test-native-material-cycles-and-saves-canonical-source ()
   (org-glance-test:with-graph graph
-    (org-glance-config-test--publish graph
+    (org-glance-test:publish-config graph
      "{\"format\":1,\"todoCycles\":[{\"active\":[\"PLAN\",\"WORK\"],\"inactive\":[\"FINISHED\"]}]}")
     (let* ((id "json-material")
            (family (org-glance-graph:headline-data-path graph id)))
@@ -409,7 +403,7 @@
           (should (string-prefix-p "* WORK Title" saved))
           (should-not (string-match-p "#\\+TODO:" saved)))
         (let ((source (buffer-string)) (point (point)))
-          (org-glance-config-test--publish graph
+          (org-glance-test:publish-config graph
            "{\"format\":1,\"todoCycles\":[{\"active\":[\"PLAN\",\"WORK\",\"NEW\"],\"inactive\":[\"FINISHED\"]}]}")
           (should (member "NEW" org-not-done-keywords))
           (should (equal source (buffer-string)))
@@ -420,7 +414,7 @@
     (dolist (final-newline '(nil t))
       (dolist (author '(nil ":AUTHOR: Reader"))
         (org-glance-test:with-graph graph
-          (org-glance-config-test--publish graph
+          (org-glance-test:publish-config graph
             "{\"format\":1,\"todoCycles\":[{\"active\":[\"PLAN\",\"WORK\"],\"inactive\":[\"DONE\"]}]}")
           (let* ((id "json-material-crlf")
                  (family (org-glance-graph:headline-data-path graph id))
@@ -496,7 +490,7 @@
 
 (ert-deftest org-glance-config-test-crlf-repetition-retains-authored-bytes ()
   (org-glance-test:with-graph graph
-    (org-glance-config-test--publish graph
+    (org-glance-test:publish-config graph
      "{\"format\":1,\"todoCycles\":[{\"active\":[\"PLAN\"],\"inactive\":[\"DONE\"]}]}")
     (let* ((id "crlf-repeat")
            (family (org-glance-graph:headline-data-path graph id))
@@ -524,7 +518,7 @@
 (ert-deftest org-glance-config-test-repetition-preserves-retained-mixed-endings ()
   (dolist (default '("\n" "\r\n"))
     (org-glance-test:with-graph graph
-      (org-glance-config-test--publish graph
+      (org-glance-test:publish-config graph
        "{\"format\":1,\"todoCycles\":[{\"active\":[\"PLAN\"],\"inactive\":[\"DONE\"]}]}")
       (let* ((exception (if (equal default "\n") "\r\n" "\n"))
              (id "mixed-repeat")
@@ -564,7 +558,7 @@
 
 (ert-deftest org-glance-config-test-material-preserves-unrelated-unsaved-buffer ()
   (org-glance-test:with-graph graph
-    (org-glance-config-test--publish graph "{\"format\":1}")
+    (org-glance-test:publish-config graph "{\"format\":1}")
     (org-glance-graph:add graph (org-glance-test:headline "unsaved-source" "* TODO Source"))
     (let* ((path (org-glance-cache:material-path graph "unsaved-source"))
            (buffer (find-file-noselect path)))
@@ -593,7 +587,7 @@
 
 (ert-deftest org-glance-config-test-overview-source-context-is-metadata-only ()
   (org-glance-test:with-graph graph
-    (org-glance-config-test--publish graph
+    (org-glance-test:publish-config graph
      "{\"format\":1,\"todoCycles\":[{\"active\":[\"PLAN(p)\"]}],\"tags\":{\"book\":{\"todoCycles\":[{\"active\":[\"WORK(w)\"]}]}}}")
     (let* ((source (org-glance-test:org-with-id "* FILE Title :book:" "context-row"
                     "#+SEQ_TODO: FILE(f!) | FINISHED(x@)\nBody α"))
@@ -613,7 +607,7 @@
 
 (ert-deftest org-glance-config-test-overview-refuses-mixed-after-state-filter ()
   (org-glance-test:with-graph graph
-    (org-glance-config-test--publish graph
+    (org-glance-test:publish-config graph
      "{\"format\":1,\"tags\":{\"book\":{\"todoCycles\":[{\"active\":[\"PLAN\"],\"inactive\":[\"DONE\"]}]},\"other\":{\"todoCycles\":[{\"active\":[\"DONE\"],\"inactive\":[\"PLAN\"]}]}}}")
     (org-glance-config-test--snapshot graph "active-row"
       (org-glance-test:org-with-id "* PLAN Active :book:" "active-row"))
@@ -629,7 +623,7 @@
 
 (ert-deftest org-glance-config-test-overview-reload-receipt-and-refusal-are-coherent ()
   (org-glance-test:with-graph graph
-    (org-glance-config-test--publish graph
+    (org-glance-test:publish-config graph
      "{\"format\":1,\"todoCycles\":[{\"active\":[\"PLAN(p)\"]}]}")
     (org-glance-config-test--snapshot graph "cache-row"
       (org-glance-test:org-with-id "* PLAN Cache :book:" "cache-row"))
@@ -642,7 +636,7 @@
         (should (equal file (org-glance-overview:cached-file graph))))
       (cl-letf (((symbol-function 'org-glance-cache:reconcile-inventory)
                  (lambda (&rest _) (ert-fail "Presentation rebuilt Rows"))))
-        (org-glance-config-test--publish graph
+        (org-glance-test:publish-config graph
          "{\"format\":1,\"todoCycles\":[{\"active\":[\"PLAN(q)\"]}]}"))
       (let ((previous file))
         (setq file (org-glance-overview:cached-file graph))
@@ -655,7 +649,7 @@
       (setq file (org-glance-overview:cached-file graph))
       (let ((bytes (f-read-text file 'utf-8))
             (receipt (f-read-text (org-glance-overview--spec-sidecar file) 'utf-8)))
-        (org-glance-config-test--publish graph
+        (org-glance-test:publish-config graph
          "{\"format\":1,\"todoCycles\":[{\"active\":[\"PLAN(q)\"]}],\"tags\":{\"other\":{\"todoCycles\":[{\"active\":[\"WAIT(w)\"]}]}}}")
         (should-error (org-glance-overview:cached-file graph) :type 'org-glance-config-error)
         (should (equal bytes (f-read-text file 'utf-8)))
@@ -663,7 +657,7 @@
 
 (ert-deftest org-glance-config-test-overview-receipts-survive-rebuild-and-family-only-change ()
   (org-glance-test:with-graph graph
-    (org-glance-config-test--publish graph "{\"format\":1}")
+    (org-glance-test:publish-config graph "{\"format\":1}")
     (let* ((id "receipt-row")
            (family (org-glance-graph:headline-data-path graph id))
            (first (org-glance-config-test--snapshot graph id
@@ -689,7 +683,7 @@
 
 (ert-deftest org-glance-config-test-overview-refresh-restores-row-and-native-context ()
   (org-glance-test:with-graph graph
-    (org-glance-config-test--publish graph
+    (org-glance-test:publish-config graph
      "{\"format\":1,\"todoCycles\":[{\"active\":[\"PLAN(p)\"]}]}")
     (dolist (id '("one" "two"))
       (org-glance-config-test--snapshot graph id
@@ -697,7 +691,7 @@
     (cl-letf (((symbol-function 'org-glance-view:fill-frame) #'ignore))
       (org-glance-test:with-overview (buffer graph nil)
         (goto-char (car (org-glance-overview--heading-region "two")))
-        (org-glance-config-test--publish graph
+        (org-glance-test:publish-config graph
          "{\"format\":1,\"todoCycles\":[{\"active\":[\"PLAN(q)\",\"WORK(w)\"]}]}")
         (org-glance-overview:refresh)
         (should (equal "two" (org-glance-overview:id-at-point)))
@@ -707,7 +701,7 @@
 
 (ert-deftest org-glance-config-test-overview-is-a-standalone-agenda-source ()
   (org-glance-test:with-graph graph
-    (org-glance-config-test--publish graph
+    (org-glance-test:publish-config graph
      "{\"format\":1,\"todoCycles\":[{\"active\":[\"PLAN(p)\"],\"inactive\":[\"FINISHED\"]}]}")
     (org-glance-config-test--snapshot graph "agenda-row"
       (org-glance-test:org-with-id "* PLAN Agenda task\nSCHEDULED: <2026-06-07 Sun>" "agenda-row"))
@@ -728,7 +722,7 @@
         (dolist (serial '(nil t))
           (ert-info ((format "filter=%S kind=%S serial=%S" filter kind serial))
             (org-glance-test:with-graph graph
-              (org-glance-config-test--publish graph
+              (org-glance-test:publish-config graph
                                                "{\"format\":1,\"todoCycles\":[{\"active\":[\"PLAN(p)\"]}]}")
               (org-glance-config-test--snapshot graph "export-row"
                                                 (org-glance-test:org-with-id "* PLAN Original :book:" "export-row"))
@@ -768,7 +762,7 @@
   (dolist (filter '(nil (:tags ("book"))))
     (dolist (kind '(presentation family))
       (org-glance-test:with-graph graph
-        (org-glance-config-test--publish graph
+        (org-glance-test:publish-config graph
          "{\"format\":1,\"todoCycles\":[{\"active\":[\"PLAN(p)\"]}]}")
         (org-glance-config-test--snapshot graph "export-row"
           (org-glance-test:org-with-id "* PLAN Original :book:" "export-row"))
@@ -799,7 +793,7 @@
     (dolist (filter '(nil (:tags ("book"))))
       (dolist (kind '(presentation family))
 	(org-glance-test:with-graph graph
-				    (org-glance-config-test--publish graph
+				    (org-glance-test:publish-config graph
 								     "{\"format\":1,\"todoCycles\":[{\"active\":[\"PLAN(p)\"]}]}")
 				    (org-glance-config-test--snapshot graph "export-row"
 								      (org-glance-test:org-with-id "* PLAN Original :book:" "export-row"))

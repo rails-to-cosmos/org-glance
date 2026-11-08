@@ -467,10 +467,6 @@ newest first. External event reconciliation is owned by the isolated worker."
       (setq cache (org-glance-graph:-meta-cache graph)))
     cache))
 
-(cl-defun org-glance-graph--max-seq (graph)
-  "Return the highest `seq' in GRAPH's records, or 0 when none has one."
-  (plist-get (org-glance-graph--read-state graph) :max-seq))
-
 (cl-defun org-glance-graph--ensure-newline-terminated (path)
   "Drop PATH's newline-less final line, rewriting PATH only when there is one."
   (let ((size (org-glance--file-size path)))

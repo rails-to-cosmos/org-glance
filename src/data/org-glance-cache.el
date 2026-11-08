@@ -340,11 +340,11 @@ Reuse an idle connection; retry one file replacement before invoking FN."
                (when (or invoked (= attempt 1))
                  (signal (car err) (cdr err))))))))))
 
-(cl-defun org-glance-cache--file-digest (path)
-  "Return PATH's raw SHA-256 digest."
+(cl-defun org-glance-cache--file-digest (path &optional bytes)
+  "Return PATH's raw SHA-256 digest, limited to BYTES when supplied."
   (with-temp-buffer
     (set-buffer-multibyte nil)
-    (insert-file-contents-literally path)
+    (insert-file-contents-literally path nil 0 bytes)
     (secure-hash 'sha256 (current-buffer))))
 
 (cl-defun org-glance-cache--tags (metadata)
