@@ -5,6 +5,8 @@ Notable user-facing changes.  Versions date-based
 
 * Unreleased
 
+* 1.57.6.0.20261108.0
+
 ** Changed
 
 - =org-glance-perf-mode= accepts configurable timing symbols and plugin registration; LLM timing names belong to the plugin.
