@@ -8,39 +8,70 @@
 (require 'cl-lib)
 (require 'org-glance-core)
 
-(defconst org-glance-perf--commands
-  '(org-glance-transient org-glance-materialize org-glance-llm
-    org-glance-llm-here org-glance-llm-sessions org-glance-overview
-    org-glance-table org-glance-tags org-glance-open
-    agnostic-llm--menu-open-session agnostic-llm)
-  "Commands whose synchronous UX preparation is measured.")
-
-(defconst org-glance-perf--stages
-  '(org-glance-ensure-init org-glance-material:pick-metadata
-    org-glance-material:completing-read org-glance-material--selection
-    org-glance-cache:headlines
-    org-glance-cache--read-db org-glance-cache--acquire-reader
-    org-glance-cache--call-reader org-glance-cache--ordinary-rows
-    org-glance-cache--read-projection org-glance-cache--decode-metadata
-    org-glance-material--candidates org-glance-config:cache-key
-    org-glance-material:open org-glance-cache:logical-id
-    org-glance-cache:material-state org-glance-material--create
-    org-glance-material--load-source org-glance-material--read-source
-    org-glance-cache:incoming-relations org-glance-version:observe
-    org-glance-property-index:property org-glance-llm--dir
-    org-glance-llm--label org-glance-llm--open-session
-    org-glance-llm--session-rows agnostic-llm-menu
-    agnostic-llm--session-shell-command agnostic-llm--open-vterm
-    agnostic-llm--named-session vterm pop-to-buffer transient-setup
-    org-mode switch-to-buffer read-from-minibuffer)
-  "Functions aggregated by call count and inclusive elapsed time.")
-
 (defvar org-glance-perf--trace nil)
 (defvar org-glance-perf--serial 0)
 (defvar org-glance-perf--origin nil)
 (defvar org-glance-perf--advices nil)
 (defvar org-glance-perf--timers nil)
 (defvar org-glance-perf-mode nil)
+
+(defun org-glance-perf--clear-advices ()
+  "Remove every advice installed by the timing mode."
+  (dolist (entry org-glance-perf--advices)
+    (advice-remove (car entry) (cdr entry)))
+  (setq org-glance-perf--advices nil))
+
+(defun org-glance-perf--set-functions (symbol value)
+  "Set timing option SYMBOL to VALUE and refresh enabled instrumentation."
+  (set-default symbol (delete-dups (copy-sequence value)))
+  (when (and org-glance-perf-mode (fboundp 'org-glance-perf--install)
+             (boundp 'org-glance-perf-commands) (boundp 'org-glance-perf-stages)
+             (boundp 'org-glance-perf-continuations))
+    (org-glance-perf--clear-advices)
+    (org-glance-perf--install)))
+
+(defcustom org-glance-perf-commands
+  '(org-glance-transient org-glance-materialize org-glance-overview
+    org-glance-table org-glance-tags org-glance-open)
+  "Function symbols whose synchronous UX preparation is measured."
+  :type '(repeat symbol) :group 'org-glance
+  :set #'org-glance-perf--set-functions)
+
+(defcustom org-glance-perf-stages
+  '(org-glance-ensure-init org-glance-material:pick-metadata
+    org-glance-material:completing-read org-glance-material--selection
+    org-glance-cache:headlines org-glance-cache--read-db
+    org-glance-cache--acquire-reader org-glance-cache--call-reader
+    org-glance-cache--ordinary-rows org-glance-cache--read-projection
+    org-glance-cache--decode-metadata org-glance-material--candidates
+    org-glance-config:cache-key org-glance-material:open
+    org-glance-cache:logical-id org-glance-cache:material-state
+    org-glance-material--create org-glance-material--load-source
+    org-glance-material--read-source org-glance-cache:incoming-relations
+    org-glance-version:observe org-glance-property-index:property
+    transient-setup org-mode switch-to-buffer pop-to-buffer read-from-minibuffer)
+  "Function symbols aggregated by call count and inclusive elapsed time."
+  :type '(repeat symbol) :group 'org-glance
+  :set #'org-glance-perf--set-functions)
+
+(defcustom org-glance-perf-continuations '(org-glance-transient)
+  "Command symbols that retain the transient origin for a following step."
+  :type '(repeat symbol) :group 'org-glance
+  :set #'org-glance-perf--set-functions)
+
+(cl-defun org-glance-perf:register (&key commands stages continuations)
+  "Append COMMANDS, STAGES and CONTINUATIONS to the timing configuration.
+Accept function symbols before their libraries load; repeated entries collapse."
+  (dolist (entries (list commands stages continuations))
+    (unless (and (listp entries) (cl-every #'symbolp entries))
+      (error "Timing registration requires lists of function symbols")))
+  (setq org-glance-perf-commands (delete-dups (append org-glance-perf-commands commands))
+        org-glance-perf-stages (delete-dups (append org-glance-perf-stages stages))
+        org-glance-perf-continuations
+        (delete-dups (append org-glance-perf-continuations continuations)))
+  (when org-glance-perf-mode
+    (org-glance-perf--clear-advices)
+    (org-glance-perf--install)))
 
 (defun org-glance-perf--stage (name function &rest args)
   "Aggregate NAME's FUNCTION called with ARGS in the current trace."
@@ -65,15 +96,15 @@
   "Measure command NAME's FUNCTION with ARGS, preserving its result or error."
   (if org-glance-perf--trace
       (apply #'org-glance-perf--stage name function args)
-    (let* ((start (float-time))
+    (let ((serial (cl-incf org-glance-perf--serial)))
+      (message "glance-perf #%d %s start" serial name)
+      (let* ((start (float-time))
            (gc-start gc-elapsed)
            (gc-count gcs-done)
-           (serial (cl-incf org-glance-perf--serial))
            (org-glance-perf--trace (make-hash-table :test #'eq))
            (status 'aborted))
       (when (eq name 'org-glance-transient)
         (setq org-glance-perf--origin start))
-      (message "glance-perf #%d %s start" serial name)
       (unwind-protect
           (prog1 (apply function args) (setq status 'returned))
         (let* ((end (float-time))
@@ -97,8 +128,7 @@
                (format "; since transient %.1f ms (includes user input)"
                        (* 1000 (- end org-glance-perf--origin)))
              ""))
-          (unless (memq name '(org-glance-transient org-glance-llm
-                               org-glance-llm-here))
+          (unless (memq name org-glance-perf-continuations)
             (setq org-glance-perf--origin nil))
           (when (and org-glance-perf-mode (not noninteractive))
             (let (timer)
@@ -108,14 +138,14 @@
                              (setq org-glance-perf--timers
                                    (delq timer org-glance-perf--timers))
                              (org-glance-perf--ready serial end))))
-              (push timer org-glance-perf--timers))))))))
+              (push timer org-glance-perf--timers)))))))))
 
 (defun org-glance-perf--install (&rest _)
   "Advise available entry points, including lazily loaded plugin functions."
-  (dolist (name (append org-glance-perf--commands org-glance-perf--stages))
+  (dolist (name (append org-glance-perf-commands org-glance-perf-stages))
     (when (and (fboundp name) (not (assq name org-glance-perf--advices)))
       (let ((advice (apply-partially
-                     (if (memq name org-glance-perf--commands)
+                     (if (memq name org-glance-perf-commands)
                          #'org-glance-perf--command
                        #'org-glance-perf--stage)
                      name)))
@@ -137,12 +167,15 @@ model response require separate provider tracing."
         (org-glance-perf--install)
         (add-hook 'after-load-functions #'org-glance-perf--install))
     (remove-hook 'after-load-functions #'org-glance-perf--install)
-    (dolist (entry org-glance-perf--advices)
-      (advice-remove (car entry) (cdr entry)))
+    (org-glance-perf--clear-advices)
     (mapc #'cancel-timer org-glance-perf--timers)
     (setq org-glance-perf--advices nil
           org-glance-perf--timers nil
           org-glance-perf--origin nil)))
+
+(when org-glance-perf-mode
+  (org-glance-perf--clear-advices)
+  (org-glance-perf-mode 1))
 
 (provide 'org-glance-perf)
 ;;; org-glance-perf.el ends here

@@ -1,5 +1,7 @@
 ;;; test-config.el --- Typed settings and canonical Org context -*- lexical-binding: t -*-
 (require 'ert)
+(require 'test-config-env
+         (expand-file-name "test-config-env.el" (file-name-directory load-file-name)))
 (require 'org-glance-config)
 
 (defun org-glance-config-test--publish (graph text)
@@ -827,8 +829,8 @@
 					(kill-buffer buffer))))))))
 
 (ert-deftest org-glance-config-test-shared-settings-vectors ()
-  (let ((path (getenv "GLANCE_CONFIG_SETTINGS_VECTORS")))
-    (unless path (ert-skip "Set GLANCE_CONFIG_SETTINGS_VECTORS for paired typed fixtures"))
+  (let ((path (org-glance-config-test:getenv "SETTINGS_VECTORS")))
+    (unless path (ert-skip "Set OG_CONFIG_SETTINGS_VECTORS for paired typed fixtures"))
     (with-temp-buffer
       (insert-file-contents path)
       (dolist (entry (append (json-parse-buffer :null-object :null :false-object :false) nil))

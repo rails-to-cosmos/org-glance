@@ -473,3 +473,27 @@ Existing compatible caches can be measured with
 =python3 tools/bench.py interactive --directory /path/to/org-root= or
 =OG_BENCH_DIRECTORY=/path/to/org-root make bench-readers=. Commit comparisons use
 disposable stores. Graph and material workloads always use disposable stores.
+
+** Timing registration and test environment
+
+Customize =org-glance-perf-commands=, =org-glance-perf-stages= and
+=org-glance-perf-continuations= to choose traced function symbols. Option changes
+refresh enabled advice. Plugins append their own names without loading provider
+libraries:
+
+#+begin_src emacs-lisp
+(org-glance-perf:register
+ :commands '(my-command my-menu)
+ :stages '(my-resolver)
+ :continuations '(my-menu))
+#+end_src
+
+Registration accepts symbols before definition and collapses duplicates. Core
+owns its timing names; the LLM plugin owns provider, menu and terminal stages.
+The start report and trailing reports lie outside the command's time/GC window.
+
+Development environment options use =OG_= names: =OG_CONFIG_BENCH=,
+=OG_CONFIG_READ_FIXTURE=, =OG_CONFIG_VECTORS=, =OG_CONFIG_SETTINGS_VECTORS=,
+=OG_TEST_XVFB= and =OG_OVERVIEW_FROZEN=. The =GLANCE_CONFIG_= aliases remain
+accepted by the config fixture adapter for the daemon's existing test targets.
+An enabled configuration timing case skips when its optional fixture is absent.

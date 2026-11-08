@@ -10,6 +10,10 @@ or work-counter regression as a failing gate and fix it before committing; a
 regression may ship only with the user's explicit acceptance.
 
 - `eask run command test` enforces the work-counter contracts listed in `docs/invariants.org`.
+- Point reads enforce `graph-point-read-work-contract` and `cache-point-addresses-use-indexes`; run `make bench-graph` and `make bench-readers`.
+- Editor and picker work enforces `virtual-save-family-work-contract`, `cache-decodes-equal-payloads-once-per-snapshot` and `material-candidates-linear-label-counting`; run `make bench-material` and `make bench-interactive`.
+- Configuration reads enforce `org-glance-config-file-test-warm-read-work`; enable optional timing with `OG_CONFIG_BENCH=1 OG_CONFIG_READ_FIXTURE=FILE eask run command test`.
+- Extraction enforces `extract-table-warm-work-contract`; compare clipboard latency with `python3 test/bench-clipboard.py --baseline COMMIT`.
 - `make bench-graph`, `make bench-material`, `make bench-interactive` and `make bench-readers` measure the corresponding production workloads; `OG_BENCH_QUICK=1` selects the quick tier.
 - `python3 tools/bench.py NAME --baseline COMMIT --quick` compares committed production code through one measurement driver; latency tables in `docs/invariants.org` record accepted measurements.
 

@@ -56,5 +56,83 @@
                          (string-match-p "3200.0 ms; prompt 3000.0; work 200.0" text))
                        messages)))))
 
+(ert-deftest org-glance-test:perf-start-report-is-outside-the-measurement ()
+  "Exclude start reporting time and GC from the command's measurements."
+  (let ((clock 0.0) (gc-elapsed 0.0) (gcs-done 0)
+        (gc-cons-threshold most-positive-fixnum) messages)
+    (cl-letf (((symbol-function 'float-time) (lambda (&rest _) clock))
+              ((symbol-function 'message)
+               (lambda (format &rest args)
+                 (let ((text (apply #'format format args)))
+                   (cl-incf clock 2.0) (cl-incf gc-elapsed 1.0) (cl-incf gcs-done 5)
+                   (push text messages)))))
+      (org-glance-perf--command
+       'sample (lambda ()
+                 (org-glance-perf--stage
+                  'work (lambda () (cl-incf clock 0.25)
+                          (cl-incf gc-elapsed 0.1) (cl-incf gcs-done)))))
+      (should (cl-some (lambda (text)
+                         (and (string-search "returned: 250.0 ms" text)
+                              (string-search "GC 100.0 ms / 1" text)))
+                       messages)))))
+
+(ert-deftest org-glance-test:perf-registration-is-idempotent-and-lazy ()
+  "Trace a registered command and a stage defined by a subsequently loaded file."
+  (let ((org-glance-perf-commands nil) (org-glance-perf-stages nil)
+        (org-glance-perf-continuations nil) messages)
+    (org-glance-perf-mode -1)
+    (unwind-protect
+        (with-temp-directory directory
+          (let ((file (expand-file-name "late.el" directory)))
+            (with-temp-file file
+              (insert "(defun org-glance-perf-test-stage () 'payload)\n"))
+            (cl-letf (((symbol-function 'org-glance-perf-test-command)
+                       (lambda () (list (funcall 'org-glance-perf-test-stage)
+                                        (funcall 'org-glance-perf-test-stage))))
+                      ((symbol-function 'message)
+                       (lambda (format &rest args)
+                         (push (apply #'format format args) messages))))
+              (dotimes (_ 2)
+                (org-glance-perf:register
+                 :commands '(org-glance-perf-test-command)
+                 :stages '(org-glance-perf-test-stage)
+                 :continuations '(org-glance-perf-test-command)))
+              (should (= 1 (length org-glance-perf-commands)))
+              (should (= 1 (length org-glance-perf-stages)))
+              (should (= 1 (length org-glance-perf-continuations)))
+              (should-not (fboundp 'org-glance-perf-test-stage))
+              (org-glance-perf-mode 1)
+              (load file nil t)
+              (should (equal '(payload payload) (funcall 'org-glance-perf-test-command)))
+              (should (cl-some (lambda (text)
+                                 (and (string-search "org-glance-perf-test-stage:" text)
+                                      (string-search "/ 2 calls" text)))
+                               messages)))))
+      (org-glance-perf-mode -1)
+      (fmakunbound 'org-glance-perf-test-stage))))
+
+(ert-deftest org-glance-test:perf-invalid-registration-is-atomic ()
+  "Reject invalid symbols before appending any timing option."
+  (let ((org-glance-perf-commands nil) (org-glance-perf-stages nil)
+        (org-glance-perf-continuations nil))
+    (should-error (org-glance-perf:register :commands '(valid) :stages '((lambda () t))))
+    (should-not org-glance-perf-commands)
+    (should-not org-glance-perf-stages)))
+
+(ert-deftest org-glance-test:perf-custom-options-refresh-enabled-advice ()
+  "Apply changed command options immediately while the mode is enabled."
+  (let ((org-glance-perf-commands '(org-glance-perf-test-old))
+        (org-glance-perf-stages nil) (org-glance-perf-continuations nil))
+    (cl-letf (((symbol-function 'org-glance-perf-test-old) #'ignore)
+              ((symbol-function 'org-glance-perf-test-new) #'ignore))
+      (unwind-protect
+          (progn
+            (org-glance-perf-mode 1)
+            (should (assq 'org-glance-perf-test-old org-glance-perf--advices))
+            (org-glance-perf--set-functions 'org-glance-perf-commands '(org-glance-perf-test-new))
+            (should-not (assq 'org-glance-perf-test-old org-glance-perf--advices))
+            (should (assq 'org-glance-perf-test-new org-glance-perf--advices)))
+        (org-glance-perf-mode -1)))))
+
 (provide 'test-perf)
 ;;; test-perf.el ends here

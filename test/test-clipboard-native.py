@@ -240,7 +240,7 @@ class Wayland(Native):
 class X11(Native):
     @classmethod
     def setUpClass(cls):
-        xvfb = os.environ.get('ORG_GLANCE_TEST_XVFB') or shutil.which('Xvfb')
+        xvfb = os.environ.get('OG_TEST_XVFB') or shutil.which('Xvfb')
         if not xvfb or not shutil.which('xclip'):
             raise unittest.SkipTest('Xvfb and xclip are required for isolated X11 tests')
         read, write = os.pipe()

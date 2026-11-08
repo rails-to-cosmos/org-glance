@@ -7,11 +7,16 @@ Notable user-facing changes.  Versions date-based
 
 ** Changed
 
+- =org-glance-perf-mode= accepts configurable timing symbols and plugin registration; LLM timing names belong to the plugin.
+
 - =make bench= runs all four named production workloads on synthetic stores; =tools/bench.py= compares compiled Git revisions.
 
 - =org-glance-cache= reuses idle SQLite readers with a fresh checked transaction for each read.
 
 ** Fixed
+
+- =org-glance-perf-mode= excludes its start report from command time and GC totals.
+- =OG_CONFIG_BENCH= skips its optional timing case when the fixture is absent; development options use the =OG_= prefix.
 
 - =org-glance-graph:get-headline= reads one family by ID; exact-version cache addresses use indexed equality.
 

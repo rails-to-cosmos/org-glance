@@ -64,3 +64,10 @@ reader/overview run passes all 58 tests. Byte compilation is warning-free.
 The full picker benchmark retains equal fingerprints and exact decode counts:
 14,308 reference deserializations and 7,385 deduplicated deserializations for
 7,157 Rows; median reference/optimized preparation is 313.58/185.36 ms.
+
+* Measurement follow-up
+
+The [[file:2026-11-08-performance-gate-measures-the-live-path.done.org][production-path performance gate]] replaces this experiment's embedded
+baseline arms with named synthetic workloads and compiled Git comparisons.
+The measurements above describe the earlier experiment; current commands and
+measurement boundaries are documented in [[file:../guide.org::*Benchmark commands and tiers][the guide]].

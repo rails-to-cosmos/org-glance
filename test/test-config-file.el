@@ -1,6 +1,8 @@
 ;;; test-config-file.el --- Shared configuration transactions -*- lexical-binding: t -*-
 
 (require 'ert)
+(require 'test-config-env
+         (expand-file-name "test-config-env.el" (file-name-directory load-file-name)))
 (require 'org-glance-config-file)
 
 (defmacro org-glance-config-test--with-root (&rest body)
@@ -14,8 +16,8 @@
   (lambda (object) (puthash key value object) object))
 
 (ert-deftest org-glance-config-file-test-vectors ()
-  (let ((path (getenv "GLANCE_CONFIG_VECTORS")))
-    (unless path (ert-skip "Set GLANCE_CONFIG_VECTORS for shared compatibility vectors"))
+  (let ((path (org-glance-config-test:getenv "VECTORS")))
+    (unless path (ert-skip "Set OG_CONFIG_VECTORS for shared compatibility vectors"))
     (with-temp-buffer
       (insert-file-contents path)
       (dolist (entry (append (json-parse-buffer) nil))
@@ -94,11 +96,13 @@
                           (org-glance-config-file:read root))))))
       (should (= reads 100)))))
 
-(when (getenv "GLANCE_CONFIG_BENCH")
+(when (org-glance-config-test:getenv "BENCH")
   (ert-deftest org-glance-config-file-test-read-baseline ()
     (org-glance-config-test--with-root
       (org-glance-config-file:write root :change #'identity)
-      (copy-file (getenv "GLANCE_CONFIG_READ_FIXTURE") (org-glance-config-file:path root) t)
+      (let ((fixture (org-glance-config-test:getenv "READ_FIXTURE")))
+        (unless fixture (ert-skip "Set OG_CONFIG_READ_FIXTURE for timing fixtures"))
+        (copy-file fixture (org-glance-config-file:path root) t))
       (let* ((snapshot (org-glance-config-file:read root))
              (canonical (org-glance-config-file--serialize
                          (org-glance-config-file:object snapshot)))
@@ -468,3 +472,28 @@
                                  (org-glance-config-file:read root))))
         (should (equal '("." ".." "config.json")
                        (directory-files (expand-file-name ".org-glance" root))))))))
+
+(ert-deftest org-glance-config-file-test-environment-prefers-OG ()
+  "Retain daemon fixture aliases while preferring canonical Emacs options."
+  (let ((process-environment nil))
+    (setenv "GLANCE_CONFIG_VECTORS" "legacy")
+    (should (equal "legacy" (org-glance-config-test:getenv "VECTORS")))
+    (setenv "OG_CONFIG_VECTORS" "current")
+    (should (equal "current" (org-glance-config-test:getenv "VECTORS")))))
+
+(ert-deftest org-glance-config-file-test-benchmark-without-fixture-skips ()
+  "Skip an explicitly enabled timing case when its optional fixture is absent."
+  (let ((process-environment (copy-sequence process-environment))
+        (root (file-name-directory (directory-file-name
+                                    (file-name-directory (symbol-file 'org-glance-config-test:getenv))))))
+    (setenv "OG_CONFIG_BENCH" "1")
+    (setenv "OG_CONFIG_READ_FIXTURE" nil)
+    (setenv "GLANCE_CONFIG_READ_FIXTURE" nil)
+    (with-temp-buffer
+      (should (eq 0 (call-process
+                     (expand-file-name invocation-name invocation-directory)
+                     nil t nil "-Q" "--batch"
+                     "-L" (expand-file-name "src/data" root)
+                     "-l" (expand-file-name "test/test-config-file.el" root)
+                     "--eval" "(ert-run-tests-batch-and-exit 'org-glance-config-file-test-read-baseline)")))
+      (should (string-search "1 skipped" (buffer-string))))))

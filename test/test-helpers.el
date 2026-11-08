@@ -1,4 +1,4 @@
-;;; test-helpers.el --- Helpers for org-glance
+;;; test-helpers.el --- Helpers for org-glance -*- lexical-binding: t; -*-
 (defconst org-glance-test--root
   (file-name-directory (directory-file-name
                         (file-name-directory (or load-file-name buffer-file-name)))))

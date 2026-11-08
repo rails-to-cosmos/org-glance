@@ -68,3 +68,10 @@ The full picker still reads and decodes the searchable projection for each
 invocation. A layered picker with about 100 frequently used headlines and an
 explicit full-search path is deferred to the next pass. Lazy expansion must
 preserve stable selection and useful results while the user types.
+
+* Measurement follow-up
+
+The [[file:2026-11-08-performance-gate-measures-the-live-path.done.org][production-path performance gate]] replaces this experiment's embedded
+baseline arms with named synthetic workloads and compiled Git comparisons.
+The measurements above describe the earlier experiment; current commands and
+measurement boundaries are documented in [[file:../guide.org::*Benchmark commands and tiers][the guide]].

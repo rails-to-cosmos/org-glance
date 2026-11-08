@@ -1,7 +1,7 @@
 #+TITLE: The performance gate measures the path the UI runs
 #+DATE: 2026-11-08
 
-Status: *proposed*.
+Status: *done*.
 
 Part of the [[file:2026-07-06-performance-audit.org][performance audit]].  A review of the
 measurement setup — harnesses, in-suite contracts, =org-glance-perf-mode= and the
@@ -255,8 +255,7 @@ baseline arms are removed.
 The installed Eask CLI exposes project commands as =eask run command=; the
 proposal's =eask bench [name]= shorthand is implemented through its supported
 =bench= and =bench-NAME= project commands. Latency remains a reviewed measurement
-arm; work-counter contracts fail in ERT. Instrumentation and environment naming
-remain for the final implementation chunk.
+arm; work-counter contracts fail in ERT. Instrumentation and environment naming are implemented in the final chunk.
 
 The shared sampler also fixes an additional measurement blind spot: the graph
 harness's compact row followed reindex's built-in compaction and measured an
@@ -269,3 +268,23 @@ samples remain available in the JSON record.
 The setup chunk passes the 754-test gate with six environment skips, the Python
 comparison cases, all four synthetic command runners and a pinned Emacs 29.1
 container benchmark smoke run.
+
+Items 8–10 are implemented. The command's start and GC counters are captured
+after its start report; the trailing report uses already captured counters.
+Timing command/stage/continuation lists are customizable, and the public append
+API supports idempotent lazy registration and live option replacement. Provider
+and LLM names now live in the sibling plugin, whose test forbids eager provider
+requires while reloading its registrations.
+
+Canonical development options use =OG_= names. The code review found existing
+=GLANCE_CONFIG_= callers in the daemon's Makefile, so one fixture adapter retains
+those aliases while preferring canonical names; the daemon repo remains
+unchanged. Missing optional timing fixtures skip. The shared test helper has a
+lexical-binding cookie. All requested behavior is implemented; no step is
+deferred. The two overnight cleanup sweeps follow as separate review commits.
+
+The material harness also reports observations and GC by operation batch;
+open/lookup counters remain zero and three saves account for six observations.
+The reader-reuse predecessor had already added a guide command and an open-count
+oracle before this proposal started; this work supplies the named synthetic
+runner and commit comparisons that were still missing.

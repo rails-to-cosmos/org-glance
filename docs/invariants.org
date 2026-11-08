@@ -1003,7 +1003,7 @@ three saves per fixture. Baseline:
 - =cache-decodes-equal-payloads-once-per-snapshot= bounds one ordinary/family payload to one deserialization per committed read and verifies fresh content on the next read.
 - =material-candidates-linear-label-counting= bounds 1,000 candidate labels to 2,000 hash lookups and preserves duplicate disambiguation and filtered order.
 - =material-selection-restores-gc-before-prompt= checks the temporary 64 MiB picker allocation budget, restoration before input and preservation of larger caller budgets.
-- =test/bench-interactive.el= alternates seven warm baseline/current pairs on 7,157 =~/sync/views= Rows: median metadata 241.61 → 169.82 ms, labels 69.49 → 10.75 ms, total 308.36 → 180.01 ms, deserializations 14,308 → 7,385; complete picker fingerprints match.
+- The retired embedded interactive A/B experiment ran seven warm baseline/current pairs on 7,157 =~/sync/views= Rows: median metadata 241.61 → 169.82 ms, labels 69.49 → 10.75 ms, total 308.36 → 180.01 ms, deserializations 14,308 → 7,385; complete picker fingerprints match.
 - Live scripted =org-glance-materialize= and =org-glance-llm= traces with automatic selection measure 391.4 ms and 338.3/292.6 ms after batching allocations; each includes one collection, 137.3 ms and 129.7/126.8 ms respectively.
 - =org-glance-perf-mode= reports inclusive stage counts, prompt wait, synchronous command time, GC and event-loop scheduling; provider readiness and screen painting require separate measurement.
 - Validation: Emacs 31.1 runs 736 tests with 730 passes, six environment skips and zero failures; timing tests pass after excluding reporting GC from command GC totals; compilation and the timing module checkdoc pass without warnings.
@@ -1017,7 +1017,7 @@ three saves per fixture. Baseline:
 - =cache-reader-errors-and-quits-release-leases= verifies error and quit cleanup and forbids callback replay, including an internal replacement condition.
 - =cache-reader-reopens-replaced-and-missing-files= and =cache-reader-replacement-during-pin-retries-before-callback= verify file identity checks, missing-file passivity and one pre-callback replacement retry.
 - =cache-reader-empty-wal-preserves-overview-receipt= equates absent and zero-byte SQLite WALs while preserving nonempty WAL invalidation.
-- =test/bench-cache-readers.el= measures seven alternating pairs of 100 warm reads on =~/sync/views=: temporary 0.3767 ms/read, retained 0.0572 ms/read; opens 100 → 1 per batch; query results match.
+- The retired temporary/retained-reader experiment measured seven alternating pairs of 100 warm reads on =~/sync/views=: temporary 0.3767 ms/read, retained 0.0572 ms/read; opens 100 → 1 per batch; query results match.
 - After reuse, =test/bench-interactive.el= retains equal fingerprints on 7,157 Rows: reference/optimized medians 313.58/185.36 ms and 14,308/7,385 deserializations per read.
 - Reader reuse validation: Emacs 31.1 runs 746 tests with 740 passes, six environment skips and zero failures; 58 focused reader/overview tests pass; compilation is warning-free.
 
@@ -1035,3 +1035,13 @@ three saves per fixture. Baseline:
 - The commit driver verifies selected library locations, compiles each revision with the same runtime, checks workload inventories and fingerprints in each process, and aggregates independent process pairs in alternating order.
 - The graph harness prepares one superseded WAL record before compaction; its fixture oracle verifies N+1 input records reduce to N live records.
 - Three compiled process pairs against =530d439= measure real N=1,000 compaction at 8.694 → 8.328 ms with equal input/live work; the prior post-reindex no-op row is retired.
+
+* Timing instrumentation contracts
+
+- =perf-start-report-is-outside-the-measurement= injects two seconds and one collection into each report and verifies a 250 ms command retains only its own 100 ms/one-collection GC cost.
+- =perf-registration-is-idempotent-and-lazy= loads a previously undefined stage and counts exactly two calls; =perf-custom-options-refresh-enabled-advice= checks live option replacement; malformed registrations mutate no timing lists.
+- Core timing names live in defcustoms; plugins append owned commands, stages and continuations through =org-glance-perf:register=; provider libraries remain lazy.
+- =org-glance-config-file-test-benchmark-without-fixture-skips= verifies an enabled timing case skips without its fixture; =org-glance-config-file-test-environment-prefers-OG= verifies canonical options precede daemon aliases.
+- The material harness records family observations and GC for each operation batch; its runner oracle requires zero open/lookup observations and six observations across three saves.
+- Cold-fold timing across six compiled process pairs has mean paired delta +0.523 ms with an exact-bootstrap 95% interval of −3.652 to +4.792 ms; its full-projection work is unchanged.
+- Five compiled process pairs against =530d439= retain zero family observations for editor open/lookup and two per save; exact-bootstrap 95% intervals for all six plain/crypt lifecycle timing differences include zero.

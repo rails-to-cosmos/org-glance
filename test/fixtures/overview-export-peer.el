@@ -29,7 +29,7 @@
 
 (defun org-glance-test-overview-peer (root role filter kind serial)
   "Run one real export publisher ROLE in ROOT with FILTER, KIND and SERIAL."
-  (when-let* ((frozen (getenv "GLANCE_OVERVIEW_FROZEN"))) (load frozen nil t))
+  (when-let* ((frozen (getenv "OG_OVERVIEW_FROZEN"))) (load frozen nil t))
   (let* ((graph (org-glance-graph root))
          (write (symbol-function 'org-glance--atomic-write))
          (expected (if (eq kind 'presentation) "PLAN(q)" "Updated")))

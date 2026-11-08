@@ -59,6 +59,10 @@
              (work (aref (plist-get compact :work) 0)))
         (should (= 4 (plist-get work :input-records)))
         (should (= 3 (plist-get work :live-records))))
+      (dolist (record (cl-remove-if-not
+                      (lambda (record) (equal "material" (plist-get record :harness))) records))
+        (should (= (if (string-prefix-p "save " (plist-get record :operation)) 6 0)
+                   (plist-get (aref (plist-get record :work) 0) :family-observations))))
       (should (= 3 (plist-get (aref (plist-get interactive :work) 0) :candidates)))
       (should (= 0 (plist-get (aref (plist-get reader :work) 0) :opens)))
       (should (= 100 (plist-get (aref (plist-get reader :work) 0) :deserializations))))))
@@ -71,7 +75,7 @@
                    (expand-file-name "test/test-bench-driver.py" org-glance-test--root))))))
 
 (ert-deftest org-glance-test:bench-profile-counts-are-positive-integers ()
-  "Reject malformed profile values rather than measuring another workload."
+  "Reject malformed profile values."
   (dolist (invalid '("0" "-1" "1.5" "7suffix" ""))
     (should-error (org-glance-bench:positive-integer invalid)))
   (should (= 7 (org-glance-bench:positive-integer "7"))))

@@ -61,6 +61,10 @@ With =straight.el= (also needs recipes for [[https://github.com/rails-to-cosmos/
 
 Newest first.
 
+- [[file:proposals/2026-11-08-performance-gate-measures-the-live-path.done.org][The performance gate measures the path the UI runs]] — =get-headline= reads
+  one id instead of scanning the whole cache; every bench harness gets a runner
+  and a synthetic store, and the gate names its failing arm.
+
 - [[file:proposals/2026-07-06-incremental-row-update.done.org][Incremental row update]] — a single-row action upserts that row instead of
   re-deriving the whole view (the double-render half is an upstream change).
 - [[file:proposals/2026-07-06-incremental-metadata-cache.done.org][Incremental metadata cache]] — an append patches the read cache instead of
@@ -125,9 +129,7 @@ Newest first.
 
 Each is part of the [[file:proposals/2026-07-06-performance-audit.org][performance audit]].
 
-- [[file:proposals/2026-11-08-performance-gate-measures-the-live-path.proposed.org][The performance gate measures the path the UI runs]] — =get-headline= reads
-  one id instead of scanning the whole cache; every bench harness gets a runner
-  and a synthetic store, and the gate names its failing arm.
+
 - [[file:proposals/2026-07-06-lazy-property-columns.proposed.org][Lazy value-fn for custom property columns]] — parse only visible rows for a
   displayed property column.
 - [[file:proposals/2026-07-06-table-paging.proposed.org][Table paging / windowing]] — render a screen-sized page at a time.
