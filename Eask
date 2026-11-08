@@ -53,6 +53,7 @@
   (load "test/test-graph.el")
   (load "test/test-version.el")
   (load "test/test-cache.el")
+  (load "test/test-cache-readers.el")
   (load "test/test-checkpoint.el")
   (load "test/test-external.el")
   (load "test/test-filter.el")

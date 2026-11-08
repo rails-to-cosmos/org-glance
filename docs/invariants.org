@@ -1007,3 +1007,16 @@ three saves per fixture. Baseline:
 - Live scripted =org-glance-materialize= and =org-glance-llm= traces with automatic selection measure 391.4 ms and 338.3/292.6 ms after batching allocations; each includes one collection, 137.3 ms and 129.7/126.8 ms respectively.
 - =org-glance-perf-mode= reports inclusive stage counts, prompt wait, synchronous command time, GC and event-loop scheduling; provider readiness and screen painting require separate measurement.
 - Validation: Emacs 31.1 runs 736 tests with 730 passes, six environment skips and zero failures; timing tests pass after excluding reporting GC from command GC totals; compilation and the timing module checkdoc pass without warnings.
+
+* SQLite reader reuse contracts
+
+- Cache reads retain at most 16 readers by canonical cache path, evict idle readers by least recent use, pin fresh compatible transactions and retire failed, missing or replaced readers.
+- Nested reads use independent readers and staging readers are temporary; active leases finish before explicit retirement closes them; =org-glance-cache:close-readers= also runs at Emacs exit.
+- =cache-reader-reuses-one-open-for-warm-reads= bounds 100 reads to one open and verifies query-only mode, transaction release and explicit close.
+- =cache-reader-sees-external-commits-in-fresh-snapshots= and =cache-reader-nested-reads-preserve-the-outer-snapshot= verify new commits and independent nested snapshots.
+- =cache-reader-errors-and-quits-release-leases= verifies error and quit cleanup and forbids callback replay, including an internal replacement condition.
+- =cache-reader-reopens-replaced-and-missing-files= and =cache-reader-replacement-during-pin-retries-before-callback= verify file identity checks, missing-file passivity and one pre-callback replacement retry.
+- =cache-reader-empty-wal-preserves-overview-receipt= equates absent and zero-byte SQLite WALs while preserving nonempty WAL invalidation.
+- =test/bench-cache-readers.el= measures seven alternating pairs of 100 warm reads on =~/sync/views=: temporary 0.3767 ms/read, retained 0.0572 ms/read; opens 100 → 1 per batch; query results match.
+- After reuse, =test/bench-interactive.el= retains equal fingerprints on 7,157 Rows: reference/optimized medians 313.58/185.36 ms and 14,308/7,385 deserializations per read.
+- Reader reuse validation: Emacs 31.1 runs 746 tests with 740 passes, six environment skips and zero failures; 58 focused reader/overview tests pass; compilation is warning-free.

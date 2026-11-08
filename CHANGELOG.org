@@ -5,6 +5,14 @@ Notable user-facing changes.  Versions date-based
 
 * Unreleased
 
+** Changed
+
+- =org-glance-cache= reuses idle SQLite readers with a fresh checked transaction for each read.
+
+** Fixed
+
+- =org-glance-overview= receipts treat absent and empty SQLite WAL files equally.
+
 * 1.57.5.0.20261108.0
 
 ** Added

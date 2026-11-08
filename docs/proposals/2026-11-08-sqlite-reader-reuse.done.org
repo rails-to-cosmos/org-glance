@@ -1,0 +1,66 @@
+#+TITLE: Reuse idle SQLite readers
+#+DATE: 2026-11-08
+
+Status: *done*
+
+* Scope
+
+The warm cache reader previously opened SQLite, set query-only mode and a busy
+timeout, began a transaction, validated schema/configuration, called its consumer,
+committed and closed the connection for every operation. Baseline:
+[[https://github.com/rails-to-cosmos/org-glance/commit/39ac2bc12337e6acaa30b1f6ef8149c54b1fc394][39ac2bc]],
+=src/data/org-glance-cache.el= line 211.
+
+This change retains connections across reads. Serialized-payload decoding remains
+local to a single committed snapshot. Writers keep their existing independent
+connections and atomic publication path.
+
+* Lifecycle
+
+The process retains up to 16 readers, keyed by canonical cache path and ordered
+by latest use. Each operation begins a new transaction and checks the schema and
+configuration before invoking its consumer. Successful reads commit immediately.
+Errors and quits roll back and retire the connection. A consumer executes once.
+
+A read compares the cache's device/inode before acquisition and after pinning
+its snapshot. A missing file retires the old reader and returns empty results.
+Replacement during admission permits one retry before invoking the consumer.
+An exhausted replacement retry reaches the caller.
+
+Nested reads use an independent reader while the outer snapshot stays pinned.
+Staging readers are temporary. The retention limit evicts an idle reader;
+when every retained reader is active, additional reads remain temporary. Explicit
+retirement removes a reader immediately and lets an active lease finish before
+closing it. =org-glance-cache:close-readers= accepts a graph or closes every
+retained reader, and runs at Emacs exit.
+
+* Overview receipts
+
+Opening a retained reader can leave an empty SQLite WAL on disk. Overview
+receipts give absent and zero-byte SQLite WALs the same representation. Main
+file changes and nonempty WAL changes keep their existing invalidation evidence.
+The full receipt still guards immutable artifact publication.
+
+* Verification
+
+=test/test-cache-readers.el= covers connection reuse, external commits, nested
+snapshots, explicit retirement, idle eviction, staging isolation, missing files,
+replacement during admission and failure/quit cleanup. The configuration repair
+test captures the actual borrowed reader and verifies it closes before repair.
+The existing overview rebuild/family-change case guards stable export receipts.
+
+=test/bench-cache-readers.el= alternates seven batches of 100 reads with retained
+and temporary readers. Both modes perform the same query, schema/configuration
+checks and file identity checks. Results must match; connection opens are counted.
+
+On Emacs 31.1/Linux with the warm =~/sync/views= cache, the final seven-pair
+run measured 0.3767 ms per temporary read and 0.0572 ms per retained read.
+Opens fell from 100 to one per 100-read batch. These figures compare current
+read admission with retention disabled/enabled; both include replacement checks.
+The retained connection still starts and ends 100 independent transactions.
+
+The full suite passes 740 tests with six environment skips; the focused
+reader/overview run passes all 58 tests. Byte compilation is warning-free.
+The full picker benchmark retains equal fingerprints and exact decode counts:
+14,308 reference deserializations and 7,385 deduplicated deserializations for
+7,157 Rows; median reference/optimized preparation is 313.58/185.36 ms.

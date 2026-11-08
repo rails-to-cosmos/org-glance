@@ -208,29 +208,136 @@ CONFIGURATION-INDEPENDENT bypasses dependency checks for maintenance reads."
 (defvar org-glance-cache--decoded-records nil
   "Serialized metadata shared within one committed read snapshot.")
 
-(cl-defun org-glance-cache--read-db-once (graph fn configuration-independent)
-  "Call FN in GRAPH's pinned read, respecting CONFIGURATION-INDEPENDENT."
-  (let ((path (org-glance-cache:path graph)))
-    (when (and (sqlite-available-p) (file-exists-p path))
-      (let ((org-glance-cache--decoded-records (make-hash-table :test #'equal))
-            (db (sqlite-open path)))
-        (unwind-protect
+(cl-defstruct (org-glance-cache--reader
+               (:constructor org-glance-cache--make-reader))
+  path identity db)
+
+(defvar org-glance-cache--readers nil
+  "Read connections in most-recently-used order.")
+(defvar org-glance-cache--active-readers nil
+  "Connections currently leased by a read transaction.")
+(defconst org-glance-cache--reader-limit 16
+  "Maximum number of retained read connections.")
+
+(define-error 'org-glance-cache-reader-replaced
+  "Cache file changed while acquiring a read snapshot")
+
+(defun org-glance-cache--file-identity (path)
+  "Return PATH's device and inode, or nil when absent."
+  (when-let* ((attributes (file-attributes path 'integer)))
+    (list (file-attribute-device-number attributes)
+          (file-attribute-inode-number attributes))))
+
+(defun org-glance-cache--retire-reader (reader)
+  "Remove READER from reuse, closing it after its active lease ends."
+  (setq org-glance-cache--readers (delq reader org-glance-cache--readers))
+  (unless (memq (org-glance-cache--reader-db reader)
+                org-glance-cache--active-readers)
+    (ignore-errors (sqlite-close (org-glance-cache--reader-db reader)))))
+
+(defun org-glance-cache:close-readers (&optional graph)
+  "Retire GRAPH's read connection, or all read connections when GRAPH is nil.
+An active reader closes when its current operation returns."
+  (let ((path (and graph (expand-file-name (org-glance-cache:path graph)))))
+    (dolist (reader (copy-sequence org-glance-cache--readers))
+      (when (or (null path) (equal path (org-glance-cache--reader-path reader)))
+        (org-glance-cache--retire-reader reader)))))
+
+(add-hook 'kill-emacs-hook #'org-glance-cache:close-readers)
+
+(defun org-glance-cache--acquire-reader (path identity)
+  "Lease a reader for PATH with IDENTITY, reusing an idle connection."
+  (let ((existing (unless org-glance-cache--staging-path
+                    (cl-find path org-glance-cache--readers
+                             :key #'org-glance-cache--reader-path :test #'equal))))
+    (when (and existing
+               (not (equal identity (org-glance-cache--reader-identity existing))))
+      (org-glance-cache--retire-reader existing)
+      (setq existing nil))
+    (if (and existing
+             (not (memq (org-glance-cache--reader-db existing)
+                        org-glance-cache--active-readers)))
+        (progn
+          (setq org-glance-cache--readers
+                (cons existing (delq existing org-glance-cache--readers)))
+          existing)
+      (let* ((db (sqlite-open path))
+             (reader (org-glance-cache--make-reader
+                      :path path :identity identity :db db)))
+        (condition-case err
             (progn
               (sqlite-execute db "PRAGMA busy_timeout=50")
               (sqlite-execute db "PRAGMA query_only=ON")
-              (sqlite-execute db "BEGIN")
-              (prog1
-                  (when (= org-glance-cache:version
-                           (caar (sqlite-select db "PRAGMA user_version")))
-                    (unless configuration-independent
-                      (let* ((key (org-glance-config:cache-key graph))
-                             (held (sqlite-select db "SELECT format,fingerprint FROM configuration_dependency WHERE singleton=1")))
-                        (when (and (or key (and held (not (equal "" (cadar held)))))
-                                   (not (equal held (list (list 1 (or key ""))))))
-                          (signal 'org-glance-cache-configuration-stale nil))))
-                    (funcall fn db))
-                (sqlite-commit db)))
-          (sqlite-close db))))))
+              (unless (or org-glance-cache--staging-path existing)
+                (when (>= (length org-glance-cache--readers)
+                          org-glance-cache--reader-limit)
+                  (when-let* ((idle (cl-find-if
+                                    (lambda (entry)
+                                      (not (memq (org-glance-cache--reader-db entry)
+                                                 org-glance-cache--active-readers)))
+                                    (reverse org-glance-cache--readers))))
+                    (org-glance-cache--retire-reader idle)))
+                (when (< (length org-glance-cache--readers)
+                         org-glance-cache--reader-limit)
+                  (push reader org-glance-cache--readers)))
+              reader)
+          ((error quit)
+           (ignore-errors (sqlite-close db))
+           (signal (car err) (cdr err))))))))
+
+(defun org-glance-cache--call-reader (graph reader fn configuration-independent)
+  "Call FN in READER's fresh GRAPH snapshot with CONFIGURATION-INDEPENDENT."
+  (let* ((db (org-glance-cache--reader-db reader))
+         (org-glance-cache--active-readers (cons db org-glance-cache--active-readers))
+         (org-glance-cache--decoded-records (make-hash-table :test #'equal))
+         complete)
+    (unwind-protect
+        (progn
+          (sqlite-execute db "BEGIN")
+          (prog1
+              (let ((compatible (= org-glance-cache:version
+                                   (caar (sqlite-select db "PRAGMA user_version")))))
+                (unless (equal (org-glance-cache--reader-identity reader)
+                               (org-glance-cache--file-identity
+                                (org-glance-cache--reader-path reader)))
+                  (signal 'org-glance-cache-reader-replaced nil))
+                (when compatible
+                  (unless configuration-independent
+                    (let* ((key (org-glance-config:cache-key graph))
+                           (held (sqlite-select db "SELECT format,fingerprint FROM configuration_dependency WHERE singleton=1")))
+                      (when (and (or key (and held (not (equal "" (cadar held)))))
+                                 (not (equal held (list (list 1 (or key ""))))))
+                        (signal 'org-glance-cache-configuration-stale nil))))
+                  (funcall fn db)))
+            (sqlite-commit db)
+            (setq complete t)))
+      (unless complete
+        (ignore-errors (sqlite-rollback db))
+        (org-glance-cache--retire-reader reader))
+      (unless (memq reader org-glance-cache--readers)
+        (ignore-errors (sqlite-close db))))))
+
+(cl-defun org-glance-cache--read-db-once (graph fn configuration-independent)
+  "Call FN in GRAPH's fresh pinned read with CONFIGURATION-INDEPENDENT.
+Reuse an idle connection; retry one file replacement before invoking FN."
+  (let ((path (expand-file-name (org-glance-cache:path graph))))
+    (when (sqlite-available-p)
+      (cl-loop
+       for attempt below 2
+       do (let ((identity (org-glance-cache--file-identity path))
+                invoked)
+            (unless identity
+              (org-glance-cache:close-readers graph)
+              (cl-return nil))
+            (condition-case err
+                (cl-return
+                 (org-glance-cache--call-reader
+                  graph (org-glance-cache--acquire-reader path identity)
+                  (lambda (db) (setq invoked t) (funcall fn db))
+                  configuration-independent))
+              (org-glance-cache-reader-replaced
+               (when (or invoked (= attempt 1))
+                 (signal (car err) (cdr err))))))))))
 
 (cl-defun org-glance-cache--file-digest (path)
   "Return PATH's raw SHA-256 digest."

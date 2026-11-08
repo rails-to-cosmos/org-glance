@@ -19,7 +19,8 @@
   '(org-glance-ensure-init org-glance-material:pick-metadata
     org-glance-material:completing-read org-glance-material--selection
     org-glance-cache:headlines
-    org-glance-cache--read-db org-glance-cache--ordinary-rows
+    org-glance-cache--read-db org-glance-cache--acquire-reader
+    org-glance-cache--call-reader org-glance-cache--ordinary-rows
     org-glance-cache--read-projection org-glance-cache--decode-metadata
     org-glance-material--candidates org-glance-config:cache-key
     org-glance-material:open org-glance-cache:logical-id

@@ -18,6 +18,7 @@ second producer database is required.
 
 - =org-glance-cache--read-db-once= is query-only and snapshot-pinned. A newly created
   live file with no published compatible schema returns empty recovery reads.
+  [[file:2026-11-08-sqlite-reader-reuse.done.org][Reader reuse]] retains idle connections with a fresh transaction per operation.
 - =org-glance-cache--read-db= closes a configuration-incompatible reader, repairs
   the dependency and retries once in a fresh snapshot; compatible reads retain
   their passive path. An active worker finishes first, and its compatible

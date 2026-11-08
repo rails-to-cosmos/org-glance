@@ -111,7 +111,7 @@
                      (apply execute db sql args))))
           (should (eq 'incremental (org-glance-overview:update graph nil '("a")))))
         (should (equal '(("a")) queries))
-        (should (= 1 opens))
+        (should (= 0 opens))
         (should (= 1 begins)))
       (should (equal bytes (f-read-text file 'utf-8)))
       (should (string= (org-glance-overview:render graph)

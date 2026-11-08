@@ -214,20 +214,23 @@ Prefix the pragmas FILTER's tags agree on; select by their cycle's done-set."
                        (org-glance-config:native-keywords settings nil nil) "")))))
 
 (defun org-glance-overview--dependency (graph filter)
-  "Return FILTER's private Overview receipt for GRAPH's current context."
-  (json-serialize
-   (vector 5 (org-glance-filter:identity filter)
-           (org-glance-config:cache-key graph)
-           (org-glance-config:presentation-key graph)
-           (vconcat
-            (mapcar (lambda (path)
-                      (when-let* ((attributes (file-attributes path)))
-                        (vector (prin1-to-string (file-attribute-modification-time attributes))
-                                (file-attribute-size attributes))))
-                    (list (org-glance-cache:path graph)
-                          (concat (org-glance-cache:path graph) "-wal")
-                          (org-glance-graph:headline-meta-path graph)
-                          (org-glance-graph:external-path graph)))))))
+  "Return FILTER's Overview receipt for GRAPH, ignoring empty SQLite WALs."
+  (let* ((cache (org-glance-cache:path graph))
+         (wal (concat cache "-wal")))
+    (json-serialize
+     (vector 5 (org-glance-filter:identity filter)
+             (org-glance-config:cache-key graph)
+             (org-glance-config:presentation-key graph)
+             (vconcat
+              (mapcar (lambda (path)
+                        (when-let* ((attributes (file-attributes path))
+                                    ((or (not (equal path wal))
+                                         (> (file-attribute-size attributes) 0))))
+                          (vector (prin1-to-string (file-attribute-modification-time attributes))
+                                  (file-attribute-size attributes))))
+                      (list cache wal
+                            (org-glance-graph:headline-meta-path graph)
+                            (org-glance-graph:external-path graph))))))))
 
 (cl-defun org-glance-overview:file (graph)
   "Return GRAPH's unfiltered local Overview publication anchor."

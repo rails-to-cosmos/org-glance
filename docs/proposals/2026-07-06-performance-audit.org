@@ -93,3 +93,7 @@ writing up (the proposals above).
 verbose command traces and fixes repeated payload decoding, quadratic duplicate
 labels and frequent GC during picker preparation. The full picker remains the
 next target for a layered recent/frequent-headline cache.
+
+[[file:2026-11-08-sqlite-reader-reuse.done.org][SQLite reader reuse]] retains idle
+connections while keeping transactions and metadata decoding scoped to each
+read; its benchmark counts connection opens and compares equal query results.

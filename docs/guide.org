@@ -418,3 +418,24 @@ eask emacs --batch -l test/test-helpers.el -l test/bench-interactive.el \
 #+end_src
 
 See [[file:proposals/2026-11-08-interactive-cache-timing.done.org][interactive timing measurements]].
+
+** SQLite reader reuse
+
+Cache reads retain up to 16 SQLite connections in least-recently-used order.
+Each operation starts and ends its own checked read transaction. Nested reads
+use independent connections; staging reads use temporary connections. Missing or replaced files retire the
+old reader; failed reads retire their connection before reporting the error.
+Connections close at Emacs exit. To release one graph's readers explicitly:
+
+#+begin_src emacs-lisp
+(org-glance-cache:close-readers org-glance-graph)
+#+end_src
+
+Pass no argument to release all readers. Active readers finish their operation
+before closing. Equal-record decoding remains local to each read snapshot.
+Run the warm connection benchmark with:
+
+#+begin_src sh
+eask emacs --batch -l test/test-helpers.el -l test/bench-cache-readers.el \
+  --eval '(org-glance-reader-bench:run (expand-file-name "~/sync/views") 7)'
+#+end_src

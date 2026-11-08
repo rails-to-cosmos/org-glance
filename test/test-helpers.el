@@ -57,6 +57,7 @@ OURS and THEIRS are newline-terminated line strings; the sole marker speller."
      (let ((,graph (org-glance-graph dir)))
        (unwind-protect
            (progn ,@body)
+         (org-glance-cache:close-readers ,graph)
          (remhash (org-glance-graph:directory ,graph)
                   org-glance-graph:list)))))
 
