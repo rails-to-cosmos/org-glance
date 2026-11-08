@@ -318,3 +318,32 @@ all nine workload differences have paired-bootstrap 95% intervals containing
 zero, and all work counters and result fingerprints match. The full gate has
 760 tests, 754 passes and six environment skips; the pinned Emacs 29.1 image
 compiles cleanly and emits all 17 records across four synthetic harnesses.
+
+* Generalization review
+
+Three read-only reviewers found one untracked follow-up:
+
+| Rank | Proposal | Impact | Safety | LOC now | LOC per suite |
+|------+----------+--------+--------+---------+---------------|
+| 1 | [[file:2026-11-08-generalize-ert-suite-discovery.proposed.org][ERT suite discovery]] | Medium | High | +3/−29 | −1 |
+
+It removes the unenforced Eask registration step for new suite files. Its first
+step is helper-first filename discovery with an added-suite canary and a
+fresh-process comparison of registered test names. The proposal is inert.
+
+Benchmark wrapper generation adds machinery for four entry points. Material
+batch timing and stable-result sampling carry different measurement contracts.
+Existing table/view proposals already cover the neighboring structural debt;
+provider registration already lives in its owner. These candidates were dropped.
+
+* Final gate
+
+The baseline was green: 746 tests, 740 passes, six environment skips; plugin
+21 passes. The final gate has 760 tests, 754 passes, six environment skips and
+zero failures; the plugin has 22 passes. All 32 production files compile
+without warnings. Lint commands pass with their existing checkdoc notices;
+regex lint reports no issues. The final pinned Emacs 29.1 image compiles and
+runs all four synthetic harnesses, emitting 17 measurement records.
+
+The implemented proposal, simplification cleanup and generalization review are
+committed separately. No second proposal is implemented and no commit is pushed.

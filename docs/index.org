@@ -162,6 +162,7 @@ Each is part of the [[file:proposals/2026-07-06-performance-audit.org][performan
 
 * Proposed — generalization / refactor
 
+- [[file:proposals/2026-11-08-generalize-ert-suite-discovery.proposed.org][Discover ERT suites from their filenames]] — new suites join the gate automatically.
 - [[file:proposals/2026-07-27-generalize-table-action-table.proposed.org][One action table behind the table's keys and handlers]].
 - [[file:proposals/2026-07-27-generalize-table-column-table.proposed.org][One column table behind the spec, the cells and editability]].
 - [[file:proposals/2026-07-27-generalize-view-scaffold.proposed.org][The shared view scaffold, actually shared]].

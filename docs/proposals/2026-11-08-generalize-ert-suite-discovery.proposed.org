@@ -1,0 +1,58 @@
+#+TITLE: Discover ERT suites from their filenames
+#+DATE: 2026-11-08
+#+STATUS: proposed
+
+* Pattern
+
+The test command enumerates 29 suite files by hand. A new suite requires a
+second edit to join the gate, and an omitted registration leaves the gate green.
+The performance work added both =test/test-bench.el= and its Eask registration.
+
+* Files
+
+- =Eask:67–96= ([[https://github.com/rails-to-cosmos/org-glance/blob/1dd416f27e02b0d2cc9df9e6fa562e3c9869a005/Eask#L67][commit 1dd416f]]) owns the manual inventory.
+- =test/test-bench.el:1= ([[https://github.com/rails-to-cosmos/org-glance/blob/1dd416f27e02b0d2cc9df9e6fa562e3c9869a005/test/test-bench.el#L1][commit 1dd416f]]) is the newest registered suite.
+- =test/test-config-env.el:1= ([[https://github.com/rails-to-cosmos/org-glance/blob/1dd416f27e02b0d2cc9df9e6fa562e3c9869a005/test/test-config-env.el#L1][commit 1dd416f]]) also matches the convention and defines only its fixture adapter.
+
+* Proposed change
+
+Retain explicit helper-first initialization and discover top-level suite files
+in sorted filename order:
+
+#+begin_src emacs-lisp
+(load "test/test-helpers.el")
+(dolist (file (directory-files "test" t "\\`test-.*\\.el\\'"))
+  (unless (equal (file-name-nondirectory file) "test-helpers.el")
+    (load file)))
+#+end_src
+
+Keep =test/fixtures/= outside discovery. Treat =test/test-*.el= as the suite or
+support-library naming convention. Any load-time dependency between suite
+modules must become explicit before changing their order.
+
+* Oracle
+
+The existing checkout must retain 760 tests, 754 passes and six environment
+skips. Add a temporary top-level =test/test-discovery-canary.el= containing one
+failing ERT case; the ordinary test command must report that case without an
+Eask edit. Remove the canary and rerun the full gate. Compare the registered
+ERT names across fresh old/new processes to catch a missing or duplicate suite.
+
+* LOC estimate
+
+Replace 29 registration lines with three discovery lines: +3/−29, net −26.
+Each future suite saves one registration line and one file edit; three further
+suites yield a total saving of 29 lines.
+
+* Risk
+
+Alphabetical loading changes initialization order. Helper-first loading stays
+explicit; suite-local macros and cross-suite fixture functions need review.
+The configuration environment adapter is safe to load directly and via its
+existing =require=. Public APIs, storage formats and benchmark semantics stay
+unchanged.
+
+* Existing precedent
+
+=tools/bench.py:46–54= ([[https://github.com/rails-to-cosmos/org-glance/blob/1dd416f27e02b0d2cc9df9e6fa562e3c9869a005/tools/bench.py#L46][commit 1dd416f]]) discovers benchmark libraries and production compilation
+sources from filename conventions.
