@@ -7,6 +7,8 @@ Notable user-facing changes.  Versions date-based
 
 ** Changed
 
+- =make bench= runs all four named production workloads on synthetic stores; =tools/bench.py= compares compiled Git revisions.
+
 - =org-glance-cache= reuses idle SQLite readers with a fresh checked transaction for each read.
 
 ** Fixed

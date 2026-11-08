@@ -7,6 +7,8 @@
 #   podman build -t org-glance-test:emacs-29.1 -f Containerfile .
 # Run the test suite:
 #   podman run --rm org-glance-test:emacs-29.1
+# Run the synthetic benchmark gate:
+#   podman run --rm -e OG_BENCH_QUICK=1 org-glance-test:emacs-29.1 eask run command bench
 # Interactive Emacs (TUI) with org-glance available:
 #   podman run --rm -it org-glance-test:emacs-29.1 eask emacs -nw
 # One-off elisp on the pinned Emacs:
@@ -21,7 +23,7 @@ FROM docker.io/silex/emacs:${EMACS_VERSION}
 # eask ships as an npm CLI. Installing it via npm avoids the eask apt repo and
 # its unverified GPG key / --allow-insecure-repositories flags.
 RUN apt-get update \
- && apt-get install -y --no-install-recommends nodejs npm ca-certificates git \
+ && apt-get install -y --no-install-recommends nodejs npm python3 ca-certificates git \
  && rm -rf /var/lib/apt/lists/* \
  && npm install -g @emacs-eask/cli \
  && npm cache clean --force

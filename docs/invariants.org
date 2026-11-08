@@ -1025,4 +1025,13 @@ three saves per fixture. Baseline:
 
 - =graph-point-read-work-contract= bounds 100 warm logical IDs to 100 family queries and 100 projection decodes, with zero full-authority reads; WAL tombstones, revival and metadata precedence remain invariant 30.
 - =cache-point-addresses-use-indexes= checks the logical/role index and query plans for logical IDs, exact versions, logical address resolution and rejected-version paths.
-- At N=1,000, =OG_BENCH_QUICK=1 make bench= records 67,090.0 → 222.4 ms for 1,000 compatibility =get-headline= calls; the pre-change run used [[https://github.com/rails-to-cosmos/org-glance/commit/530d439][530d439]].
+- At N=1,000, three alternating process pairs from =python3 tools/bench.py graph --baseline 530d439 --quick --samples 3 --pairs 3= compile both revisions and measure 100 compatibility lookups at 1,607.66 → 15.96 ms and 100 SQLite UI lookups at 21.27 → 10.92 ms; baseline [[https://github.com/rails-to-cosmos/org-glance/commit/530d439][530d439]].
+
+* Benchmark runner contracts
+
+- =make bench= runs graph, material, interactive and readers workloads; =make bench-NAME= and =eask run command bench-NAME= select one harness; synthetic stores are the default.
+- =bench-fingerprint-checks-every-round= rejects an intermediate changed result; =bench-measures-only-work-and-counts-iterations= excludes setup and observers from timing.
+- =bench-all-harnesses-use-disposable-stores= runs all four harnesses, checks their JSON records and counts actual picker candidates and UI point-read work; =bench-driver-comparison-contracts= runs the Python comparison cases inside ERT.
+- The commit driver verifies selected library locations, compiles each revision with the same runtime, checks workload inventories and fingerprints in each process, and aggregates independent process pairs in alternating order.
+- The graph harness prepares one superseded WAL record before compaction; its fixture oracle verifies N+1 input records reduce to N live records.
+- Three compiled process pairs against =530d439= measure real N=1,000 compaction at 8.694 → 8.328 ms with equal input/live work; the prior post-reindex no-op row is retired.

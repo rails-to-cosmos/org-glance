@@ -1,45 +1,30 @@
-;;; bench-cache-readers.el --- Warm reader reuse measurements -*- lexical-binding: t; -*-
+;;; bench-cache-readers.el --- Warm UI point-read measurements -*- lexical-binding: t; -*-
 
-(require 'org-glance)
-(require 'benchmark)
+(require 'bench-common)
 
-(defun org-glance-reader-bench:run (directory &optional repeats)
-  "Compare retained and temporary readers in DIRECTORY over REPEATS pairs.
-Use identical file checks, transactions and queries; count connection opens."
-  (let* ((graph (make-org-glance-graph :directory (file-truename directory)))
-         (path (org-glance-cache:path graph))
-         (query (lambda (db)
-                  (sqlite-select db "SELECT logical_id,state FROM headline_family LIMIT 1")))
-         (expected (org-glance-cache--read-db graph query))
-         (open (symbol-function 'sqlite-open))
-         (fresh nil) (reused nil)
-         (counts (vector 0 0))
-         (inhibit-message t))
-    (unwind-protect
-        (dotimes (round (or repeats 7))
-          (dolist (variant (if (zerop (% round 2)) '(0 1) '(1 0)))
-            (org-glance-cache:close-readers graph)
-            (garbage-collect)
-            (let ((org-glance-cache--staging-path (when (zerop variant) path))
-                  (opens 0) result)
-              (cl-letf (((symbol-function 'sqlite-open)
-                         (lambda (&rest args) (cl-incf opens) (apply open args))))
-                (let ((elapsed
-                       (car (benchmark-run 100
-                              (setq result (org-glance-cache--read-db graph query))))))
-                  (if (zerop variant) (push (* 10 elapsed) fresh)
-                    (push (* 10 elapsed) reused))))
-              (unless (equal expected result) (error "Reader result changed"))
-              (cl-incf (aref counts variant) opens))))
-      (org-glance-cache:close-readers graph))
-    (princ (format "Warm readers: %d alternating pairs of 100 reads; equal results\n"
-                   (or repeats 7)))
-    (princ (format "Per-read median ms: fresh %.4f; reused %.4f\n"
-                   (nth (/ (length fresh) 2) (sort fresh #'<))
-                   (nth (/ (length reused) 2) (sort reused #'<))))
-    (princ (format "Connection opens per 100 reads: fresh %.1f; reused %.1f\n"
-                   (/ (aref counts 0) (float (or repeats 7)))
-                   (/ (aref counts 1) (float (or repeats 7)))))))
+(defun org-glance-reader-bench:run (&optional directory repeats)
+  "Measure warm UI point reads in DIRECTORY or disposable stores over REPEATS."
+  (let ((inhibit-message t) (message-log-max nil))
+    (org-glance-bench:with-store
+     directory
+     (lambda (graph)
+       (let* ((metadata (car (org-glance-cache:headlines graph)))
+              (id (if metadata (org-glance-headline-metadata:id metadata) "absent"))
+              (open (symbol-function 'sqlite-open))
+              (deserialize (symbol-function 'org-glance-headline-metadata:deserialize))
+              (opens 0) (decoded 0))
+         (org-glance-graph:live-meta graph id)
+         (cl-letf (((symbol-function 'sqlite-open)
+                    (lambda (&rest args) (cl-incf opens) (apply open args)))
+                   ((symbol-function 'org-glance-headline-metadata:deserialize)
+                    (lambda (record) (cl-incf decoded) (funcall deserialize record))))
+           (org-glance-bench:measure
+            "readers" "org-glance-graph:live-meta"
+            (lambda () (org-glance-graph:live-meta graph id))
+            :samples (or repeats (org-glance-bench:rounds)) :iterations 100
+            :before (lambda () (setq opens 0 decoded 0))
+            :fingerprint #'org-glance-bench:fingerprint
+            :counters (lambda (_result) (list :opens opens :deserializations decoded)))))))))
 
 (provide 'bench-cache-readers)
 ;;; bench-cache-readers.el ends here

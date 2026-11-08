@@ -9,6 +9,10 @@ performance contract for each changed behavior. Treat any unexplained latency
 or work-counter regression as a failing gate and fix it before committing; a
 regression may ship only with the user's explicit acceptance.
 
+- `eask run command test` enforces the work-counter contracts listed in `docs/invariants.org`.
+- `make bench-graph`, `make bench-material`, `make bench-interactive` and `make bench-readers` measure the corresponding production workloads; `OG_BENCH_QUICK=1` selects the quick tier.
+- `python3 tools/bench.py NAME --baseline COMMIT --quick` compares committed production code through one measurement driver; latency tables in `docs/invariants.org` record accepted measurements.
+
 ## Documentation
 
 - Docs are org-mode (`.org`); cross-references are org-links —

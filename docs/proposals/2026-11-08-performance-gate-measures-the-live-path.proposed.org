@@ -235,6 +235,37 @@ against the prior implementation.
 
 The baseline build and 746-test suite passed with six environment skips; the
 plugin baseline passed 21 tests. Lint commands completed with existing checkdoc
-diagnostics. The quick N=1,000 benchmark measured 67,090.0 ms for 1,000 warm
-compatibility lookups before the change and 222.4 ms afterward. Named harnesses,
-commit baselines and instrumentation changes remain in this proposal.
+diagnostics. The initial quick row overlapped lint's bytecode cleanup and mixed library load
+modes. It supplies no accepted before/after ratio. The commit driver compiles
+both revisions in isolation. At N=1,000, three alternating process pairs against
+=530d439= measure 100 compatibility lookups at 1,607.66 → 15.96 ms and 100
+SQLite UI lookups at 21.27 → 10.92 ms.
+
+Items 4–7 are implemented. Named Make/Eask commands run all four harnesses or
+one selection. Interactive and reader workloads have disposable synthetic
+stores; explicit compatible private stores remain supported. The interactive
+workload calls the real materialize command with automatic selection and a
+fresh editor. =tools/bench.py= extracts committed production source, compiles
+both revisions, verifies library origins and runs the same current drivers.
+Per-round and per-process fingerprints, workload inventories, raw samples, GC
+and work counters are checked or recorded. =--pairs= alternates revision order
+across independent processes. The old embedded algorithm and staging-mode
+baseline arms are removed.
+
+The installed Eask CLI exposes project commands as =eask run command=; the
+proposal's =eask bench [name]= shorthand is implemented through its supported
+=bench= and =bench-NAME= project commands. Latency remains a reviewed measurement
+arm; work-counter contracts fail in ERT. Instrumentation and environment naming
+remain for the final implementation chunk.
+
+The shared sampler also fixes an additional measurement blind spot: the graph
+harness's compact row followed reindex's built-in compaction and measured an
+already compact store. It now prepares a superseded WAL record, and the runner
+oracle verifies N+1 input records reduce to N live records. Three compiled
+process pairs measure real N=1,000 compaction at 8.694 → 8.328 ms. Collection
+before each sample removes GC debt from a preceding workload; raw GC and latency
+samples remain available in the JSON record.
+
+The setup chunk passes the 754-test gate with six environment skips, the Python
+comparison cases, all four synthetic command runners and a pinned Emacs 29.1
+container benchmark smoke run.

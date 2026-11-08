@@ -409,13 +409,8 @@ restores the caller's GC policy before entering the minibuffer. Equal serialized
 metadata shares decoding within one committed SQLite read; the next read gets
 fresh metadata.
 
-Run the paired warm-cache benchmark without initializing or reconciling the
-graph:
-
-#+begin_src sh
-eask emacs --batch -l test/test-helpers.el -l test/bench-interactive.el \
-  --eval '(org-glance-interactive-bench:run (expand-file-name "~/sync/views") 7)'
-#+end_src
+Run =make bench-interactive= to measure the materialize command with automatic
+selection and a fresh editor on disposable synthetic stores.
 
 See [[file:proposals/2026-11-08-interactive-cache-timing.done.org][interactive timing measurements]].
 
@@ -433,9 +428,48 @@ Connections close at Emacs exit. To release one graph's readers explicitly:
 
 Pass no argument to release all readers. Active readers finish their operation
 before closing. Equal-record decoding remains local to each read snapshot.
-Run the warm connection benchmark with:
+Run =make bench-readers= to measure committed UI point reads and connection
+opens on disposable synthetic stores.
+
+** Benchmark commands and tiers
+
+=eask run command bench= and =make bench= run all four harnesses. Each harness
+also has a named command:
+
+| Workload | Make target | Eask command |
+|----------+-------------+--------------|
+| Graph construction, SQLite UI reads, compatibility reads, overview, recovery | =make bench-graph= | =eask run command bench-graph= |
+| Plain/crypt editor open, warm lookup and save | =make bench-material= | =eask run command bench-material= |
+| Materialize command with automatic selection and a fresh editor | =make bench-interactive= | =eask run command bench-interactive= |
+| Warm committed UI point reads | =make bench-readers= | =eask run command bench-readers= |
+
+The default store tiers are 1,000 and 10,000 headlines. =OG_BENCH_QUICK=1= selects
+1,000 headlines and 100 point lookups; =OG_BENCH_LARGE=1= adds 100,000 headlines.
+The material harness uses graph/history shapes 10/1, 50/12 and 100/40; quick
+selects 10/1 and large adds 500/80. =OG_BENCH_SAMPLES= selects repeat count.
+=OG_BENCH_SIZES= accepts positive comma-separated sizes for focused experiments.
 
 #+begin_src sh
-eask emacs --batch -l test/test-helpers.el -l test/bench-cache-readers.el \
-  --eval '(org-glance-reader-bench:run (expand-file-name "~/sync/views") 7)'
+OG_BENCH_QUICK=1 make bench
+python3 tools/bench.py readers --baseline HEAD~1 --quick --samples 7 --pairs 3
+OG_BENCH_QUICK=1 make podman-bench
 #+end_src
+
+The Python driver compiles production code extracted from the requested Git
+commit and from the current working tree, then runs the same current harnesses
+against both. It verifies the loaded library locations. Its JSON records source
+revisions, runtime, raw samples, work counters, ratios and fingerprint equality.
+Use =--pairs= for independent process pairs in alternating revision order.
+Collection runs before each sample; preparation and fingerprint observers run
+outside its timing window. Each revision's fingerprint must stay stable in every
+round and process. A cross-revision
+fingerprint difference is reported separately from latency.
+
+The work-counter arm fails inside ERT. Latency samples support review against
+commit baselines; =docs/invariants.org= records accepted measurements. Investigate
+an unexplained regression before committing.
+
+Existing compatible caches can be measured with
+=python3 tools/bench.py interactive --directory /path/to/org-root= or
+=OG_BENCH_DIRECTORY=/path/to/org-root make bench-readers=. Commit comparisons use
+disposable stores. Graph and material workloads always use disposable stores.

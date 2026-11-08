@@ -1,4 +1,4 @@
-.PHONY: bootstrap init build test info clean lint lint-package bench loc
+.PHONY: bootstrap init build test info clean lint lint-package bench bench-graph bench-material bench-interactive bench-readers loc
 
 bootstrap:
 	@command -v eask >/dev/null 2>&1 || { \
@@ -49,6 +49,9 @@ lint-package:
 bench:
 	eask run command bench
 
+bench-graph bench-material bench-interactive bench-readers:
+	eask run command $@
+
 clean:
 	eask clean elc
 
@@ -92,7 +95,7 @@ PODMAN ?= podman
 EMACS_VERSION ?= 29.1
 IMAGE ?= org-glance-test:emacs-$(EMACS_VERSION)
 
-.PHONY: podman-build podman-test podman-emacs podman-shell podman-clean
+.PHONY: podman-build podman-test podman-bench podman-emacs podman-shell podman-clean
 
 podman-build:
 	$(PODMAN) build --build-arg EMACS_VERSION=$(EMACS_VERSION) -t $(IMAGE) -f Containerfile .
@@ -100,6 +103,9 @@ podman-build:
 # Run the full ERT suite on the pinned Emacs.
 podman-test: podman-build
 	$(PODMAN) run --rm $(IMAGE)
+
+podman-bench: podman-build
+	$(PODMAN) run --rm -e OG_BENCH_QUICK -e OG_BENCH_LARGE $(IMAGE) eask run command bench
 
 # Interactive Emacs (TUI) on the pinned version with org-glance loaded; data
 # under ./.podman-data persists across runs as `org-glance-directory'.

@@ -37,11 +37,27 @@
  (depends-on "package-lint")
  (depends-on "relint"))
 
+(defun org-glance--eask-bench (name)
+  "Run benchmark NAME through the common harness dispatcher."
+  (add-to-list 'load-path (expand-file-name "test"))
+  (require 'bench-runner)
+  (org-glance-bench:dispatch name (getenv "OG_BENCH_DIRECTORY")))
+
 (eask-defcommand bench
-  "Time the store's hot paths over synthetic graphs (see test/bench-graph.el)."
-  (load "test/test-helpers.el")
-  (load "test/bench-graph.el")
-  (org-glance-bench:run))
+  "Run every performance harness over disposable synthetic stores."
+  (org-glance--eask-bench (or (getenv "OG_BENCH") "all")))
+(eask-defcommand bench-graph
+  "Measure graph construction, point reads and projections."
+  (org-glance--eask-bench "graph"))
+(eask-defcommand bench-material
+  "Measure plain and encrypted editor lifecycles."
+  (org-glance--eask-bench "material"))
+(eask-defcommand bench-interactive
+  "Measure warm materialize command preparation."
+  (org-glance--eask-bench "interactive"))
+(eask-defcommand bench-readers
+  "Measure warm committed UI point reads."
+  (org-glance--eask-bench "readers"))
 
 (eask-defcommand test
   "Run a configured ert test suite."
@@ -76,5 +92,6 @@
   (load "test/test-tags.el")
   (load "test/test-ui.el")
   (load "test/test-perf.el")
+  (load "test/test-bench.el")
   (load "test/test-plugins.el")
   (ert-run-tests-batch-and-exit))
