@@ -11,6 +11,8 @@ Notable user-facing changes.  Versions date-based
 
 ** Fixed
 
+- =org-glance-graph:get-headline= reads one family by ID; exact-version cache addresses use indexed equality.
+
 - =org-glance-overview= receipts treat absent and empty SQLite WAL files equally.
 
 * 1.57.5.0.20261108.0

@@ -1020,3 +1020,9 @@ three saves per fixture. Baseline:
 - =test/bench-cache-readers.el= measures seven alternating pairs of 100 warm reads on =~/sync/views=: temporary 0.3767 ms/read, retained 0.0572 ms/read; opens 100 → 1 per batch; query results match.
 - After reuse, =test/bench-interactive.el= retains equal fingerprints on 7,157 Rows: reference/optimized medians 313.58/185.36 ms and 14,308/7,385 deserializations per read.
 - Reader reuse validation: Emacs 31.1 runs 746 tests with 740 passes, six environment skips and zero failures; 58 focused reader/overview tests pass; compilation is warning-free.
+
+* Indexed point-read performance contracts
+
+- =graph-point-read-work-contract= bounds 100 warm logical IDs to 100 family queries and 100 projection decodes, with zero full-authority reads; WAL tombstones, revival and metadata precedence remain invariant 30.
+- =cache-point-addresses-use-indexes= checks the logical/role index and query plans for logical IDs, exact versions, logical address resolution and rejected-version paths.
+- At N=1,000, =OG_BENCH_QUICK=1 make bench= records 67,090.0 → 222.4 ms for 1,000 compatibility =get-headline= calls; the pre-change run used [[https://github.com/rails-to-cosmos/org-glance/commit/530d439][530d439]].

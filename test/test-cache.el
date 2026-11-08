@@ -720,7 +720,7 @@
               (should (equal '(("left" "rejected") ("right" "current"))
                              (sqlite-select
                               db
-                              "SELECT event_id,role FROM headline_projection WHERE logical_id='a'"))))
+                              "SELECT event_id,role FROM headline_projection WHERE logical_id='a' ORDER BY event_id"))))
           (sqlite-close db))))))
 
 (ert-deftest org-glance-test:rejected-snapshot-is-visible-and-an-edit-makes-it-current ()
@@ -1981,5 +1981,33 @@
       (org-glance-test:headline "decode" "* TODO Updated :work:" "new body"))
     (should (equal "Updated" (org-glance-headline-metadata:title
                               (car (org-glance-cache:headlines graph)))))))
+
+
+(ert-deftest org-glance-test:cache-point-addresses-use-indexes ()
+  "Logical and exact-version point reads search the projection indexes."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "indexed" "* Indexed"))
+    (let* ((version (plist-get (org-glance-cache:material-state graph "indexed") :version))
+           (address (concat "indexed/" version))
+           (select (symbol-function 'sqlite-select))
+           plans)
+      (org-glance-cache--read-db
+       graph (lambda (db)
+               (should (member "headline_projection_logical_role"
+                               (mapcar #'cadr (sqlite-select db "PRAGMA index_list(headline_projection)"))))))
+      (cl-letf (((symbol-function 'sqlite-select)
+                 (lambda (db sql &rest args)
+                   (when (and (string-prefix-p "SELECT " sql)
+                              (string-search "FROM headline_projection" sql))
+                     (push (apply select db (concat "EXPLAIN QUERY PLAN " sql) args) plans))
+                   (apply select db sql args))))
+        (should (org-glance-headline-metadata? (org-glance-cache:headline graph "indexed")))
+        (should (org-glance-headline-metadata? (org-glance-cache:headline graph address)))
+        (should (equal "indexed" (org-glance-cache:logical-id graph address)))
+        (org-glance-cache:material-path graph address))
+      (should (>= (length plans) 3))
+      (dolist (plan plans)
+        (should (cl-some (lambda (row) (string-search "SEARCH" (nth 3 row))) plan))
+        (should-not (cl-some (lambda (row) (string-match-p "SCAN \\(headline_projection\\|projection\\)" (nth 3 row))) plan))))))
 
 (provide 'test-cache)

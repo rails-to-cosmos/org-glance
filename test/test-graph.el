@@ -479,5 +479,34 @@ the two paths rather than trusting either."
                                         (org-glance-graph:headlines fresh))))
           (should (equal tri (mapcar (lambda (i) (org-glance-test:tri-state fresh i)) ids))))))))
 
-(provide 'test-graph)
 ;;; test-graph.el ends here
+
+(ert-deftest org-glance-test:graph-point-read-work-contract ()
+  "Read 100 IDs with one indexed family read and one payload decode per ID."
+  (org-glance-test:with-graph graph
+    (let ((ids (cl-loop for index below 100 collect (format "point-%03d" index))))
+      (apply #'org-glance-graph:add graph
+             (mapcar (lambda (id) (org-glance-test:headline id (concat "* " id))) ids))
+      (org-glance-graph--ensure-cache graph)
+      (let ((families 0) (decoded 0)
+            (select (symbol-function 'sqlite-select))
+            (decode (symbol-function 'org-glance-cache--decode-metadata)))
+        (cl-letf (((symbol-function 'org-glance-cache:authority)
+                   (lambda (&rest _) (ert-fail "Point read requested full authority")))
+                  ((symbol-function 'sqlite-select)
+                   (lambda (db sql &rest args)
+                     (when (string-search "FROM headline_family" sql)
+                       (cl-incf families)
+                       (should (string-search "WHERE logical_id=?" sql)))
+                     (when (string-search "FROM headline_projection" sql)
+                       (should (string-search "WHERE logical_id=?" sql)))
+                     (apply select db sql args)))
+                  ((symbol-function 'org-glance-cache--decode-metadata)
+                   (lambda (payload) (cl-incf decoded) (funcall decode payload))))
+          (dolist (id ids)
+            (should (equal id (org-glance-headline-metadata:id
+                               (org-glance-graph:get-headline graph id))))))
+        (should (= 100 families))
+        (should (= 100 decoded))))))
+
+(provide 'test-graph)

@@ -28,7 +28,7 @@
 (defvar org-glance-cache--configuration-repairs nil
   "Graphs whose configuration dependencies are being repaired synchronously.")
 
-(defconst org-glance-cache:version 10
+(defconst org-glance-cache:version 11
   "Private org-glance cache schema version.")
 
 (defcustom org-glance-cache-progress-step 25
@@ -48,6 +48,7 @@
     "CREATE TABLE IF NOT EXISTS headline_event (logical_id TEXT NOT NULL REFERENCES headline_family(logical_id) ON DELETE CASCADE, event_id TEXT NOT NULL, kind TEXT NOT NULL, parents_json TEXT NOT NULL, targets_json TEXT NOT NULL, observed_leaves_json TEXT NOT NULL, payload_digest TEXT, producer TEXT NOT NULL, created TEXT NOT NULL, envelope TEXT NOT NULL, PRIMARY KEY(logical_id,event_id))"
     "CREATE TABLE IF NOT EXISTS headline_payload_observation (logical_id TEXT NOT NULL, event_id TEXT NOT NULL, path TEXT NOT NULL, observed_digest TEXT, payload_state TEXT NOT NULL, PRIMARY KEY(logical_id,event_id), FOREIGN KEY(logical_id,event_id) REFERENCES headline_event(logical_id,event_id) ON DELETE CASCADE)"
     "CREATE TABLE IF NOT EXISTS headline_projection (logical_id TEXT NOT NULL REFERENCES headline_family(logical_id) ON DELETE CASCADE, event_id TEXT, role TEXT NOT NULL, source_digest TEXT, parser_contract TEXT NOT NULL, record_payload TEXT, PRIMARY KEY(logical_id,event_id))"
+    "CREATE INDEX IF NOT EXISTS headline_projection_logical_role ON headline_projection(logical_id,role)"
     "CREATE UNIQUE INDEX IF NOT EXISTS headline_projection_metadata ON headline_projection(logical_id) WHERE event_id IS NULL"
     "CREATE TABLE IF NOT EXISTS inventory_directory (path TEXT PRIMARY KEY, stamp TEXT NOT NULL)"
     "CREATE TABLE IF NOT EXISTS configuration_dependency (singleton INTEGER PRIMARY KEY CHECK(singleton=1), format INTEGER NOT NULL, fingerprint TEXT NOT NULL)")
@@ -1860,35 +1861,61 @@ Refuse Rows with incoming relation labels that require broader regeneration."
                          (vector id)))))
     (org-glance-cache--decode-metadata (car row))))
 
+(defun org-glance-cache--row-address (id)
+  "Return ID's logical and event components as SQL parameters, or nil."
+  (when-let* ((slash (string-search "/" id)))
+    (vector (substring id 0 slash) (substring id (1+ slash)))))
+
+(cl-defun org-glance-cache:family-headline (graph id)
+  "Return ID's (STATE REVIVED METADATA) from one committed GRAPH snapshot.
+METADATA is the sole searchable logical Row, or nil for ambiguity or absence."
+  (org-glance-cache--read-db
+   graph
+   (lambda (db)
+     (when-let* ((family (car (sqlite-select
+                              db "SELECT state,revived FROM headline_family WHERE logical_id=?"
+                              (vector id)))))
+       (let ((projected
+              (cl-remove-if-not
+               (lambda (metadata)
+                 (and metadata (equal id (org-glance-headline-metadata:id metadata))))
+               (mapcar
+                (lambda (row) (org-glance-cache--decode-metadata (car row)))
+                (sqlite-select
+                 db
+                 "SELECT record_payload FROM headline_projection WHERE logical_id=? AND role IN ('current','conflict','recovery') ORDER BY event_id"
+                 (vector id))))))
+         (list (car family) (eq 1 (cadr family))
+               (and (= 1 (length projected)) (car projected))))))))
+
 (cl-defun org-glance-cache--headline (db id)
   "Return ID's effective Row from the committed DB snapshot."
-  (let* ((exact (car (sqlite-select
-                         db
-                         "SELECT record_payload FROM headline_projection WHERE logical_id || '/' || event_id=? AND role IN ('current','conflict','recovery','rejected') LIMIT 1"
-                         (vector id))))
-            (family (car (sqlite-select
-                          db
-                          "SELECT state FROM headline_family WHERE logical_id=?"
+  (let* ((address (org-glance-cache--row-address id))
+         (exact (and address
+                     (car (sqlite-select
+                           db
+                           "SELECT record_payload FROM headline_projection WHERE logical_id=? AND event_id=? AND role IN ('current','conflict','recovery','rejected') LIMIT 1"
+                           address)))))
+    (if exact
+        (org-glance-cache--decode-metadata (car exact))
+      (let* ((family (car (sqlite-select
+                          db "SELECT state FROM headline_family WHERE logical_id=?"
                           (vector id))))
-            (state (car family))
-            (ordinary (org-glance-cache--ordinary-headline db id))
-            (projected-rows
-             (and family
-                  (sqlite-select
-                   db
-                   "SELECT record_payload FROM headline_projection WHERE logical_id=? AND role IN ('current','recovery') ORDER BY event_id"
-                   (vector id))))
-            (projected
-             (and (= 1 (length projected-rows))
-                  (org-glance-cache--decode-metadata
-                   (caar projected-rows)))))
-       (cond
-        (exact (org-glance-cache--decode-metadata (car exact)))
-        ((equal state "deleted") 'tombstone)
-        (projected
-         (org-glance-graph--prefer-family-metadata projected ordinary))
-        (family nil)
-        (t ordinary))))
+             (ordinary (org-glance-cache--ordinary-headline db id))
+             (projected-rows
+              (and family
+                   (sqlite-select
+                    db
+                    "SELECT record_payload FROM headline_projection WHERE logical_id=? AND role IN ('current','recovery') ORDER BY event_id"
+                    (vector id))))
+             (projected
+              (and (= 1 (length projected-rows))
+                   (org-glance-cache--decode-metadata (caar projected-rows)))))
+        (cond
+         ((equal (car family) "deleted") 'tombstone)
+         (projected (org-glance-graph--prefer-family-metadata projected ordinary))
+         (family nil)
+         (t ordinary))))))
 
 (cl-defun org-glance-cache:headline (graph id)
   "Return ID from GRAPH's committed projection, `tombstone', or nil."
@@ -1896,13 +1923,14 @@ Refuse Rows with incoming relation labels that require broader regeneration."
 
 (cl-defun org-glance-cache:logical-id (graph id)
   "Return the logical headline ID addressed by projection Row ID in GRAPH."
-  (or (org-glance-cache--read-db
-       graph
-       (lambda (db)
-         (caar (sqlite-select
-                db
-                "SELECT logical_id FROM headline_projection WHERE logical_id || '/' || event_id=? LIMIT 1"
-                (vector id)))))
+  (or (when-let* ((address (org-glance-cache--row-address id)))
+        (org-glance-cache--read-db
+         graph
+         (lambda (db)
+           (caar (sqlite-select
+                  db
+                  "SELECT logical_id FROM headline_projection WHERE logical_id=? AND event_id=? LIMIT 1"
+                  address)))))
       id))
 
 (cl-defun org-glance-cache:material-state (graph id &optional version)
@@ -1959,11 +1987,12 @@ longer match the digest admitted by the pinned projection."
                 graph
                 (lambda (db)
                   (or
-                   (car
-                    (sqlite-select
-                     db
-                     "SELECT observation.path,event.payload_digest FROM headline_projection AS projection JOIN headline_family AS family USING(logical_id) JOIN headline_event AS event ON event.logical_id=projection.logical_id AND event.event_id=projection.event_id JOIN headline_payload_observation AS observation ON observation.logical_id=event.logical_id AND observation.event_id=event.event_id WHERE projection.logical_id || '/' || projection.event_id=? AND projection.role='rejected' AND family.verified=1 AND observation.payload_state='available'"
-                     (vector id)))
+                   (when-let* ((address (org-glance-cache--row-address id)))
+                     (car
+                      (sqlite-select
+                       db
+                       "SELECT observation.path,event.payload_digest FROM headline_projection AS projection JOIN headline_family AS family USING(logical_id) JOIN headline_event AS event ON event.logical_id=projection.logical_id AND event.event_id=projection.event_id JOIN headline_payload_observation AS observation ON observation.logical_id=event.logical_id AND observation.event_id=event.event_id WHERE projection.logical_id=? AND projection.event_id=? AND projection.role='rejected' AND family.verified=1 AND observation.payload_state='available'"
+                       address)))
                    (car
                     (sqlite-select
                      db

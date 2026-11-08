@@ -911,34 +911,26 @@ Full headlines also persist their contents (invariant 5)."
       (org-glance-graph:insert graph specs)))
   graph)
 
+(declare-function org-glance-cache:family-headline "org-glance-cache" (graph id))
+
 (cl-defun org-glance-graph:get-headline (graph id)
   "Return the most recent metadata for ID in GRAPH, from the committed cache.
 Return `tombstone' if ID was deleted, or nil if unknown (invariant 30)."
   (cl-check-type graph org-glance-graph)
   (cl-check-type id string)
-  (let* ((record (gethash id (plist-get (org-glance-graph--ensure-cache graph)
-                                         :by-id)))
-         (authority (and (fboundp 'org-glance-cache:authority)
-                         (org-glance-cache:authority graph)))
-         (family (and authority
-                      (assoc id (plist-get authority :families))))
-         (projected (and family
-                         (cl-remove-if-not
-                          (lambda (meta)
-                            (equal id (org-glance-headline-metadata:id meta)))
-                          (plist-get authority :headlines)))))
+  (let* ((record (gethash id (plist-get (org-glance-graph--ensure-cache graph) :by-id)))
+         (family (and (fboundp 'org-glance-cache:family-headline)
+                      (org-glance-cache:family-headline graph id)))
+         (projected (nth 2 family)))
     (cond
-     ((and record (plist-get record :tombstone)
-           (not (member id (plist-get authority :revived))))
-      'tombstone)
+     ((and record (plist-get record :tombstone) (not (nth 1 family))) 'tombstone)
      (family
       (cond
-       ((equal "deleted" (cadr family)) 'tombstone)
-       ((= 1 (length projected))
+       ((equal "deleted" (car family)) 'tombstone)
+       (projected
         (org-glance-graph--prefer-family-metadata
-         (car projected)
-         (and record
-              (not (plist-get record :tombstone))
+         projected
+         (and record (not (plist-get record :tombstone))
               (org-glance-headline-metadata:deserialize record))))
        (t nil)))
      ((null record) nil)

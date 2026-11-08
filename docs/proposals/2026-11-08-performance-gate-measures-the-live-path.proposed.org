@@ -40,11 +40,12 @@ reachable by plugins (invariant 26) and used by =graph--tombstone-spec=.
 =org-glance-graph:headlines= calls authority once and folds into hash tables,
 which is the correct shape.
 
-Second-order: both reads scan.  =headline_projection= carries one partial index,
-=(logical_id) WHERE event_id IS NULL=, which neither =WHERE logical_id=? AND role
-IN (…)= nor the computed predicate =WHERE logical_id || '/' || event_id=?= can
-use; an expression predicate is unindexable as written.  What separates the two
-readers today is the elisp-side decode of every Row, not the SQL.
+Second-order: =cache:headline= probes the computed expression
+=logical_id || '/' || event_id=?= even for plain IDs, causing a projection scan.
+The composite primary key =(logical_id,event_id)= already indexes the later
+logical-ID query. The separate =(logical_id) WHERE event_id IS NULL= index
+covers metadata-only Rows. Indexed equality on both address components removes
+the initial scan; the logical/role index narrows role-selected reads.
 
 ** The wired-up benchmark measures the compatibility path
 
@@ -222,3 +223,18 @@ size, =benchmark-run= on =get-headline=, =cache:headline= and 100 bare
 =cache:authority= calls, Emacs 31.1 on Linux.  The setup findings came from
 reading =Eask=, =Makefile=, =Containerfile=, the four harnesses, the env-var
 gating across =test/=, and grepping =docs/= for every recorded number.
+
+* Implementation progress
+
+Items 1–3 are implemented: =cache:family-headline= observes one family with its
+revival flag and searchable logical metadata; =get-headline= preserves WAL
+precedence and tri-state results. Schema 11 adds the logical/role index. Exact
+Row addresses split into indexed logical/event parameters at all three read
+sites, preserving ordinary-ID fallback. Both new work/query-plan tests failed
+against the prior implementation.
+
+The baseline build and 746-test suite passed with six environment skips; the
+plugin baseline passed 21 tests. Lint commands completed with existing checkdoc
+diagnostics. The quick N=1,000 benchmark measured 67,090.0 ms for 1,000 warm
+compatibility lookups before the change and 222.4 ms afterward. Named harnesses,
+commit baselines and instrumentation changes remain in this proposal.
