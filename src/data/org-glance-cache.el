@@ -205,11 +205,15 @@ CONFIGURATION-INDEPENDENT bypasses dependency checks for maintenance reads."
          (org-glance-cache-configuration-stale
           (user-error "Cache configuration changed again; run M-x org-glance-reindex and retry")))))))
 
+(defvar org-glance-cache--decoded-records nil
+  "Serialized metadata shared within one committed read snapshot.")
+
 (cl-defun org-glance-cache--read-db-once (graph fn configuration-independent)
   "Call FN in GRAPH's pinned read, respecting CONFIGURATION-INDEPENDENT."
   (let ((path (org-glance-cache:path graph)))
     (when (and (sqlite-available-p) (file-exists-p path))
-      (let ((db (sqlite-open path)))
+      (let ((org-glance-cache--decoded-records (make-hash-table :test #'equal))
+            (db (sqlite-open path)))
         (unwind-protect
             (progn
               (sqlite-execute db "PRAGMA busy_timeout=50")
@@ -1140,18 +1144,26 @@ PREPARED holds compatibility statements already computed for each changed ID."
                                (org-glance-tag-config:todo-declarations source))))))
 
 (cl-defun org-glance-cache--decode-metadata (payload)
-  "Decode one serialized metadata PAYLOAD, returning nil when malformed."
-  (ignore-errors
-    (let* ((record (json-parse-string payload :object-type 'plist))
-           (metadata (org-glance-headline-metadata:deserialize record)))
-      (when org-glance-cache--context-receipts
-        (puthash metadata
-                 (if (vectorp (plist-get record :_orgTodo))
-                     (mapcar (lambda (entry) (append entry nil))
-                             (append (plist-get record :_orgTodo) nil))
-                   :missing)
-                 org-glance-cache--context-receipts))
-      metadata)))
+  "Decode metadata PAYLOAD once per committed read; return nil when malformed."
+  (let ((cached (if org-glance-cache--decoded-records
+                    (gethash payload org-glance-cache--decoded-records :missing)
+                  :missing)))
+    (if (not (eq cached :missing)) cached
+      (let ((metadata
+             (ignore-errors
+               (let* ((record (json-parse-string payload :object-type 'plist))
+                      (metadata (org-glance-headline-metadata:deserialize record)))
+                 (when org-glance-cache--context-receipts
+                   (puthash metadata
+                            (if (vectorp (plist-get record :_orgTodo))
+                                (mapcar (lambda (entry) (append entry nil))
+                                        (append (plist-get record :_orgTodo) nil))
+                              :missing)
+                            org-glance-cache--context-receipts))
+                 metadata))))
+        (when org-glance-cache--decoded-records
+          (puthash payload metadata org-glance-cache--decoded-records))
+        metadata))))
 
 (cl-defun org-glance-cache--family-metadata (db id)
   "Return ID's current immutable-family metadata from DB."

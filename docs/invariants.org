@@ -997,3 +997,13 @@ three saves per fixture. Baseline:
 
 - Review regressions: =virtual-pending-save-survives-clean-undo= covers native save/save-all/close/discard, exit consent and bulk guards after undo clears the modified flag; =virtual-same-version-revert-refreshes-concurrency= covers external rejection followed by display-only revert and another save.
 - Review validation: both supplied reproductions pass; the full Emacs 31.1 suite passes 701 tests with six skips and zero failures; all 110 material tests pass on Emacs 31.1 and 29.1; compilation is warning-free and the family work contract remains zero warm/unmodified observations and two per publication.
+
+* Warm interactive measurement contracts
+
+- =cache-decodes-equal-payloads-once-per-snapshot= bounds one ordinary/family payload to one deserialization per committed read and verifies fresh content on the next read.
+- =material-candidates-linear-label-counting= bounds 1,000 candidate labels to 2,000 hash lookups and preserves duplicate disambiguation and filtered order.
+- =material-selection-restores-gc-before-prompt= checks the temporary 64 MiB picker allocation budget, restoration before input and preservation of larger caller budgets.
+- =test/bench-interactive.el= alternates seven warm baseline/current pairs on 7,157 =~/sync/views= Rows: median metadata 241.61 → 169.82 ms, labels 69.49 → 10.75 ms, total 308.36 → 180.01 ms, deserializations 14,308 → 7,385; complete picker fingerprints match.
+- Live scripted =org-glance-materialize= and =org-glance-llm= traces with automatic selection measure 391.4 ms and 338.3/292.6 ms after batching allocations; each includes one collection, 137.3 ms and 129.7/126.8 ms respectively.
+- =org-glance-perf-mode= reports inclusive stage counts, prompt wait, synchronous command time, GC and event-loop scheduling; provider readiness and screen painting require separate measurement.
+- Validation: Emacs 31.1 runs 736 tests with 730 passes, six environment skips and zero failures; timing tests pass after excluding reporting GC from command GC totals; compilation and the timing module checkdoc pass without warnings.

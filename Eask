@@ -74,5 +74,6 @@
   (load "test/test-settings.el")
   (load "test/test-tags.el")
   (load "test/test-ui.el")
+  (load "test/test-perf.el")
   (load "test/test-plugins.el")
   (ert-run-tests-batch-and-exit))

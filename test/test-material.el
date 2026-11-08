@@ -1481,5 +1481,48 @@ called from another one; the caller gets no crypt wiring."
       (should (s-contains? "plainbody" (buffer-string)))
       (should org-glance-material--encrypted))))
 
-(provide 'test-material)
 ;;; test-material.el ends here
+
+(ert-deftest org-glance-test:material-candidates-linear-label-counting ()
+  "Build disambiguated labels with bounded hashing and preserve filtered order."
+  (let* ((metas (cl-loop for index below 1000
+                         collect (make-org-glance-headline-metadata
+                                  :id (format "%08d" index)
+                                  :title (if (< index 2) "Twin" (format "Title %d" index)))))
+         (lookups 0)
+         (lookup (symbol-function 'gethash)))
+    (cl-letf (((symbol-function 'gethash)
+               (lambda (&rest args) (cl-incf lookups) (apply lookup args))))
+      (setq lookups 0)
+      (let* ((candidates (org-glance-material--candidates metas nil))
+             (work lookups))
+        (should (= 1000 (length candidates)))
+        (should (equal '("Twin ·00000000" "Twin ·00000001")
+                       (mapcar #'car (seq-take candidates 2))))
+        (should (eq (car metas) (cdar candidates)))
+        (should (= work 2000))))
+    (should (equal '("Twin")
+                   (mapcar #'car
+                           (org-glance-material--candidates
+                            metas (lambda (meta) (equal "00000001"
+                                                 (org-glance-headline-metadata:id meta)))))))))
+
+(ert-deftest org-glance-test:material-selection-restores-gc-before-prompt ()
+  "Bound allocation during preparation and restore the caller's policy at input."
+  (let ((graph (make-org-glance-graph :directory temporary-file-directory))
+        (meta (make-org-glance-headline-metadata :id "gc" :title "GC")))
+    (dolist (threshold (list 800000 (* 128 1024 1024)))
+      (let ((gc-cons-threshold threshold))
+        (cl-letf (((symbol-function 'org-glance-cache:headlines)
+                   (lambda (_graph)
+                     (should (= gc-cons-threshold
+                                (max threshold (* 64 1024 1024))))
+                     (list meta)))
+                  ((symbol-function 'completing-read)
+                   (lambda (_prompt candidates &rest _)
+                     (should (= threshold gc-cons-threshold))
+                     (caar candidates))))
+          (should (eq meta (org-glance-material:completing-read graph)))
+          (should (= threshold gc-cons-threshold)))))))
+
+(provide 'test-material)

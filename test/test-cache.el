@@ -1961,5 +1961,25 @@
                      (org-glance-headline-metadata:title
                       (org-glance-graph:live-meta graph id)))))))
 
-(provide 'test-cache)
 ;;; test-cache.el ends here
+
+(ert-deftest org-glance-test:cache-decodes-equal-payloads-once-per-snapshot ()
+  "Equal payloads share decoding within a read and refresh on the next read."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-test:headline "decode" "* TODO Decode :work:" "body"))
+    (let ((decoded 0)
+          (decode (symbol-function 'org-glance-headline-metadata:deserialize)))
+      (cl-letf (((symbol-function 'org-glance-headline-metadata:deserialize)
+                 (lambda (record) (cl-incf decoded) (funcall decode record))))
+        (dotimes (_ 2)
+          (let ((before decoded))
+            (should (equal "Decode" (org-glance-headline-metadata:title
+                                      (car (org-glance-cache:headlines graph)))))
+            (should (= 1 (- decoded before)))))))
+    (org-glance-graph:add graph
+      (org-glance-test:headline "decode" "* TODO Updated :work:" "new body"))
+    (should (equal "Updated" (org-glance-headline-metadata:title
+                              (car (org-glance-cache:headlines graph)))))))
+
+(provide 'test-cache)

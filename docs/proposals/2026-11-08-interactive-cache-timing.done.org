@@ -1,0 +1,70 @@
+#+TITLE: Warm interactive cache timing
+#+DATE: 2026-11-08
+
+Status: *done*
+
+* Measured problem
+
+On the warm =~/sync/views= cache, 7,157 searchable headlines required 14,308
+metadata deserializations per picker. Ordinary and family tables commonly carry
+equal serialized records. Duplicate label disambiguation walked the frequency
+alist once for every label. The running Emacs collected repeatedly during those
+allocations: scripted materialize and LLM menu traces took roughly 1.2–1.5 s,
+with roughly 1.0–1.3 s in GC.
+
+Baseline source: [[https://github.com/rails-to-cosmos/org-glance/commit/02aecbdcd8e056d13ad80427ecfb1646c5a0faaf][02aecbd]],
+=src/data/org-glance-cache.el= line 1142 and
+=src/view/org-glance-material.el= line 48.
+
+* Implementation
+
+=org-glance-perf-mode= installs removable advice on available command and stage
+functions. Its after-load hook covers lazy LLM loading. A command trace aggregates
+inclusive stage durations and call counts, separates minibuffer interaction,
+and reports GC time/count. A zero-delay callback reports return to the event
+loop. The transient origin supplies elapsed time including user interaction.
+The logger records function names and numeric measurements.
+
+Committed reads share decoded metadata by exact serialized payload within their
+pinned SQLite snapshot. A later read gets a new decoding table. Compatibility
+metadata precedence, malformed-record tolerance and overview TODO receipts retain
+their existing rules. This table expires at read completion.
+
+Picker labels use hashed frequency counts. Both public picker paths share
+preparation with a temporary 64 MiB allocation budget; input uses the caller's
+original GC policy. This permits a bounded allocation burst while keeping the
+cost of the collection following preparation inside the interactive path.
+
+* Paired warm benchmark
+
+=test/bench-interactive.el= opens an inert graph handle and reads committed SQLite
+rows. It alternates original decoding/label behavior and the optimized behavior,
+collects before each sample, and checks complete picker fingerprints. It leaves
+graph startup and reconciliation outside the measurement. The timed pair covers
+metadata reading and label construction; live traces cover editor/menu setup.
+
+Emacs 31.1, Linux, seven pairs on 7,157 Rows:
+
+| Stage                  | Baseline median ms | Current median ms |
+|------------------------+--------------------+-------------------|
+| Metadata               |             241.61 |            169.82 |
+| Labels                 |              69.49 |             10.75 |
+| Combined               |             308.36 |            180.01 |
+| Deserializations/read  |              14308 |              7385 |
+
+The live session uses an older installed package. The picker and decoding fixes
+were loaded into that session for smoke measurements, with a compatibility
+wrapper around its older SQLite reader. Scripted selection bypassed human wait,
+used real transient setup, opened an editor and opened the real LLM menu. After
+the allocation budget adjustment, materialize took 391.4 ms; two LLM menu runs
+with the editor already open took 338.3 and 292.6 ms. Each trace included one GC.
+These smoke samples use a different heap and instrumentation from the paired
+batch benchmark. They describe command return; event-loop scheduling, screen
+painting and provider output have separate boundaries.
+
+* Follow-up
+
+The full picker still reads and decodes the searchable projection for each
+invocation. A layered picker with about 100 frequently used headlines and an
+explicit full-search path is deferred to the next pass. Lazy expansion must
+preserve stable selection and useful results while the user types.

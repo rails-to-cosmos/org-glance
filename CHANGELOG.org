@@ -5,6 +5,16 @@ Notable user-facing changes.  Versions date-based
 
 * Unreleased
 
+* 1.57.5.0.20261108.0
+
+** Added
+
+- =org-glance-perf-mode= logs command stages, call counts, prompt wait, GC and event-loop timing in =*Messages*=.
+
+** Fixed
+
+- =org-glance-materialize= and the LLM picker share equal-record decoding, count duplicate labels in linear time and batch picker allocations.
+
 * 1.57.4.0.20261106.0
 
 ** Changed

@@ -388,3 +388,33 @@ snapshot with its nil revision. Missing observations are refused. If another
 client creates the file first, the shared transaction reports a conflict and
 preserves its bytes. This prepares first publication; fresh-root JSON defaults
 and legacy reader retirement remain part of coordinated cutover.
+
+* Measure interactive latency
+
+Enable =M-x org-glance-perf-mode= and use =org-glance-transient= normally.
+Open =*Messages*= to compare materialize, overview and LLM timings. Toggle the
+mode again to remove its instrumentation.
+
+Each numbered command reports inclusive stage times, call counts, synchronous
+elapsed time, minibuffer interaction, work excluding that interaction, and GC
+time/count. Nested stage times overlap. The transient-to-command total includes
+key selection and prompt wait. Logs contain function names and timing values.
+The event-loop marker reports scheduling after return, including log output;
+screen painting and provider readiness require separate measurement. LLM menu
+preparation and terminal creation have separate command traces; first model
+output requires provider tracing.
+
+Picker preparation temporarily allows 64 MiB between garbage collections and
+restores the caller's GC policy before entering the minibuffer. Equal serialized
+metadata shares decoding within one committed SQLite read; the next read gets
+fresh metadata.
+
+Run the paired warm-cache benchmark without initializing or reconciling the
+graph:
+
+#+begin_src sh
+eask emacs --batch -l test/test-helpers.el -l test/bench-interactive.el \
+  --eval '(org-glance-interactive-bench:run (expand-file-name "~/sync/views") 7)'
+#+end_src
+
+See [[file:proposals/2026-11-08-interactive-cache-timing.done.org][interactive timing measurements]].

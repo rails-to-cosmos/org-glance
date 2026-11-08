@@ -50,31 +50,38 @@
   "Return completion entries built from METAS accepted by FILTER."
   (let* ((metas (cl-remove-if-not (or filter #'always) metas))
          (labels (mapcar #'org-glance-material:label metas))
-         (counts (-frequencies labels)))
+         (counts (make-hash-table :test #'equal)))
+    (dolist (label labels)
+      (puthash label (1+ (gethash label counts 0)) counts))
     (cl-mapcar (lambda (meta label)
-                 (cons (if (> (alist-get label counts 0 nil #'equal) 1)
+                 (cons (if (> (gethash label counts 0) 1)
                            (format "%s ·%s" label
                                    (s-left 8 (org-glance-headline-metadata:id meta)))
                          label)
                        meta))
                metas labels)))
 
+(cl-defun org-glance-material--selection (graph filter)
+  "Return GRAPH's (TOTAL . CANDIDATES) accepted by FILTER.
+Allow 64 MiB of allocation between collections during picker preparation."
+  (cl-check-type graph org-glance-graph)
+  (let* ((gc-cons-threshold (max gc-cons-threshold (* 64 1024 1024)))
+         (org-done-keywords (org-glance--done-keywords))
+         (metas (org-glance-cache:headlines graph)))
+    (cons (length metas) (org-glance-material--candidates metas filter))))
+
 (cl-defun org-glance-material:candidates (graph &optional filter)
   "Return indexed completion entries for GRAPH accepted by FILTER."
-  (cl-check-type graph org-glance-graph)
-  (let ((org-done-keywords (org-glance--done-keywords)))
-    (org-glance-material--candidates
-     (org-glance-cache:headlines graph) filter)))
+  (cdr (org-glance-material--selection graph filter)))
 
 (cl-defun org-glance-material:completing-read (graph &key (prompt "Headline: ") filter)
   "Choose a live headline from GRAPH under PROMPT; return its metadata.
 FILTER, if non-nil, is a predicate on the metadata."
   (cl-check-type graph org-glance-graph)
-  (let* ((metas (org-glance-cache:headlines graph))
-         (org-done-keywords (org-glance--done-keywords))
-         (candidates (org-glance-material--candidates metas filter)))
+  (let* ((selection (org-glance-material--selection graph filter))
+         (candidates (cdr selection)))
     (unless candidates
-      (let ((total (length metas))
+      (let ((total (car selection))
             (dir (org-glance-graph:directory graph)))
         (user-error
          (if (zerop total)

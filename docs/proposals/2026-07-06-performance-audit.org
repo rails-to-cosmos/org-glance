@@ -85,3 +85,10 @@ overview/material · filter/coherence) and each was independently, adversarially
 verified for real-workload impact (confirmed / minor / refuted), then the
 confirmed ones were re-checked against the source before landing (B/C/E/D) or
 writing up (the proposals above).
+
+* 2026-11-08 warm interactive paths
+
+[[file:2026-11-08-interactive-cache-timing.done.org][Interactive cache timing]] adds
+verbose command traces and fixes repeated payload decoding, quadratic duplicate
+labels and frequent GC during picker preparation. The full picker remains the
+next target for a layered recent/frequent-headline cache.
