@@ -43,6 +43,7 @@ class RepeatedProcesses(unittest.TestCase):
         self.assertEqual(merged['median-ms'], 3)
         self.assertEqual(merged['samples-ms'], [2, 4])
         self.assertEqual(merged['work'], [{'opens': 0}, {'opens': 1}])
+        self.assertEqual(merged['process-samples-ms'], [[2], [4]])
 
     def test_process_inventory_and_result_drift_are_errors(self):
         first = dict(record(), **{'samples-ms': [2]})
@@ -51,6 +52,38 @@ class RepeatedProcesses(unittest.TestCase):
             with self.subTest(later=later):
                 with self.assertRaises(ValueError):
                     bench.merge_runs([[first], later])
+
+    def test_uncertainty_uses_independent_process_pairs(self):
+        previous = dict(record(), **{'process-samples-ms': [[2, 4], [4, 6], [6, 8]]})
+        current = dict(record(elapsed=4), **{'process-samples-ms': [[4, 6], [6, 8], [8, 10]]})
+        result = bench.compare([previous], [current])[0]
+        self.assertEqual(result['process_pairs'], 3)
+        self.assertEqual(result['paired_delta_ms'], 2)
+        self.assertEqual(result['paired_delta_ci95_ms'], [2, 2])
+
+    def test_single_process_has_no_between_process_interval(self):
+        previous = dict(record(), **{'process-samples-ms': [[2] * 100]})
+        current = dict(record(elapsed=4), **{'process-samples-ms': [[4] * 100]})
+        result = bench.compare([previous], [current])[0]
+        self.assertEqual(result['process_pairs'], 1)
+        self.assertIsNone(result['paired_delta_ci95_ms'])
+        current['process-samples-ms'].append([4])
+        with self.assertRaises(ValueError):
+            bench.compare([previous], [current])
+
+    def test_interval_retains_process_variation(self):
+        previous = dict(record(elapsed=10), **{'process-samples-ms': [[10], [10], [10]]})
+        current = dict(record(elapsed=10), **{'process-samples-ms': [[2], [10], [18]]})
+        result = bench.compare([previous], [current])[0]
+        self.assertEqual(result['paired_delta_ms'], 0)
+        lower, upper = result['paired_delta_ci95_ms']
+        self.assertLess(lower, 0)
+        self.assertGreater(upper, 0)
+        self.assertEqual(result, bench.compare([previous], [current])[0])
+
+    def test_empty_process_sample_is_rejected(self):
+        with self.assertRaises(ValueError):
+            bench.merge_runs([[dict(record(), **{'samples-ms': []})]])
 
 
 if __name__ == '__main__':

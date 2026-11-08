@@ -2010,4 +2010,39 @@
         (should (cl-some (lambda (row) (string-search "SEARCH" (nth 3 row))) plan))
         (should-not (cl-some (lambda (row) (string-match-p "SCAN \\(headline_projection\\|projection\\)" (nth 3 row))) plan))))))
 
+(ert-deftest org-glance-test:logical-readers-agree-on-projection-roles ()
+  "Use sole current/recovery logical rows and retain exact-version roles."
+  (org-glance-test:with-graph graph
+    (dolist (role '("current" "recovery" "conflict" "rejected"))
+      (org-glance-graph:add graph (org-glance-test:headline role "* Role"))
+      (let ((version (plist-get (org-glance-cache:material-state graph role) :version))
+            (db (sqlite-open (org-glance-cache:path graph))))
+        (unwind-protect
+            (sqlite-execute db "UPDATE headline_projection SET role=? WHERE logical_id=?"
+                            (vector role role))
+          (sqlite-close db))
+        (let ((live (member role '("current" "recovery"))))
+          (dolist (reader '(org-glance-graph:get-headline
+                            org-glance-graph:live-meta org-glance-cache:headline))
+            (let ((metadata (funcall reader graph role)))
+              (if live
+                  (should (equal role (org-glance-headline-metadata:id metadata)))
+                (should-not metadata))))
+          (should (eq (not (null live))
+                      (not (null (org-glance-graph--tombstone-spec graph role))))))
+        (should (org-glance-headline-metadata?
+                 (org-glance-cache:headline graph (concat role "/" version))))
+        (when (member role '("current" "recovery"))
+          (let ((writer (sqlite-open (org-glance-cache:path graph))))
+            (unwind-protect
+                (sqlite-execute
+                 writer
+                 "INSERT INTO headline_projection SELECT logical_id,event_id||'-ambiguous',role,source_digest,parser_contract,'{' FROM headline_projection WHERE logical_id=?"
+                 (vector role))
+              (sqlite-close writer)))
+          (dolist (reader '(org-glance-graph:get-headline
+                            org-glance-graph:live-meta org-glance-cache:headline))
+            (should-not (funcall reader graph role)))
+          (should-not (org-glance-graph--tombstone-spec graph role)))))))
+
 (provide 'test-cache)

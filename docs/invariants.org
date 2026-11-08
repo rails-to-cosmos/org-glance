@@ -320,7 +320,9 @@ argument in [[file:proposals][docs/proposals/]].
     filter hides.
 
 30. *=graph:get-headline= is tri-state: nil / =tombstone= / metadata.*  Read-only callers
-    collapse the first two through =org-glance-graph:live-meta=.  Two callers need the
+    collapse the first two through =org-glance-graph:live-meta=.
+    Logical metadata comes from a sole stored current/recovery row; conflict/rejected rows remain readable by exact version through the cache, pinned by =logical-readers-agree-on-projection-roles=.
+    Two callers need the
     distinction and share one guard: =org-glance-graph--tombstone-spec= answers the
     record a delete owes or nil, for =org-glance-graph:delete= (which appends it alone)
     and =org-glance-graph:refresh-external= (which carries it into the one batch its
@@ -1052,3 +1054,12 @@ three saves per fixture. Baseline:
 - =extract-table-warm-work-contract= requires exactly one clipboard publication of the selected cached value; removing extraction fails it while blob reads and parses remain forbidden.
 - Fourteen sampled runtime mutations across benchmark, timing, point-read and extraction contracts are killed; two surviving omissions required stronger assertions and no tests were removed.
 - After reverting query-helper indirection, seven alternating compiled process pairs at N=100 retain equal work and fingerprints; paired-bootstrap 95% intervals for all nine graph workload differences include zero.
+
+* Independent-review regression contracts
+
+- All nine graph rows honor =OG_BENCH_SAMPLES= (default seven) and emit per-round latency, GC, work and fingerprints; the synthetic runner requires three complete samples, N property reads, 2N reindex reads and N+1→N compaction each round.
+- Commit comparisons retain process sample groups and default to three alternating pairs; =paired_delta_ci95_ms= bootstraps paired process medians and stays null below three pairs.
+- Review-fix validation: 761 ERT tests, 755 passes, six environment skips, nine Python comparison cases and warning-free compilation of 32 production files.
+- =python3 tools/bench.py graph --baseline a7c58ed --quick --sizes 50 --samples 3 --pairs 5= yields equal fingerprints and work for all nine rows; 100 compatibility lookups measure 22.012→19.305 ms, paired delta −2.215 ms with a 95% interval of −2.817…−1.734 ms.
+- The same comparison measures insertion delta +15.710 ms (95% interval +2.961…+27.034 ms); five identical-code control pairs compiled from =a7c58ed= span −39.760…+22.455 ms, and a failing-reader tripwire confirms insertion/reindex never call the edited family reader.
+- =OG_BENCH_QUICK=1 OG_BENCH_SIZES=50 OG_BENCH_SAMPLES=3 make bench-readers= reports zero opens and 100 deserializations in each of three 100-read batches, median 0.123 ms/read.

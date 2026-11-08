@@ -446,7 +446,12 @@ also has a named command:
 The default store tiers are 1,000 and 10,000 headlines. =OG_BENCH_QUICK=1= selects
 1,000 headlines and 100 point lookups; =OG_BENCH_LARGE=1= adds 100,000 headlines.
 The material harness uses graph/history shapes 10/1, 50/12 and 100/40; quick
-selects 10/1 and large adds 500/80. =OG_BENCH_SAMPLES= selects repeat count.
+selects 10/1 and large adds 500/80. =OG_BENCH_SAMPLES= selects repeat count;
+graph workloads default to seven samples, including insert, cold fills, reindex
+and compaction. A one-sample override supports smoke runs. Every graph row
+reports latency/GC samples, work counters and a result fingerprint. Insert uses
+a fresh graph each round; cold fills reset their caches; compaction starts with
+one superseded record each round. Preparation runs outside the measured window.
 =OG_BENCH_SIZES= accepts positive comma-separated sizes for focused experiments.
 
 #+begin_src sh
@@ -459,7 +464,13 @@ The Python driver compiles production code extracted from the requested Git
 commit and from the current working tree, then runs the same current harnesses
 against both. It verifies the loaded library locations. Its JSON records source
 revisions, runtime, raw samples, work counters, ratios and fingerprint equality.
-Use =--pairs= for independent process pairs in alternating revision order.
+Commit comparisons default to three independent process pairs in alternating
+revision order; current-only runs default to one. =--pairs= overrides that count.
+The driver retains per-process samples and reports =paired_delta_ms= as the
+mean difference between paired process medians, plus =paired_delta_ci95_ms= as
+a deterministic percentile-bootstrap 95% interval. Fewer than three pairs
+report a null interval. Interpret that interval together with counters and
+fingerprints when assessing a latency change.
 Collection runs before each sample; preparation and fingerprint observers run
 outside its timing window. Each revision's fingerprint must stay stable in every
 round and process. A cross-revision

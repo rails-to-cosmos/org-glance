@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import platform
+import random
 import shutil
 import statistics
 import subprocess
@@ -85,10 +86,14 @@ def merge_runs(runs):
             seen.add(key)
             if key not in merged:
                 merged[key] = dict(record, **{'samples-ms': [], 'work': [],
-                                             'gc-counts': [], 'gc-ms': []})
+                                             'gc-counts': [], 'gc-ms': [],
+                                             'process-samples-ms': []})
             target = merged[key]
             if target.get('fingerprint') != record.get('fingerprint'):
                 raise ValueError(f'Result changed between processes for {key}')
+            if not record.get('samples-ms'):
+                raise ValueError(f'Workload emitted no latency samples for {key}')
+            target['process-samples-ms'].append(list(record['samples-ms']))
             for field in ('samples-ms', 'work', 'gc-counts', 'gc-ms'):
                 target[field].extend(record.get(field, []))
         if expected is None:
@@ -98,6 +103,24 @@ def merge_runs(runs):
     for record in merged.values():
         record['median-ms'] = statistics.median(record['samples-ms'])
     return list(merged.values())
+
+
+def paired_uncertainty(baseline, current):
+    previous = baseline.get('process-samples-ms', [])
+    measured = current.get('process-samples-ms', [])
+    if len(previous) != len(measured):
+        raise ValueError('Baseline and current process-pair counts differ')
+    deltas = [statistics.median(after) - statistics.median(before)
+              for before, after in zip(previous, measured)]
+    interval = None
+    if len(deltas) >= 3:
+        rng = random.Random(0)
+        draws = sorted(statistics.mean(rng.choices(deltas, k=len(deltas)))
+                       for _ in range(10000))
+        interval = [draws[249], draws[9749]]
+    return {'process_pairs': len(deltas),
+            'paired_delta_ms': statistics.mean(deltas) if deltas else None,
+            'paired_delta_ci95_ms': interval}
 
 
 def compare(baseline, current):
@@ -112,14 +135,15 @@ def compare(baseline, current):
     result = []
     for record in current:
         old = previous[key(record)]
-        result.append({'harness': record['harness'], 'operation': record['operation'],
+        result.append(dict(paired_uncertainty(old, record), **{
+                       'harness': record['harness'], 'operation': record['operation'],
                        'size': record['size'], 'baseline_ms': old['median-ms'],
                        'current_ms': record['median-ms'],
                        'ratio': (record['median-ms'] / old['median-ms']
                                  if old['median-ms'] else None),
                        'fingerprints_equal': (old['fingerprint'] == record['fingerprint']
                                               if old.get('fingerprint') and record.get('fingerprint')
-                                              else None)})
+                                              else None)}))
     return result
 
 
@@ -132,10 +156,12 @@ def main():
     tier.add_argument('--quick', action='store_true')
     tier.add_argument('--large', action='store_true')
     parser.add_argument('--samples', type=int, default=7)
-    parser.add_argument('--pairs', type=int, default=1,
-                        help='Independent process pairs in alternating revision order')
+    parser.add_argument('--pairs', type=int,
+                        help='Alternating process pairs (default: 3 with a baseline, 1 otherwise)')
     parser.add_argument('--sizes', help='Positive comma-separated synthetic store sizes')
     args = parser.parse_args()
+    if args.pairs is None:
+        args.pairs = 3 if args.baseline else 1
     if args.directory:
         args.directory = args.directory.expanduser().resolve()
     if args.samples < 1 or args.pairs < 1:

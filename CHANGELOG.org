@@ -5,23 +5,24 @@ Notable user-facing changes.  Versions date-based
 
 * Unreleased
 
+** Fixed
+
+- =org-glance-graph:get-headline= hides conflict/rejected-only logical IDs consistently with cache readers.
+- =make bench-graph= samples and fingerprints all workloads; =tools/bench.py= reports uncertainty across process pairs.
+
 * 1.57.6.0.20261108.0
 
 ** Changed
 
 - =org-glance-perf-mode= accepts configurable timing symbols and plugin registration; LLM timing names belong to the plugin.
-
 - =make bench= runs all four named production workloads on synthetic stores; =tools/bench.py= compares compiled Git revisions.
-
 - =org-glance-cache= reuses idle SQLite readers with a fresh checked transaction for each read.
 
 ** Fixed
 
 - =org-glance-perf-mode= excludes its start report from command time and GC totals.
 - =OG_CONFIG_BENCH= skips its optional timing case when the fixture is absent; development options use the =OG_= prefix.
-
 - =org-glance-graph:get-headline= reads one family by ID; exact-version cache addresses use indexed equality.
-
 - =org-glance-overview= receipts treat absent and empty SQLite WAL files equally.
 
 * 1.57.5.0.20261108.0

@@ -47,56 +47,100 @@ Return the elapsed seconds."
   (1+ (length (org-glance-graph--sealed-segments graph))))
 
 (cl-defun org-glance-bench:run ()
-  "Measure the graph tiers through committed UI and compatibility readers."
+  "Measure repeated graph workloads and verify their published results."
   (let ((inhibit-message t) (message-log-max nil))
     (dolist (n org-glance-bench:sizes)
       (org-glance-test:with-graph graph
-        (let ((org-glance-bench--size n))
-          (org-glance-bench:measure
-           "graph" "insert (batched)" (lambda () (org-glance-bench:build graph n))
-           :samples 1 :counters (lambda (_result)
-                                 (list :segments (org-glance-bench--segments graph))))
-          (org-glance-bench:measure
-           "graph" "cold compatibility fold"
-           (lambda () (org-glance-graph--invalidate-cache graph)
-             (org-glance-graph:headlines graph))
-           :samples 1 :fingerprint #'org-glance-bench:fingerprint)
-          (let ((ids (cl-loop for index below org-glance-bench:sample
-                              collect (format "bench-%06d" (mod (* index 37) n)))))
-            (dolist (reader '(org-glance-graph:live-meta org-glance-graph:get-headline))
-              (funcall reader graph (car ids))
+        (let ((org-glance-bench--size n)
+              (root (org-glance-graph:directory graph))
+              (content (symbol-function 'org-glance-graph:get-content))
+              (blob-reads 0) inserted)
+          (cl-letf (((symbol-function 'org-glance-graph:get-content)
+                     (lambda (&rest args)
+                       (cl-incf blob-reads) (apply content args))))
+            (cl-labels
+                ((metadata-fingerprint (_result)
+                   (org-glance-bench:fingerprint (org-glance-graph:headlines graph)))
+                 (record-counts (_result)
+                   (list :headlines (length (org-glance-graph:headlines graph))
+                         :records (cdr (org-glance-graph--latest-records graph))
+                         :segments (org-glance-bench--segments graph)))
+                 (overview-fingerprint (_result)
+                   (org-glance-bench:fingerprint
+                    (f-read-text (cdr (org-glance-overview--manifest graph nil)) 'utf-8))))
               (org-glance-bench:measure
-               "graph" (format "%s x%d" reader (length ids))
-               (lambda () (mapcar (lambda (id) (funcall reader graph id)) ids))
+               "graph" "insert (batched)" (lambda () (org-glance-bench:build graph n))
+               :before (lambda ()
+                         (when inserted
+                           (when (fboundp 'org-glance-cache:close-readers)
+                             (org-glance-cache:close-readers graph))
+                           (remhash (org-glance-graph:directory graph) org-glance-graph:list)
+                           (delete-directory (org-glance-graph:directory graph) t)
+                           (make-directory root t)
+                           (setq graph (org-glance-graph
+                                        (make-temp-file (expand-file-name "sample-" root) t))))
+                         (setq inserted t))
+               :fingerprint #'metadata-fingerprint :counters #'record-counts)
+              (org-glance-bench:measure
+               "graph" "cold compatibility fold"
+               (lambda () (org-glance-graph:headlines graph))
+               :before (lambda () (org-glance-graph--invalidate-cache graph))
                :fingerprint #'org-glance-bench:fingerprint
-               :counters (lambda (_result) (list :lookups (length ids))))))
-          (org-glance-bench:measure
-           "graph" "property-index cold fill"
-           (lambda ()
-             (org-glance-property-index:clear graph)
-             (org-glance-property-index:ensure
-              graph (cl-loop for index below n collect (format "bench-%06d" index))))
-           :samples 1)
-          (org-glance-bench:measure
-           "graph" "overview full refresh" (lambda () (org-glance-overview:write graph))
-           :fingerprint (lambda (file) (org-glance-bench:fingerprint (f-read-text file 'utf-8))))
-          (org-glance-bench:measure
-           "graph" "overview one-row refresh"
-           (lambda () (org-glance-overview:update graph nil '("bench-000000")))
-           :fingerprint #'org-glance-bench:fingerprint)
-          (org-glance-bench:measure
-           "graph" "reindex" (lambda () (org-glance-graph:reindex graph)) :samples 1)
-          (let (input-records)
-            (org-glance-bench:measure
-             "graph" "compact superseded record"
-             (lambda () (org-glance-graph:compact graph)) :samples 1
-             :before (lambda ()
-                       (org-glance-graph:insert
-                        graph (list (org-glance-graph:live-meta graph "bench-000000")))
-                       (setq input-records (cdr (org-glance-graph--latest-records graph))))
-             :counters (lambda (result)
-                         (list :input-records input-records :live-records result
-                               :segments (org-glance-bench--segments graph))))))))))
+               :counters (lambda (result) (list :headlines (length result))))
+              (let ((ids (cl-loop for index below org-glance-bench:sample
+                                  collect (format "bench-%06d" (mod (* index 37) n)))))
+                (dolist (reader '(org-glance-graph:live-meta org-glance-graph:get-headline))
+                  (funcall reader graph (car ids))
+                  (org-glance-bench:measure
+                   "graph" (format "%s x%d" reader (length ids))
+                   (lambda () (mapcar (lambda (id) (funcall reader graph id)) ids))
+                   :fingerprint #'org-glance-bench:fingerprint
+                   :counters (lambda (_result) (list :lookups (length ids))))))
+              (org-glance-bench:measure
+               "graph" "property-index cold fill"
+               (lambda ()
+                 (org-glance-property-index:ensure
+                  graph (cl-loop for index below n collect (format "bench-%06d" index))))
+               :before (lambda ()
+                         (org-glance-property-index:clear graph)
+                         (setq blob-reads 0))
+               :fingerprint
+               (lambda (_result)
+                 (let ((table (org-glance-property-index--table graph)))
+                   (org-glance-bench:fingerprint
+                    (cl-loop for index below n
+                             collect (gethash (format "bench-%06d" index) table)))))
+               :counters (lambda (_result)
+                           (list :indexed-headlines
+                                 (hash-table-count (org-glance-property-index--table graph))
+                                 :blob-reads blob-reads)))
+              (org-glance-bench:measure
+               "graph" "overview full refresh" (lambda () (org-glance-overview:write graph))
+               :fingerprint #'overview-fingerprint :counters #'record-counts)
+              (org-glance-bench:measure
+               "graph" "overview one-row refresh"
+               (lambda () (org-glance-overview:update graph nil '("bench-000000")))
+               :fingerprint #'overview-fingerprint
+               :counters (lambda (result)
+                           (append (list :mode (symbol-name result)) (record-counts result))))
+              (org-glance-bench:measure
+               "graph" "reindex" (lambda () (org-glance-graph:reindex graph))
+               :before (lambda () (org-glance-graph:compact graph) (setq blob-reads 0))
+               :fingerprint #'metadata-fingerprint
+               :counters (lambda (result)
+                           (list :headlines result :blob-reads blob-reads)))
+              (let (input-records)
+                (org-glance-bench:measure
+                 "graph" "compact superseded record"
+                 (lambda () (org-glance-graph:compact graph))
+                 :before (lambda ()
+                           (org-glance-graph:insert
+                            graph (list (org-glance-graph:live-meta graph "bench-000000")))
+                           (setq input-records (cdr (org-glance-graph--latest-records graph))))
+                 :fingerprint #'metadata-fingerprint
+                 :counters (lambda (result)
+                             (list :input-records input-records :live-records result
+                                   :segments (org-glance-bench--segments graph))))))))))))
 
 (provide 'bench-graph)
 ;;; bench-graph.el ends here

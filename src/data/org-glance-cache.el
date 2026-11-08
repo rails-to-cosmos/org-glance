@@ -1868,25 +1868,20 @@ Refuse Rows with incoming relation labels that require broader regeneration."
 
 (cl-defun org-glance-cache:family-headline (graph id)
   "Return ID's (STATE REVIVED METADATA) from one committed GRAPH snapshot.
-METADATA is the sole searchable logical Row, or nil for ambiguity or absence."
+METADATA is the sole current/recovery Row, or nil for ambiguity or absence."
   (org-glance-cache--read-db
    graph
    (lambda (db)
      (when-let* ((family (car (sqlite-select
                               db "SELECT state,revived FROM headline_family WHERE logical_id=?"
                               (vector id)))))
-       (let ((projected
-              (cl-remove-if-not
-               (lambda (metadata)
-                 (and metadata (equal id (org-glance-headline-metadata:id metadata))))
-               (mapcar
-                (lambda (row) (org-glance-cache--decode-metadata (car row)))
-                (sqlite-select
-                 db
-                 "SELECT record_payload FROM headline_projection WHERE logical_id=? AND role IN ('current','conflict','recovery') ORDER BY event_id"
-                 (vector id))))))
+       (let ((rows (sqlite-select
+                    db
+                    "SELECT record_payload FROM headline_projection WHERE logical_id=? AND role IN ('current','recovery') ORDER BY event_id"
+                    (vector id))))
          (list (car family) (eq 1 (cadr family))
-               (and (= 1 (length projected)) (car projected))))))))
+               (and (= 1 (length rows))
+                    (org-glance-cache--decode-metadata (caar rows)))))))))
 
 (cl-defun org-glance-cache--headline (db id)
   "Return ID's effective Row from the committed DB snapshot."

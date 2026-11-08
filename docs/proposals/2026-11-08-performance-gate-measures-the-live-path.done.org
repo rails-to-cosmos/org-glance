@@ -339,11 +339,112 @@ provider registration already lives in its owner. These candidates were dropped.
 * Final gate
 
 The baseline was green: 746 tests, 740 passes, six environment skips; plugin
-21 passes. The final gate has 760 tests, 754 passes, six environment skips and
+21 passes. The final gate has 761 tests, 755 passes, six environment skips and
 zero failures; the plugin has 22 passes. All 32 production files compile
 without warnings. Lint commands pass with their existing checkdoc notices;
 regex lint reports no issues. The final pinned Emacs 29.1 image compiles and
 runs all four synthetic harnesses, emitting 17 measurement records.
 
 The implemented proposal, simplification cleanup and generalization review are
-committed separately. No second proposal is implemented and no commit is pushed.
+committed separately. The follow-up proposal remains unimplemented. At the
+independent review, =origin/master= contained =a7c58ed=.
+
+* Independent review
+
+A reviewer session verified the implementation claims against the repository and
+ran a defect pass over the landed change.  Current
+[[https://github.com/rails-to-cosmos/org-glance/commit/a7c58ed][a7c58ed]], baseline
+[[https://github.com/rails-to-cosmos/org-glance/commit/530d439][530d439]].
+
+** Reproduced
+
+=python3 tools/bench.py graph --baseline 530d439 --quick= at the reviewed driver's default
+sampling (=--samples 7 --pairs 1=), Linux, Emacs 31.1.90:
+
+| Operation, N = 1,000      | Baseline ms | Current ms |   Ratio |
+|---------------------------+-------------+------------+---------|
+| =get-headline= ×100       |     2320.29 |      20.48 |  0.0088 |
+| =live-meta= ×100          |       23.57 |      13.02 |   0.552 |
+| overview full refresh     |       27.99 |      27.89 |   0.996 |
+| cold compatibility fold   |       32.67 |      35.06 |   1.073 |
+
+Fingerprints match on every compared Row, and the two readers share one
+fingerprint.  Absolute values exceed the accepted table's because that run used
+three alternating pairs; the ratios agree.  An independent per-call probe
+measures =get-headline= at 0.22 / 0.22 / 0.21 ms for N = 200 / 400 / 800, against
+4.52 / 9.40 / 22.49 ms before, so the growth is gone.
+
+The gate reproduces at 760 tests, 754 as expected, zero unexpected and six
+skips, with warning-free compilation.  The plugin carries its own registration
+commit.  The status migration leaves no dangling link to the former
+=.proposed.org= name, and =docs/invariants.org= records the accepted measurements
+with their reproduction command.
+
+** Findings (resolved below)
+
+1. *A sole =conflict= projection reads differently through the two readers bound
+   by invariant 30.*  Probed: =role=conflict= returns metadata from
+   =graph:get-headline= and nil from =graph:live-meta= and =cache:headline=;
+   =role=rejected= returns nil from all three.  Three role sets answer one
+   question —
+   [[https://github.com/rails-to-cosmos/org-glance/commit/a7c58ed][a7c58ed]],
+   =src/data/org-glance-cache.el= line 1909 (=current,recovery=), line 1886
+   (=current,conflict,recovery=) and line 2047 (all four).  Narrowing
+   =get-headline= from four roles to three makes =rejected= agree across readers,
+   which matches invariant 40; the =conflict= disagreement predates this work and
+   survives it, now spelled in a new function with no note.  =graph--tombstone-spec=
+   reads such an id as live and would tombstone what the UI treats as absent.  No
+   test covers either role through these readers.  Open: record the three-role
+   choice in invariant 30, or align it with =cache--headline= and cover the case.
+2. *The driver's four slowest Rows carry one sample and no fingerprint.*  =insert
+   (batched)=, =property-index cold fill=, =reindex= and =compact= run
+   =iterations: 1= with =fingerprints_equal: null=, so their ratios carry no
+   uncertainty and no result check; =cold compatibility fold= returned 1.073 above
+   and nothing separates that from noise.  The operations dominating bulk cost are
+   the ones the gate cannot police.  Three or more samples for them, plus a
+   fingerprint for =reindex= and =compact=, would close it.
+3. Sample, GC, fingerprint and work-counter reporting covers five of the nine
+   graph Rows.
+4. The =1.57.6.0.20261108.0= changelog section separates some bullets with a blank
+   line and others without.
+5. =Final gate='s closing line "no commit is pushed" is stale: =origin/master=
+   carries =a7c58ed=.
+
+** Withdrawn
+
+A mid-review claim that =cache:authority= had slowed by ~42% came from a working
+tree holding uncommitted reader work as its baseline.  The committed comparison
+puts authority's consumer, =overview full refresh=, at ratio 0.996.
+
+** Review fixes
+
+1. Logical point readers accept only a sole current/recovery projection.
+   Conflict/rejected metadata remains accessible by exact-version cache address.
+   =logical-readers-agree-on-projection-roles= covers all four roles, all three
+   logical readers, the delete/fold guard and exact-version access; it failed
+   against the reviewed revision. Ambiguity counts stored rows before decoding;
+   a malformed second row also refuses logical reads. Invariant 30 records it.
+2. Every graph workload uses the selected sample count (default seven), with
+   per-round GC, work counters and result fingerprints. Insert gets an empty
+   graph each time; cold property fills clear the index before timing; reindex
+   starts from a compact WAL; compaction gets N+1 records before every sample.
+   The strengthened runner oracle requires three samples and complete records
+   for all nine rows, N property reads and 2N reindex reads, and N+1→N compaction.
+3. The commit driver preserves process sample groups and defaults comparisons
+   to three alternating process pairs. It reports paired mean latency deltas
+   and deterministic percentile-bootstrap 95% intervals; fewer than three pairs
+   report no interval. Tests distinguish repeated samples from independent
+   process pairs and reject empty or unmatched groups.
+4. Release changelog bullets use consistent spacing. The final-gate publication
+   statement now records the review-time remote snapshot.
+
+The final fix passes 761 ERT tests (755 passes, six environment skips), nine
+Python comparison cases and warning-free compilation of 32 production files.
+Both reported regressions failed before their fixes; the role test additionally
+rejects a valid row beside a malformed row. Five compiled comparison pairs at
+N=50 retain equal work and fingerprints for all nine workloads; warm reader
+batches retain zero SQLite opens. The compatibility getter improves from
+22.012 to 19.305 ms per 100 calls. The insertion timing difference lies within
+the identical-code control's variation; tripwire probes verify insertion and
+reindex never execute the edited reader. Reproduction and intervals are in
+[[file:../invariants.org::*Independent-review regression contracts][the regression evidence]].

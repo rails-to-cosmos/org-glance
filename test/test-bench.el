@@ -48,7 +48,7 @@
         (org-glance-bench:sample 2)
         (process-environment (copy-sequence process-environment)))
     (setenv "OG_BENCH_QUICK" "1")
-    (setenv "OG_BENCH_SAMPLES" "1")
+    (setenv "OG_BENCH_SAMPLES" "3")
     (let* ((output (with-output-to-string (org-glance-bench:dispatch)))
            (records (cl-loop for line in (split-string output "\n" t)
                              when (string-prefix-p "OG_BENCH_JSON " line)
@@ -62,9 +62,27 @@
       (let* ((compact (cl-find "compact superseded record" records
                                :key (lambda (record) (plist-get record :operation))
                                :test #'equal))
-             (work (aref (plist-get compact :work) 0)))
-        (should (= 4 (plist-get work :input-records)))
-        (should (= 3 (plist-get work :live-records))))
+             (work (plist-get compact :work)))
+        (mapc (lambda (sample)
+                (should (= 4 (plist-get sample :input-records)))
+                (should (= 3 (plist-get sample :live-records)))) work))
+      (dolist (record (cl-remove-if-not
+                      (lambda (record) (equal "graph" (plist-get record :harness))) records))
+        (dolist (field '(:samples-ms :gc-counts :gc-ms :work))
+          (should (= 3 (length (plist-get record field)))))
+        (should (stringp (plist-get record :fingerprint)))
+        (mapc
+         (lambda (work)
+           (should work)
+           (pcase (plist-get record :operation)
+             ("insert (batched)" (should (= 3 (plist-get work :records))))
+             ("property-index cold fill"
+              (should (= 3 (plist-get work :blob-reads)))
+              (should (= 3 (plist-get work :indexed-headlines))))
+             ("reindex"
+              (should (= 6 (plist-get work :blob-reads)))
+              (should (= 3 (plist-get work :headlines))))))
+         (plist-get record :work)))
       (dolist (record (cl-remove-if-not
                       (lambda (record) (equal "material" (plist-get record :harness))) records))
         (should (= (if (string-prefix-p "save " (plist-get record :operation)) 6 0)
