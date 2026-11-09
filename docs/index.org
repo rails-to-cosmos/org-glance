@@ -133,6 +133,8 @@ Each is part of the [[file:proposals/2026-07-06-performance-audit.org][performan
 - [[file:proposals/2026-11-08-write-path-storage-audit.org][Write path and storage audit]] — guarded source analysis removes
   repeated write parsing and read-back; storage-format and WAL cutovers remain
   coordinated work.
+- [[file:proposals/2026-11-09-bound-family-revalidation.proposed.org][Bound family revalidation by version count]] — an observation reuse re-stats
+  every version, 54 ms at the live store's 514-version family.
 - [[file:proposals/2026-07-06-lazy-property-columns.proposed.org][Lazy value-fn for custom property columns]] — parse only visible rows for a
   displayed property column.
 - [[file:proposals/2026-07-06-table-paging.proposed.org][Table paging / windowing]] — render a screen-sized page at a time.

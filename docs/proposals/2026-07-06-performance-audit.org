@@ -65,6 +65,15 @@ first version costs five inodes; additional versions share family directories.
 Its 2026-11-09 implementation shares write analysis and publication receipts;
 canonical storage-format and WAL migrations remain coordinated work.
 
+An independent review reproduces that implementation at ratio 0.650 for insert
+and 0.379 for reindex, one =--from-string= parse per headline on both paths and
+zero payload read-backs on insert.  It measures the remaining cost in
+=cache--after-append=, 54% of an insert and 35% of a reindex, and in
+=graph:put-content=, 35% of an insert.  It finds observation revalidation linear
+in a family's version count, 54 ms at the live store's 514-version family, open
+as [[file:2026-11-09-bound-family-revalidation.proposed.org][Bound family
+revalidation]].
+
 * Minor / not yet scoped
 
 Real but low-impact; noted for completeness, no proposal yet:

@@ -203,3 +203,104 @@ Validation and paired measurements are recorded in
 Cache composition from =sqlite3= in =mode=ro= and =PRAGMA page_count=.  Segment
 counts read from =meta/MANIFEST=, whose generation numbers are not a count:
 the real store holds eight live segments.
+
+* Independent review
+
+A reviewer session verified the 2026-11-09 implementation claims against the
+repository and ran a defect pass over the landed change.  Current
+[[https://github.com/rails-to-cosmos/org-glance/commit/113814b][113814b]], baseline
+[[https://github.com/rails-to-cosmos/org-glance/commit/ef1e388][ef1e388]].
+
+** Reproduced
+
+=python3 tools/bench.py graph --baseline ef1e388 --quick --sizes 100 --samples 3
+--pairs 2=, Linux, Emacs 31.1.90:
+
+| Operation, N = 100       | Baseline ms | Current ms | Ratio |
+|--------------------------+-------------+------------+-------|
+| insert (batched)         |     1654.88 |    1076.09 | 0.650 |
+| reindex                  |     1539.67 |     582.97 | 0.379 |
+| property-index cold fill |      489.71 |     442.84 | 0.904 |
+| save crypt depth=1       |       24.26 |       9.73 | 0.401 |
+
+Fingerprints match on every compared Row, so the gain carries equal semantic
+results.  The gate reproduces at 770 tests, 764 as expected, zero unexpected and
+six skips, with warning-free compilation.
+
+An independent counter probe at N = 200, the audit's original scale, measures
+=graph:add= at 6.61 ms and =reindex= at 5.07 ms per headline, against the audit's
+14.9 ms and 23.2 ms.  Reindex passes the audit's 6 ms target; insert stands above
+its 4 ms one.  =headline--from-string= runs 200 times for 200 headlines on both
+paths, from 800 before, so the fourfold multiplier is gone;
+=graph--parse-blob= answers 400 insert requests from 200 parses through the
+operation-local analysis.  =graph:get-content= and physical =data.org= reads are
+zero on insert.  Items 1 and 2 hold as implemented.
+
+** Findings
+
+1. *Observation revalidation is linear in a family's version count, and the
+   contract ladder stops an order of magnitude below the live store.*  The proof
+   table holds =data.org= and =meta.json= per version, and
+   =version--observation-current-p= re-stats every entry on each reuse —
+   [[https://github.com/rails-to-cosmos/org-glance/commit/113814b][113814b]],
+   =src/data/org-glance-version.el= line 358.  Measured proof size and
+   revalidation cost:
+
+   | Versions | Proof paths | =current-p= ms | Observe reuse ms |
+   |----------+-------------+----------------+------------------|
+   |        8 |          18 |           0.92 |             0.95 |
+   |       32 |          66 |           3.58 |             3.49 |
+   |      128 |         258 |          13.78 |            12.28 |
+   |      512 |        1026 |          54.45 |            50.16 |
+
+   Proof size is 2V + 2 and cost is linear.  =~/sync/views= holds one family of
+   514 versions, its runner-up at 33, so that headline pays about 54 ms of
+   =stat= per observation and about 109 ms per save at two observations, growing
+   with each further save.  Reuse still beats re-walking, which read and parsed
+   those same files.  =virtual-save-family-work-contract= exercises depths 1, 8
+   and 32 and asserts call counts, which hold constant in V, so this cost may
+   grow unbounded while the gate stays green; at depth 32 it measures 3.58 ms.
+   Open as [[file:2026-11-09-bound-family-revalidation.proposed.org][Bound family
+   revalidation]].  Item 4's generation counter is the structural answer and now
+   carries a measured ceiling.
+2. *The remaining write cost has moved.*  =cache--after-append= holds 54% of an
+   insert and 35% of a reindex, from 83% and 74% in the audit's baseline, and
+   stays the largest single block at one call per batch.  =graph:put-content= is
+   35% of an insert at 2.3 ms per headline, which is payload inode creation and
+   belongs to item 5.  A later write-path pass starts here.
+3. *=tools/bench.py= measures the working tree for the current label* —
+   [[https://github.com/rails-to-cosmos/org-glance/commit/113814b][113814b]],
+   =tools/bench.py= lines 38-43 — and samples =dirty= once before measuring,
+   line 182, without warning or refusing.  A =bench.py readers= run during this
+   review died with =Invalid read syntax= against a concurrently written
+   =org-glance-cache.el=.  A dirty or mid-write tree measures code that no
+   revision holds.
+
+** Corrected in the audit above
+
+Two of the audit's own earlier statements were wrong and the implementation pass
+amended them; the review confirms the amendments.
+
+- *Three inodes per additional version, against the audit's original five.*
+  =~/sync/views= holds 15,223 event directories and 30,447 files below them, so
+  each version costs its directory plus =data.org= plus =meta.json=.  Family,
+  shard and =versions= directories are shared, 14,552 inodes for 7,120
+  families.
+- *Immutable inventory stops at the =versions= root.*  =version:inventory= lists
+  it with non-recursive =f-directories=, so an inventory pass never descends
+  into a provider session tree.  Legacy family discovery carried the recursion,
+  and =family-inventory-stays-within-the-id-layout= now plants a provider
+  lookalike and asserts the scan skips it.
+
+** Method
+
+=python3 tools/bench.py= as quoted.  Counter probes advise
+=headline--from-string=, =--org-mode=, =graph--parse-blob=, =graph:put-content=,
+=graph:insert=, =cache--after-append=, =version:observe=,
+=version--observe-directories=, =version--read-payload= and
+=version--observation-current-p=, then run one batched =graph:add= of 200 and one
+=graph:reindex= in a batch process.  The depth table builds a single family by
+repeated =graph:add= and times =version--observation-current-p= over 20
+iterations and =version:observe= over 5 inside one source context.  Store
+inventory from =find= with explicit =-mindepth=/=-maxdepth= on =~/sync/views=,
+read-only.
