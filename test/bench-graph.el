@@ -53,11 +53,13 @@ Return the elapsed seconds."
       (org-glance-test:with-graph graph
         (let ((org-glance-bench--size n)
               (root (org-glance-graph:directory graph))
-              (content (symbol-function 'org-glance-graph:get-content))
+              (content (symbol-function 'insert-file-contents-literally))
               (blob-reads 0) inserted)
-          (cl-letf (((symbol-function 'org-glance-graph:get-content)
-                     (lambda (&rest args)
-                       (cl-incf blob-reads) (apply content args))))
+          (cl-letf (((symbol-function 'insert-file-contents-literally)
+                     (lambda (path &rest args)
+                       (when (equal (file-name-nondirectory path) "data.org")
+                         (cl-incf blob-reads))
+                       (apply content path args))))
             (cl-labels
                 ((metadata-fingerprint (_result)
                    (org-glance-bench:fingerprint (org-glance-graph:headlines graph)))

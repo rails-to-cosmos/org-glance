@@ -56,12 +56,14 @@ tables are a real pain point.
 * 2026-11-08 write path and storage
 
 [[file:2026-11-08-write-path-storage-audit.org][The write path and storage audit]] measures what the read
-audits left out.  =graph:add= costs 14.9 ms and =reindex= 23.2 ms per headline,
+audits left out. Its original measurements show =graph:add= at 14.9 ms and
+=reindex= at 23.2 ms per headline,
 83% and 74% of it in the synchronous family projection, with four
 =--from-string= parses and two blob read-backs per headline.  The real store
-holds 72.1 MB of payload across 76,050 inodes and 2.1 GB, five inodes per
-headline-version.  Eight ranked wins and four out-of-bounds ideas are listed
-there.
+holds 72.1 MB of payload across 76,050 inodes and 2.1 GB. A family with its
+first version costs five inodes; additional versions share family directories.
+Its 2026-11-09 implementation shares write analysis and publication receipts;
+canonical storage-format and WAL migrations remain coordinated work.
 
 * Minor / not yet scoped
 

@@ -979,7 +979,7 @@
            (payload-observations 0)
            (payload-reads 0)
            (original-directories (symbol-function 'f-directories))
-           (original-read-text (symbol-function 'f-read-text))
+           (original-read (symbol-function 'insert-file-contents-literally))
            (original-payload
             (symbol-function 'org-glance-cache--payload-observation))
            (leaf (car (org-glance-version:candidates
@@ -995,11 +995,11 @@
                        (when (equal path versions)
                          (cl-incf directory-censuses))
                        (apply original-directories path args)))
-                    ((symbol-function 'f-read-text)
+                    ((symbol-function 'insert-file-contents-literally)
                      (lambda (path &rest args)
                        (when (equal path payload)
                          (cl-incf payload-reads))
-                       (apply original-read-text path args)))
+                       (apply original-read path args)))
                     ((symbol-function 'org-glance-cache--payload-observation)
                      (lambda (&rest args)
                        (cl-incf payload-observations)
@@ -2044,5 +2044,68 @@
                             org-glance-graph:live-meta org-glance-cache:headline))
             (should-not (funcall reader graph role)))
           (should-not (org-glance-graph--tombstone-spec graph role)))))))
+
+(ert-deftest org-glance-test:compatibility-batch-looks-up-each-id-once ()
+  "Project a full batch with bounded metadata-key work and unchanged order."
+  (let* ((n 200)
+         (headlines (cl-loop for i below n
+                             collect (make-org-glance-headline-metadata
+                                      :id (format "batch-%d" i) :tags [])))
+         (ids (mapcar #'org-glance-headline-metadata:id headlines))
+         (prepared (make-hash-table :test #'equal))
+         (id (symbol-function 'org-glance-headline-metadata:id))
+         (keys 0) (edges 0) applied)
+    (dolist (id ids) (puthash id (list id) prepared))
+    (cl-letf (((symbol-function 'org-glance-headline-metadata:id)
+               (lambda (metadata) (cl-incf keys) (funcall id metadata)))
+              ((symbol-function 'org-glance-cache--apply-statements)
+               (lambda (_db statements) (push (car statements) applied)))
+              ((symbol-function 'org-glance-cache--project-edges)
+               (lambda (&rest _) (cl-incf edges))))
+      (org-glance-cache--project-compatibility-changes nil nil ids headlines prepared))
+    (should (equal ids (nreverse applied)))
+    (should (= n edges))
+    (should (<= keys (* 3 n)))))
+
+(ert-deftest org-glance-test:family-inventory-stays-within-the-id-layout ()
+  "Find short and sharded families while pruning legacy/provider subtrees."
+  (org-glance-test:with-graph graph
+    (dolist (id '("a" "ab" "abcd" "long-id"))
+      (org-glance-graph:add graph (org-glance-test:headline id "* Family")))
+    (let ((legacy (org-glance-graph:headline-data-path graph "legacy"))
+          (observe (symbol-function 'org-glance-cache--observe-inventory-directory))
+          visited)
+      (org-glance-test:write (f-join legacy "data.org") "* Legacy\n")
+      (make-directory (f-join legacy "sessions" "provider" "versions") t)
+      (cl-letf (((symbol-function 'org-glance-cache--observe-inventory-directory)
+                 (lambda (dir thunk)
+                   (push dir visited)
+                   (funcall observe dir thunk))))
+        (should (equal '("a" "ab" "abcd" "long-id")
+                       (org-glance-cache--family-ids graph))))
+      (should-not (cl-some (lambda (path) (string-search "/sessions" path)) visited)))))
+
+(ert-deftest org-glance-test:write-analysis-repairs-a-missing-payload-cache ()
+  "Rebuild a missing derived payload table while completing the write."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "repair" "* Before"))
+    (let ((db (sqlite-open (org-glance-cache:path graph))))
+      (unwind-protect
+          (sqlite-execute db "DROP TABLE headline_payload_observation")
+        (sqlite-close db)))
+    (org-glance-graph:add graph (org-glance-test:headline "repair" "* After"))
+    (should (equal "After" (org-glance-headline-metadata:title
+                           (org-glance-graph:live-meta graph "repair"))))))
+
+(ert-deftest org-glance-test:write-analysis-keeps-maintenance-readers-temporary ()
+  "Avoid adding idle read connections solely to prepare a write batch."
+  (org-glance-test:with-graph graph
+    (let* ((path (org-glance-cache:path graph))
+           (pooled (lambda ()
+                     (cl-count path org-glance-cache--readers
+                               :key #'org-glance-cache--reader-path :test #'equal)))
+           (before (funcall pooled)))
+      (org-glance-graph:add graph (org-glance-test:headline "writer" "* Write"))
+      (should (= before (funcall pooled))))))
 
 (provide 'test-cache)

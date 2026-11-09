@@ -1,13 +1,16 @@
 #+TITLE: Write path and storage audit — org-glance
 #+DATE: 2026-11-08
 
-Status: *audit* · companion to [[file:2026-07-06-performance-audit.org][the 2026-07-06 performance audit]]
+Status: *audit; compatible write-path fixes implemented 2026-11-09* · companion to [[file:2026-07-06-performance-audit.org][the 2026-07-06 performance audit]]
 
 Every audit so far has measured reads.  Reads are now fast: the point read is
 0.21 ms and flat ([[file:2026-11-08-performance-gate-measures-the-live-path.done.org][the performance gate]]).  This one measures the WRITE path and
 the STORE, where the remaining cost sits.  Measured on Linux, Emacs 31.1.90,
 synthetic stores from =org-glance-test:with-graph=, plus the real 7,119-headline
 =~/sync/views= store read-only.
+
+The profiles below are the 2026-11-08 baseline. The compatible implementation
+and remaining coordinated work are recorded below.
 
 * Two numbers that frame it
 
@@ -41,7 +44,7 @@ Three facts follow.  The synchronous family projection is 83% of an insert and
 74% of a reindex.  The writer reads back and reparses the blob it just wrote.
 The 2026-07-06 audit's item D collapsed "4 thunk reparses → one
 =--content-facts= pass" on the read side; the write side carries the multiplier
-today.
+in this baseline.
 
 * Theme 2 — directory inventories are the hot path, over a polluted tree
 
@@ -59,11 +62,12 @@ store:
 | =archive/=                                  |  126 MB |      —  |
 | Whole store                                 |  2.1 GB |  76,050 |
 
-A headline-version costs five inodes: =versions/<uuidv7>/= plus =data.org= plus
-=meta.json=, under three nested directories.  The deepest family holds 514
-versions, so one headline owns over a thousand inodes.  The =.agent-home= trees
-are plugin-local provider caches living inside =data/=; they are git-ignored, so
-they cost no sync, and every inventory walk still traverses them.
+Each additional version costs three inodes: its event directory, =data.org=
+and =meta.json=; family and shard directories are shared across versions.  The deepest family holds 514
+versions, so one headline owns over a thousand inodes.  The =.agent-home= trees belong to the Glance agent sandbox. Immutable-family
+inventory already stops before these trees; legacy-family discovery previously
+recursed through arbitrary descendants. The implementation below bounds that
+discovery to the ID layout.
 
 The =inventory_directory= table already exists in the cache, so the checkpoint
 side of this is built.
@@ -104,23 +108,75 @@ Ranked by measured payoff against risk.
    pattern is already proven by audit item D.
 2. *Never read back what was just written.*  =get-content= plus =--reparse-blob=
    during insert and reindex re-derive what the caller holds.
-3. *Batch the family projection per insert batch.*  =--prepare-headline=,
+3. *Share preparation across the insert batch.*  =--prepare-headline=,
    =--prepare-family=, =--payload-observation= and =--version-metadata= run once
-   per headline inside one transaction; one pass over the batch replaces N.
+   per headline. Projection already commits once per batch; preparation still
+   duplicated parsing and scanned the batch repeatedly by ID.
 4. *Demote the directory walk to the repair path.*  A generation counter per
    family directory, checked against =inventory_directory=, lets a read skip
-   =readdir= entirely and keeps the walk for repair.  Restates invariant 41.
+   =readdir= entirely and keeps the walk for repair. This requires coordinated
+   writer participation under invariant 41.
 5. *One file per version.*  Fold =meta.json= into a header on =data.org=, or
    append both to a per-headline log.  Saves ≈ 30,000 inodes on the real store.
    Touches invariants 39–41 and the Glance interop contract.
-6. *Move provider session homes out of =data/=.*  Plugin-side, into
-   =XDG_CACHE_HOME=: 1.3 GB and 12,377 inodes leave the store and every
-   inventory walk.
+6. *Move provider session homes out of =data/=.* Glance sandbox-side, into
+   a private cache location: 1.3 GB and 12,377 inodes leave the store; sandbox
+   HOME mappings, credentials and isolation require a coordinated migration.
 7. *Cache hygiene.*  Retire =glance.sqlite3= after import, checkpoint
    =glance-index.sqlite3-wal=, and account for 6.7 KB per headline across a
    15-column =headline= and a 10-column =headline_event=.
 8. *Retire the WAL at stage-5.*  331 B per headline of derived data leaves git,
    and compaction stops minting a multi-MB git object per run.
+
+* Compatible implementation — 2026-11-09
+
+Items 1–3 share operation-local source analysis across graph writes, reindex and
+material saves. Exact source bytes, raw SHA-256, parsed metadata and content facts
+travel together; a successful publication supplies its own payload receipt.
+New inserts perform one canonical parse per headline inside the writer, zero
+payload disk reads and two family observations. Caller construction remains a
+separate parse. Reindex performs one parse, one payload read and one family
+observation per headline; contexts reset every 500 headlines.
+
+Receipts validate size, mtime, ctime, inode and device before reuse; symlinks
+always read afresh. Namespace changes and changed source identities invalidate
+observations. Local publication, legacy migration and pruning invalidate the
+family explicitly. Returned content strings and history lists remain owned by
+the caller. Fault tests cover hook corruption, restored mtimes, inode replacement
+and external events during an operation.
+
+Verified, digest-matching non-leaf payload observations reuse parseability;
+current leaves still parse metadata. Missing or incompatible derived cache state
+falls back to source analysis. Batch preparation indexes IDs once, and maintenance
+reads reuse existing idle connections without introducing a retained reader.
+
+Item 4 retains directory inventories as search authority. Per-operation validated
+observations remove repeated walks; family discovery visits only short-ID roots
+and canonical shard/ID directories, including a short ID beside its sharded
+siblings. A persistent generation counter requires all independent writers to
+participate before it can replace inventories.
+
+Items 5 and 8 remain coordinated protocol work under invariants 35 and 39–41:
+canonical two-file events and the compatibility WAL remain in force. Item 6
+belongs to Glance's =src-query/Glance/Agent/Sandbox.hs=, lines 63–65
+([[https://gitlab.com/rails-to-cosmos/glance/-/blob/d0e4eeef8187fbdca51f9ff63dfcec820f0df813/src-query/Glance/Agent/Sandbox.hs#L63][sandbox HOME mapping]]), including private credentials and mount policy.
+
+Item 7's read-only inspection of =~/sync/views= finds 49,762,304 bytes in the
+private SQLite file, including 2,711,552 free bytes. Its largest tables are
+=headline_event= (9,900,032 B), =org_headline= (7,225,344 B),
+=headline_projection= (5,586,944 B) and =headline_payload_observation=
+(5,361,664 B), plus indexes and source/inventory tables. There are 15,318 events
+for 7,157 families; serialized current projection payloads total 3,669,792 B.
+These distinct representations explain the footprint comparison. The former
+shared database remains untouched under invariant 35; foreign WAL checkpointing
+belongs to the owning Glance connection lifecycle.
+
+Three alternating compiled process pairs against =ef1e388= measure inserts
+1,651→1,016 ms and reindex 1,518→570 ms at N=100; plain/crypt saves fall
+22.1/23.4→8.9/9.0 ms. Cold property fill improves 470→432 ms. These are
+synthetic warm-filesystem measurements; the real store was inspected read-only.
+Validation and paired measurements are recorded in
+[[file:../invariants.org::*Write-path analysis contracts][Write-path analysis contracts]].
 
 * Out of bounds
 

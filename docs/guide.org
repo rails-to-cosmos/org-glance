@@ -449,7 +449,9 @@ The material harness uses graph/history shapes 10/1, 50/12 and 100/40; quick
 selects 10/1 and large adds 500/80. =OG_BENCH_SAMPLES= selects repeat count;
 graph workloads default to seven samples, including insert, cold fills, reindex
 and compaction. A one-sample override supports smoke runs. Every graph row
-reports latency/GC samples, work counters and a result fingerprint. Insert uses
+reports latency/GC samples, work counters and a result fingerprint. Payload-read
+counters count physical reads of =data.org=; property fill and reindex each read
+N payloads per sample. Insert uses
 a fresh graph each round; cold fills reset their caches; compaction starts with
 one superseded record each round. Preparation runs outside the measured window.
 =OG_BENCH_SIZES= accepts positive comma-separated sizes for focused experiments.

@@ -321,7 +321,8 @@ Plugins use it instead of the buffer-local internals."
   "Return encoded content, metadata, crypt proof and authored revision.
 SEAL encrypts crypt blocks for publication; nil retains editing presentation."
   (when seal (org-glance-material--prepare-crypt))
-  (let* ((revision org-glance-material--revision)
+  (let* ((graph org-glance-material--graph)
+         (revision org-glance-material--revision)
          (text (buffer-substring (point-min) (point-max)))
          (reserved org-glance-material--reserved-lines)
          (drawer org-glance-material--drawer-lines)
@@ -334,7 +335,7 @@ SEAL encrypts crypt blocks for publication; nil retains editing presentation."
                      (org-glance-material--require-password)))
          (org-glance-config--pending-context org-glance-config--org-context)
          (org-todo-keywords (org-glance-tag-config:cycle->keywords-or
-                            org-glance-material--cycle org-todo-keywords)))
+                             org-glance-material--cycle org-todo-keywords)))
     (with-temp-buffer
       (org-glance--org-mode)
       (org-glance-material--harden-buffer)
@@ -357,7 +358,7 @@ SEAL encrypts crypt blocks for publication; nil retains editing presentation."
                                 blocks))))
         (user-error "Encrypted headline is not sealed; save refused"))
       (let* ((content (org-glance-material--encode-endings (buffer-string)))
-             (headline (org-glance-headline--from-string content)))
+             (headline (org-glance-graph--parse-blob graph content)))
         (list content (org-glance-headline:metadata headline)
               (org-glance-material--sealed-proof) revision)))))
 
@@ -389,45 +390,46 @@ SEAL encrypts crypt blocks for publication; nil retains editing presentation."
 
 (defun org-glance-material--write-version ()
   "Complete pending work and publish the current authored draft."
-  (org-glance-material--ensure)
-  (when buffer-file-name
-    (user-error "Material saves require a virtual buffer; use content export"))
-  (when org-glance-material--busy (user-error "Material operation already running"))
-  (let ((org-glance-material--busy t))
-    (when org-glance-material--pending
-      (org-glance-material--adopt
-       (org-glance-graph:publish-edit org-glance-material--pending)))
-    (when (buffer-modified-p)
-      (when (plist-get org-glance-material--base :reconcile)
-        (user-error "Resolve concurrent versions before saving"))
-      (save-excursion
-        (org-glance-material--drop-hand-typed-reserved)
-        (org-glance-material--normalize-tags))
-      (let* ((serialized (org-glance-material--serialize))
-             (revision (nth 3 serialized))
-             (receipt (org-glance-graph:prepare-edit
-                       org-glance-material--graph :id org-glance-material--id
-                       :contents (car serialized) :metadata (cadr serialized)
-                       :revision revision
-                       :expected-frontier (plist-get org-glance-material--base :frontier)
-                       :source-version (plist-get org-glance-material--base :version)
-                       :source-digest (plist-get org-glance-material--base :digest))))
-        (setq org-glance-material--pending receipt)
-        (when (nth 2 serialized)
-          (setq org-glance-material--password-proof (nth 2 serialized)))
-        (condition-case err
-            (org-glance-material--adopt (org-glance-graph:publish-edit receipt))
-          ((error quit)
-           (unless (file-exists-p (org-glance-version:directory
-                                  (org-glance-publication:version receipt)))
-             (setq org-glance-material--pending nil))
-           (set-buffer-modified-p
-            (or (not (eq receipt org-glance-material--receipt))
-                (/= org-glance-material--revision
-                    (org-glance-publication:revision receipt))))
-           (signal (car err) (cdr err)))))))
-  (setq org-glance-material--save-completed t)
-  t)
+  (org-glance-graph--with-source-context
+    (org-glance-material--ensure)
+    (when buffer-file-name
+      (user-error "Material saves require a virtual buffer; use content export"))
+    (when org-glance-material--busy (user-error "Material operation already running"))
+    (let ((org-glance-material--busy t))
+      (when org-glance-material--pending
+        (org-glance-material--adopt
+         (org-glance-graph:publish-edit org-glance-material--pending)))
+      (when (buffer-modified-p)
+        (when (plist-get org-glance-material--base :reconcile)
+          (user-error "Resolve concurrent versions before saving"))
+        (save-excursion
+          (org-glance-material--drop-hand-typed-reserved)
+          (org-glance-material--normalize-tags))
+        (let* ((serialized (org-glance-material--serialize))
+               (revision (nth 3 serialized))
+               (receipt (org-glance-graph:prepare-edit
+                         org-glance-material--graph :id org-glance-material--id
+                         :contents (car serialized) :metadata (cadr serialized)
+                         :revision revision
+                         :expected-frontier (plist-get org-glance-material--base :frontier)
+                         :source-version (plist-get org-glance-material--base :version)
+                         :source-digest (plist-get org-glance-material--base :digest))))
+          (setq org-glance-material--pending receipt)
+          (when (nth 2 serialized)
+            (setq org-glance-material--password-proof (nth 2 serialized)))
+          (condition-case err
+              (org-glance-material--adopt (org-glance-graph:publish-edit receipt))
+            ((error quit)
+             (unless (file-exists-p (org-glance-version:directory
+                                     (org-glance-publication:version receipt)))
+               (setq org-glance-material--pending nil))
+             (set-buffer-modified-p
+              (or (not (eq receipt org-glance-material--receipt))
+                  (/= org-glance-material--revision
+                      (org-glance-publication:revision receipt))))
+             (signal (car err) (cdr err)))))))
+    (setq org-glance-material--save-completed t)
+    t))
 
 (defun org-glance-material:save ()
   "Save the logical draft and return its completed receipt, or nil for no work."

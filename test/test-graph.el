@@ -509,4 +509,58 @@ the two paths rather than trusting either."
         (should (= 100 families))
         (should (= 100 decoded))))))
 
+(ert-deftest org-glance-test:graph-write-analysis-work-contract ()
+  "Parse each written headline once and reuse one observation per phase."
+  (org-glance-test:with-graph graph
+    (let* ((n 8)
+           (headlines (cl-loop for i below n
+                               collect (org-glance-test:headline
+                                        (format "write-%d" i) "* TODO Write :work:")))
+           (parse (symbol-function 'org-glance-headline--from-string))
+           (observe (symbol-function 'org-glance-version--observe-directories))
+           (content (symbol-function 'org-glance-graph:get-content))
+           (mode (symbol-function 'org-glance--org-mode))
+           (read (symbol-function 'insert-file-contents-literally))
+           (parses 0) (observations 0) (contents 0) (payload-reads 0) (modes 0))
+      (cl-letf (((symbol-function 'org-glance-headline--from-string)
+                 (lambda (&rest args) (cl-incf parses) (apply parse args)))
+                ((symbol-function 'org-glance-version--observe-directories)
+                 (lambda (&rest args) (cl-incf observations) (apply observe args)))
+                ((symbol-function 'org-glance-graph:get-content)
+                 (lambda (&rest args) (cl-incf contents) (apply content args)))
+                ((symbol-function 'org-glance--org-mode)
+                 (lambda () (cl-incf modes) (funcall mode)))
+                ((symbol-function 'insert-file-contents-literally)
+                 (lambda (path &rest args)
+                   (when (equal "data.org" (file-name-nondirectory path))
+                     (cl-incf payload-reads))
+                   (apply read path args))))
+        (apply #'org-glance-graph:add graph headlines)
+        (should (= n parses))
+        (should (= (* 2 n) modes))
+        (should (= (* 2 n) observations))
+        (should (= 0 contents))
+        (should (= 0 payload-reads))
+        (setq parses 0 observations 0 contents 0 payload-reads 0 modes 0)
+        (should (= n (org-glance-graph:reindex graph)))
+        (should (= n parses))
+        (should (= n modes))
+        (should (= n observations))
+        (should (= 0 contents))
+        (should (= n payload-reads))))))
+
+(ert-deftest org-glance-test:source-context-preserves-caller-owned-values ()
+  "Keep returned content strings and history lists independently mutable."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "owned" "* First"))
+    (org-glance-graph:add graph (org-glance-test:headline "owned" "* Second"))
+    (org-glance-graph--with-source-context
+      (let* ((dir (org-glance-graph:headline-data-path graph "owned"))
+             (contents (org-glance-graph:get-content graph "owned"))
+             (history (org-glance-version:history dir "owned")))
+        (aset contents 0 ?#)
+        (setcdr history nil)
+        (should (string-prefix-p "* Second" (org-glance-graph:get-content graph "owned")))
+        (should (= 2 (length (org-glance-version:history dir "owned"))))))))
+
 (provide 'test-graph)

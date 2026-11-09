@@ -5,8 +5,13 @@ Notable user-facing changes.  Versions date-based
 
 * Unreleased
 
+** Changed
+
+- =org-glance-graph:add=, =org-glance-graph:reindex= and material saves reuse guarded source analysis and publication bytes.
+
 ** Fixed
 
+- Cache family discovery includes short IDs beside sharded siblings and skips deep session trees.
 - =org-glance-graph:get-headline= hides conflict/rejected-only logical IDs consistently with cache readers.
 - =make bench-graph= samples and fingerprints all workloads; =tools/bench.py= reports uncertainty across process pairs.
 

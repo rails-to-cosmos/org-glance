@@ -80,7 +80,7 @@
               (should (= 3 (plist-get work :blob-reads)))
               (should (= 3 (plist-get work :indexed-headlines))))
              ("reindex"
-              (should (= 6 (plist-get work :blob-reads)))
+              (should (= 3 (plist-get work :blob-reads)))
               (should (= 3 (plist-get work :headlines))))))
          (plist-get record :work)))
       (dolist (record (cl-remove-if-not

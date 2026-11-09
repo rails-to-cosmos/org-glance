@@ -353,4 +353,84 @@
       (should-not (org-glance-version:prune dir "alpha" 1))
       (should (= 3 (length (org-glance-version:history dir "alpha")))))))
 
+(ert-deftest org-glance-test:payload-receipts-guard-bytes-and-file-identity ()
+  "Reuse raw bytes while detecting rewrites, replacement and symlink targets."
+  (with-temp-directory dir
+    (let* ((file (f-join dir "data.org"))
+           (old "* Payload λ\r\n") (new "* Payload μ\r\n")
+           (org-glance-version--payloads (make-hash-table :test #'equal))
+           (read (symbol-function 'f-read-bytes)) (reads 0))
+      (f-write-text old 'utf-8-unix file)
+      (cl-letf (((symbol-function 'f-read-bytes)
+                 (lambda (&rest args) (cl-incf reads) (apply read args))))
+        (let ((first (org-glance-version--read-payload file))
+              (mtime (file-attribute-modification-time (file-attributes file))))
+          (should (eq first (org-glance-version--read-payload file)))
+          (should (= reads 1))
+          (should (equal old (org-glance-version--payload-contents first)))
+          (should (equal "* Payload λ\n" (org-glance-version--payload-text first)))
+          (should (equal (secure-hash 'sha256 (encode-coding-string old 'utf-8-unix))
+                         (org-glance-version--payload-digest first)))
+          (f-write-text new 'utf-8-unix file)
+          (set-file-times file mtime)
+          (should (equal new (org-glance-version--payload-contents
+                             (org-glance-version--read-payload file)))))
+        (should (= reads 2))
+        (let ((replacement (f-join dir "replacement")))
+          (f-write-text old 'utf-8-unix replacement)
+          (rename-file replacement file t)
+          (should (equal old (org-glance-version--payload-contents
+                             (org-glance-version--read-payload file)))))
+        (should (= reads 3))
+        (let ((link (f-join dir "link.org")))
+          (make-symbolic-link file link)
+          (org-glance-version--read-payload link)
+          (org-glance-version--read-payload link)
+          (should (= reads 5)))))))
+
+(ert-deftest org-glance-test:operation-observations-detect-external-changes ()
+  "Reuse one observation and reobserve externally changed bytes or event names."
+  (with-temp-directory dir
+    (let* ((org-glance-version--payloads (make-hash-table :test #'equal))
+           (org-glance-version--observations (make-hash-table :test #'equal))
+           (root (org-glance-version:write-snapshot dir "a" nil "test" "* First"))
+           (first (org-glance-version:observe dir "a"))
+           (path (org-glance-version:data-file dir (org-glance-version:id root)))
+           (mtime (file-attribute-modification-time (file-attributes path))))
+      (should (eq first (org-glance-version:observe dir "a")))
+      (f-write-text "* Other" 'utf-8-unix path)
+      (set-file-times path mtime)
+      (let ((changed (org-glance-version:observe dir "a")))
+        (should-not (eq first changed))
+        (should-not (org-glance-version:valid
+                     (car (org-glance-version-observation:history changed)))))
+      (let ((contents "* External"))
+        (org-glance-test--write-family-event
+         dir "external"
+         (list :version 2 :event "snapshot-published" :headline "a"
+               :id "external" :parents (vector (org-glance-version:id root))
+               :contentSha256 (secure-hash 'sha256 contents)
+               :created "2026-11-09T00:00:00Z" :producer "external") contents))
+      (should (= 2 (length (org-glance-version-observation:history
+                            (org-glance-version:observe dir "a"))))))))
+
+(ert-deftest org-glance-test:publication-receipts-detect-hook-corruption ()
+  "Verify source mutations after payload writes and final publication."
+  (dolist (at '(after-payload-write after-final-rename))
+    (with-temp-directory dir
+      (let* ((org-glance-version--payloads (make-hash-table :test #'equal))
+             (org-glance-version--observations (make-hash-table :test #'equal))
+             (org-glance-version--publication-hook
+              (lambda (phase)
+                (when (eq phase at)
+                  (let* ((root (f-join dir "versions"))
+                         (published (car (f-directories root)))
+                         (file (f-join published "data.org"))
+                         (mtime (file-attribute-modification-time (file-attributes file))))
+                    (f-write-text "* Other" 'utf-8-unix file)
+                    (set-file-times file mtime)))))
+             (_ (org-glance-version:write-snapshot dir "a" nil "test" "* First")))
+        (should-not (org-glance-version:valid
+                     (car (org-glance-version:history dir "a"))))))))
+
 ;;; test-version.el ends here

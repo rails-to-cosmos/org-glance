@@ -1057,9 +1057,22 @@ three saves per fixture. Baseline:
 
 * Independent-review regression contracts
 
-- All nine graph rows honor =OG_BENCH_SAMPLES= (default seven) and emit per-round latency, GC, work and fingerprints; the synthetic runner requires three complete samples, N property reads, 2N reindex reads and N+1→N compaction each round.
+- All nine graph rows honor =OG_BENCH_SAMPLES= (default seven) and emit per-round latency, GC, work and fingerprints; the synthetic runner requires three complete samples, N physical payload reads for property fill and reindex and N+1→N compaction each round.
 - Commit comparisons retain process sample groups and default to three alternating pairs; =paired_delta_ci95_ms= bootstraps paired process medians and stays null below three pairs.
 - Review-fix validation: 761 ERT tests, 755 passes, six environment skips, nine Python comparison cases and warning-free compilation of 32 production files.
 - =python3 tools/bench.py graph --baseline a7c58ed --quick --sizes 50 --samples 3 --pairs 5= yields equal fingerprints and work for all nine rows; 100 compatibility lookups measure 22.012→19.305 ms, paired delta −2.215 ms with a 95% interval of −2.817…−1.734 ms.
 - The same comparison measures insertion delta +15.710 ms (95% interval +2.961…+27.034 ms); five identical-code control pairs compiled from =a7c58ed= span −39.760…+22.455 ms, and a failing-reader tripwire confirms insertion/reindex never call the edited family reader.
 - =OG_BENCH_QUICK=1 OG_BENCH_SIZES=50 OG_BENCH_SAMPLES=3 make bench-readers= reports zero opens and 100 deserializations in each of three 100-read batches, median 0.123 ms/read.
+
+* Write-path analysis contracts
+
+- =graph-write-analysis-work-contract= requires N canonical parses, zero payload disk reads and 2N family observations for insert; reindex requires N parses, N payload reads and N family observations.
+- =virtual-save-family-work-contract= requires one parse and two family observations per save at history depths 1, 8 and 32.
+- =compatibility-batch-looks-up-each-id-once= bounds ID access linearly and verifies publication order; =family-inventory-stays-within-the-id-layout= covers short IDs, sharded siblings and deep session trees.
+- =payload-receipts-guard-bytes-and-file-identity=, =operation-observations-detect-external-changes= and =publication-receipts-detect-hook-corruption= require UTF-8/raw-digest correctness, CRLF-compatible reads and invalidation after source changes.
+- =source-context-preserves-caller-owned-values= protects returned strings/lists; =write-analysis-repairs-a-missing-payload-cache= requires source fallback; =write-analysis-keeps-maintenance-readers-temporary= forbids a newly retained maintenance reader.
+- Graph benchmark payload counters instrument physical =insert-file-contents-literally= calls for =data.org=; reindex and property fill require N reads per sample.
+- Three alternating compiled process pairs against =ef1e388= (=python3 tools/bench.py all --baseline ef1e388 --quick --sizes 100 --samples 3 --pairs 3=) retain equal graph/interactive/reader fingerprints; insert measures 1,650.981→1,016.034 ms and reindex 1,517.642→569.957 ms at N=100.
+- The same comparison measures cold property fill 470.312→431.922 ms, plain save 22.129→8.890 ms and crypt save 23.411→8.999 ms; paired 95% intervals resolve improvements for these five workloads and include zero for every remaining non-improving workload.
+- Physical payload reads at N=100 fall 300→100 for cold property fill and 900→100 for reindex; semantic result/work counters remain equal.
+- Write-path validation runs 770 ERT tests: 764 passes, six fixture/platform skips, zero failures; 32 production files compile warning-free, lint retains existing checkdoc diagnostics and relint warnings in unchanged config/utils files.

@@ -8,6 +8,8 @@ Before every commit, run the focused correctness tests and the applicable
 performance contract for each changed behavior. Treat any unexplained latency
 or work-counter regression as a failing gate and fix it before committing; a
 regression may ship only with the user's explicit acceptance.
+Write analysis changes run `graph-write-analysis-work-contract`,
+`virtual-save-family-work-contract` and the graph/material benchmarks.
 
 - `eask run command test` enforces the work-counter contracts listed in `docs/invariants.org`.
 - Point reads enforce `graph-point-read-work-contract` and `cache-point-addresses-use-indexes`; run `make bench-graph` and `make bench-readers`.
@@ -207,7 +209,8 @@ evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
     timer compare event-name inventories with SQLite checkpoints; relay lines
     are wake-up hints. One operation derives History, payload integrity, parsing,
     and projection from one observation and re-observes only after mutation. A
-    writer commits its family projection before success.
+    writer commits its family projection before success. Operation-local receipts
+    revalidate source identity and mutation stamps; symlinks always read afresh.
 47. Extraction decrypts scratch content before selection and requires acknowledged
     clipboard publication; Linux locks source payload buffers and enforces
     sleep-inclusive deadlines; X11 sends payloads directly through XCB's raw

@@ -14,7 +14,84 @@
 
 (cl-defstruct (org-glance-version-observation
                (:conc-name org-glance-version-observation:))
-  inventory history payloads)
+  inventory history payloads proof)
+
+(defvar org-glance-version--observations nil
+  "Family observations shared within one write operation.")
+
+(defvar org-glance-version--payloads nil
+  "Attribute-guarded payloads shared within one write operation.")
+
+(defvar org-glance-version--observed-paths nil
+  "Read-time source stamps collected for the current family observation.")
+
+(defun org-glance-version--record-path (path attributes)
+  "Record PATH's read-time ATTRIBUTES in the current observation."
+  (when org-glance-version--observed-paths
+    (puthash path attributes org-glance-version--observed-paths)))
+
+(defun org-glance-version--record-current-path (path)
+  "Record PATH's current stamp when an observation will be retained."
+  (when org-glance-version--observed-paths
+    (org-glance-version--record-path path (org-glance-version--payload-attributes-at path))))
+
+(cl-defstruct org-glance-version--payload attributes contents text digest)
+
+(defun org-glance-version--make-payload (bytes attributes)
+  "Decode exact BYTES and attach their digest and source ATTRIBUTES."
+  (let ((contents (decode-coding-string bytes 'utf-8-unix))
+        (text (decode-coding-string bytes 'utf-8)))
+    (make-org-glance-version--payload
+     :attributes attributes :contents contents
+     :text (if (equal contents text) contents text)
+     :digest (secure-hash 'sha256 bytes))))
+
+(defun org-glance-version--payload-attributes-at (path)
+  "Return PATH's identity and mutation stamp, excluding access time."
+  (when (not (file-symlink-p path))
+    (when-let* ((attributes (file-attributes path)))
+      (list (file-attribute-size attributes)
+            (file-attribute-modification-time attributes)
+            (file-attribute-status-change-time attributes)
+            (file-attribute-inode-number attributes)
+            (file-attribute-device-number attributes)))))
+
+(defun org-glance-version--observation-key (directory headline)
+  "Return DIRECTORY and HEADLINE's operation-local observation key."
+  (cons (file-name-as-directory (expand-file-name directory)) headline))
+
+(defun org-glance-version--invalidate-observation (directory headline)
+  "Forget DIRECTORY and HEADLINE's observation after mutation."
+  (when org-glance-version--observations
+    (remhash (org-glance-version--observation-key directory headline)
+             org-glance-version--observations)))
+
+(defun org-glance-version--read-payload (path)
+  "Return PATH's digest and decoded text; signal on a changing read."
+  (let* ((attributes (org-glance-version--payload-attributes-at path))
+         (held (and org-glance-version--payloads
+                    (gethash path org-glance-version--payloads))))
+    (if (and attributes held
+             (equal attributes (org-glance-version--payload-attributes held)))
+        (progn (org-glance-version--record-path path attributes) held)
+      (let* ((bytes (f-read-bytes path))
+             (payload (org-glance-version--make-payload bytes attributes)))
+        (when (and attributes
+                   (not (equal attributes (org-glance-version--payload-attributes-at path))))
+          (error "Snapshot changed while reading %s" path))
+        (org-glance-version--record-path path attributes)
+        (when (and attributes org-glance-version--payloads
+                   (equal attributes (org-glance-version--payload-attributes-at path)))
+          (puthash path payload org-glance-version--payloads))
+        payload))))
+
+(defun org-glance-version--observation-current-p (observation)
+  "Return non-nil when OBSERVATION's source stamps still agree."
+  (let ((proof (org-glance-version-observation:proof observation)))
+    (and proof
+         (cl-loop for path being the hash-keys of proof using (hash-values stamp)
+                  always (and (not (file-symlink-p path))
+                              (equal stamp (org-glance-version--payload-attributes-at path)))))))
 
 (cl-defun org-glance-version:path (headline-dir version-id)
   "Return VERSION-ID's immutable directory below HEADLINE-DIR."
@@ -184,19 +261,38 @@ Capture PARENTS, PRODUCER and CONTENTS' digest in the returned envelope."
   (let* ((final (org-glance-version:directory version))
          (parent (f-parent final)))
     (f-mkdir-full-path parent)
-    (let ((temp (make-temp-file (f-join parent ".version-") t)))
+    (let ((temp (make-temp-file (f-join parent ".version-") t)) payload envelope-payload)
       (unwind-protect
           (progn
             (org-glance-version--publication-point 'before-temp-write)
             (when contents
               (let ((coding-system-for-write 'utf-8-unix))
-                (write-region contents nil (f-join temp "data.org") nil 'silent)))
+                (write-region contents nil (f-join temp "data.org") nil 'silent))
+              (when org-glance-version--payloads
+                (let ((bytes (encode-coding-string contents 'utf-8-unix)))
+                  (setq payload
+                        (org-glance-version--make-payload
+                         bytes (org-glance-version--payload-attributes-at
+                                (f-join temp "data.org")))))))
             (org-glance-version--publication-point 'after-payload-write)
-            (let ((coding-system-for-write 'utf-8-unix))
-              (write-region (concat (json-serialize (org-glance-version--plist version)) "\n")
-                            nil (f-join temp "meta.json") nil 'silent))
+            (let ((coding-system-for-write 'utf-8-unix)
+                  (envelope (concat (json-serialize (org-glance-version--plist version)) "\n")))
+              (write-region envelope nil (f-join temp "meta.json") nil 'silent)
+              (when org-glance-version--payloads
+                (setq envelope-payload
+                      (org-glance-version--make-payload
+                       (encode-coding-string envelope 'utf-8-unix)
+                       (org-glance-version--payload-attributes-at (f-join temp "meta.json"))))))
             (org-glance-version--publication-point 'after-envelope-write)
             (rename-file temp final)
+            (org-glance-version--invalidate-observation
+             (f-parent parent) (org-glance-version:headline version))
+            (dolist (entry (list (cons "data.org" payload) (cons "meta.json" envelope-payload)))
+              (let ((file (f-join final (car entry))) (source (cdr entry)))
+                (when (and source (org-glance-version--payload-attributes source)
+                           (equal (org-glance-version--payload-attributes source)
+                                  (org-glance-version--payload-attributes-at file)))
+                  (puthash file source org-glance-version--payloads))))
             (org-glance-version--publication-point 'after-final-rename)
             (setq temp nil))
         (when (and temp (f-exists? temp)) (delete-directory temp t))))
@@ -225,19 +321,36 @@ Capture PARENTS, PRODUCER and CONTENTS' digest in the returned envelope."
 (cl-defun org-glance-version:history (headline-dir headline)
   "Read HEADLINE's identifiable version history below HEADLINE-DIR.
 Each returned node carries payload integrity in its `valid' slot."
-  (org-glance-version-observation:history
-   (org-glance-version:observe headline-dir headline)))
+  (copy-sequence
+   (org-glance-version-observation:history
+    (org-glance-version:observe headline-dir headline))))
 
 (cl-defun org-glance-version:observe
     (headline-dir headline &optional (inventory nil inventory-supplied-p))
-  "Observe HEADLINE's family once and return its inventory, payloads, and history."
-  (let* ((root (f-join headline-dir "versions"))
-         (inventory (if inventory-supplied-p
-                        inventory
-                      (org-glance-version:inventory headline-dir)))
-         (directories (mapcar (lambda (event) (f-join root event)) inventory)))
-    (org-glance-version--observe-directories
-     headline-dir headline inventory directories)))
+  "Observe HEADLINE in HEADLINE-DIR with optional INVENTORY.
+Reuse a current operation snapshot; treat its returned contents as immutable."
+  (let* ((key (org-glance-version--observation-key headline-dir headline))
+         (held (and org-glance-version--observations
+                    (gethash key org-glance-version--observations))))
+    (if (and held (org-glance-version--observation-current-p held)
+             (or (not inventory-supplied-p)
+                 (equal inventory (org-glance-version-observation:inventory held))))
+        held
+      (let* ((org-glance-version--observed-paths
+              (and org-glance-version--observations (make-hash-table :test #'equal)))
+             (root (f-join headline-dir "versions"))
+             (_ (org-glance-version--record-current-path root))
+             (inventory (if inventory-supplied-p
+                            inventory
+                          (org-glance-version:inventory headline-dir)))
+             (directories (mapcar (lambda (event) (f-join root event)) inventory))
+             (observation (org-glance-version--observe-directories
+                           headline-dir headline inventory directories)))
+        (setf (org-glance-version-observation:proof observation)
+              org-glance-version--observed-paths)
+        (when org-glance-version--observations
+          (puthash key observation org-glance-version--observations))
+        observation))))
 
 (cl-defun org-glance-version:inventory (headline-dir)
   "Return HEADLINE-DIR's published immutable event-directory names."
@@ -261,30 +374,37 @@ Each returned node carries payload integrity in its `valid' slot."
          (candidates
           (when (f-directory? root)
             (cl-loop for dir in (sort directories #'string<)
-               for meta = (f-join dir "meta.json")
-               for data = (f-join dir "data.org")
-               for payload = (condition-case nil
-                                 (if (f-file? data)
-                                     (cons t (f-read-text data 'utf-8-unix))
-                                   (cons nil nil))
-                               (error (cons t nil)))
-               do (puthash (file-name-nondirectory dir) payload payloads)
-               when (f-exists? meta)
-               for raw = (condition-case nil
-                             (json-parse-string (f-read-text meta 'utf-8)
-                                                :object-type 'plist :array-type 'list
-                                                :null-object nil :false-object nil)
-                           (error nil))
-               for candidate = (and raw
-                                    (org-glance-version--candidate
-                                     dir headline raw payload))
-               when candidate collect candidate)))
+                     for meta = (f-join dir "meta.json")
+                     for data = (f-join dir "data.org")
+               do (org-glance-version--record-current-path data)
+                  (org-glance-version--record-current-path meta)
+                     for payload = (condition-case nil
+                                       (if (f-file? data)
+                                           (cons t (org-glance-version--payload-contents
+                                                    (org-glance-version--read-payload data)))
+                                         (cons nil nil))
+                                     (error (cons t nil)))
+                     do (puthash (file-name-nondirectory dir) payload payloads)
+                     when (f-exists? meta)
+                     for raw = (condition-case nil
+                                   (json-parse-string
+                                    (org-glance-version--payload-text
+                                     (org-glance-version--read-payload meta))
+                                    :object-type 'plist :array-type 'list
+                                    :null-object nil :false-object nil)
+                                 (error nil))
+                     for candidate = (and raw
+                                          (org-glance-version--candidate
+                                           dir headline raw payload))
+                     when candidate collect candidate)))
          (versions (cl-remove-if-not #'org-glance-version--version-event-p
                                      candidates))
          (known (mapcar #'org-glance-version:id versions))
          (changed t)
          stored
-         (legacy (org-glance-version--legacy headline-dir headline)))
+         (legacy (progn
+                   (org-glance-version--record-current-path (f-join headline-dir "data.org"))
+                   (org-glance-version--legacy headline-dir headline))))
     (while changed
       (let ((closed
              (cl-remove-if
@@ -325,7 +445,8 @@ Each returned node carries payload integrity in its `valid' slot."
   (let ((data (f-join headline-dir "data.org")))
     (when (f-file? data)
       (condition-case nil
-          (let* ((contents (f-read-text data 'utf-8-unix))
+          (let* ((contents (org-glance-version--payload-contents
+                            (org-glance-version--read-payload data)))
                  (digest (secure-hash 'sha256 contents)))
             (make-org-glance-version
              :schema 1 :headline headline
@@ -339,7 +460,8 @@ Each returned node carries payload integrity in its `valid' slot."
   "Publish HEADLINE's deterministic root, then remove legacy data.org."
   (when-let* ((legacy (org-glance-version--legacy headline-dir headline))
               (data (f-join headline-dir "data.org"))
-              (contents (f-read-text data 'utf-8-unix))
+              (contents (org-glance-version--payload-contents
+                         (org-glance-version--read-payload data)))
               (id (org-glance-version:id legacy))
               (final (org-glance-version:path headline-dir id)))
     (let ((version (make-org-glance-version
@@ -358,6 +480,7 @@ Each returned node carries payload integrity in its `valid' slot."
             (error "Invalid migration root already exists: %s" final))
         (org-glance-version--publish version contents))
       (delete-file data)
+      (org-glance-version--invalidate-observation headline-dir headline)
       version)))
 
 (cl-defun org-glance-version:leaves (versions)
@@ -416,6 +539,7 @@ Zero keeps all history.  A family with several structural leaves is unchanged."
                          (equal (org-glance-version:directory version)
                                 (org-glance-version:path headline-dir id)))
                 (delete-directory (org-glance-version:directory version) t)
+                (org-glance-version--invalidate-observation headline-dir headline)
                 (push id removed)))))))))
 
 (cl-defun org-glance-version:snapshot-leaves (headline-dir headline)

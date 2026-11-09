@@ -145,7 +145,9 @@ Decrypt with unwrap restores the original bytes."
 
 (ert-deftest org-glance-test:headline-content-facts-matches-thunks ()
   "`--content-facts' equals the separately forced thunks across shapes."
-  (dolist (lines '(("* TODO Plain" ":PROPERTIES:" ":ORG_GLANCE_ID: a" ":END:")
+  (dolist (lines '(("#+CATEGORY: Prefix" "* DONE Prefix" "CLOSED: [2026-11-09 Mon]"
+                    ":PROPERTIES:" ":ORG_GLANCE_ID: prefix" ":CATEGORY: Explicit" ":END:")
+                   ("* TODO Plain" ":PROPERTIES:" ":ORG_GLANCE_ID: a" ":END:")
                    ("* TODO Linked [[https://x][d]]" ":PROPERTIES:" ":ORG_GLANCE_ID: b" ":END:"
                     "See [[file:y.org][y]] and [[id:z][z]].")
                    ("* TODO Propd" ":PROPERTIES:" ":ORG_GLANCE_ID: c" ":END:"
@@ -156,7 +158,12 @@ Decrypt with unwrap restores the original bytes."
                     "key: val")))
     (let* ((h (apply #'org-glance-headline--from-lines lines))
            (facts (org-glance-headline--content-facts h)))
-      (should (equal (plist-get facts :hash)        (org-glance-headline:hash h)))
+      (should (equal (plist-get facts :hash)
+                     (thunk-force (org-glance-headline--hash
+                                   (org-glance-headline:contents h)))))
+      (should (equal (list (plist-get facts :closed) (plist-get facts :category))
+                     (org-glance-headline:with-contents h
+                       (list (org-entry-get nil "CLOSED") (org-entry-get nil "CATEGORY" t)))))
       (should (eq    (plist-get facts :linked)
                      (and (org-glance-headline:with-contents h (org-glance--buffer-links)) t)))
       (should (eq    (plist-get facts :propertized) (and (org-glance-headline:properties h) t)))

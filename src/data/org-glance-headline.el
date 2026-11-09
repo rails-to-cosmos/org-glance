@@ -200,7 +200,7 @@ Deletes its log drawers first: no fact sees what the hash ignores (invariant 5).
 `org-glance-headline--copy' rebuilds them when it replaces `:contents'.")
 
 (defconst org-glance-headline--content-fact-keys
-  '(:relations :links :linked :propertized :encrypted :range :hash)
+  '(:relations :links :linked :propertized :encrypted :range :hash :closed :category)
   "Keys `org-glance-headline--content-facts' returns.
 The FROM vocabulary of `org-glance-headline-metadata:fields', checked at load.")
 
@@ -216,19 +216,24 @@ Reuse its `-facts' memo when keyed by its own (`eq') contents, else compute."
 
 (cl-defun org-glance-headline--buffer-content-facts ()
   "Return the `--content-fact-keys' plist of the headline filling the buffer.
-One pass over the text the hash reads: log drawers go first (invariant 5), the
-hash runs LAST.  Both mutate the buffer, so it must be a scratch one."
-  (org-glance-headline--delete-log-drawers)
+Read planning and category before stripping log drawers under invariant 5.
+Compute the hash last; both operations require a scratch buffer."
   (goto-char (point-min))
-  (pcase-let* ((links (org-glance--buffer-links))
-               (`(,edges . ,plain) (org-glance--links-partition links)))
-    (list :relations   edges
-          :links       plain
-          :linked      (and links t)
-          :propertized (org-glance-headline--buffer-propertized?)
-          :encrypted   (org-glance-headline--buffer-encrypted?)
-          :range       (org-glance-headline--buffer-range)
-          :hash        (org-glance-headline--buffer-hash))))
+  (let ((closed (org-entry-get nil "CLOSED"))
+        (category (org-entry-get nil "CATEGORY" t)))
+    (org-glance-headline--delete-log-drawers)
+    (goto-char (point-min))
+    (pcase-let* ((links (org-glance--buffer-links))
+                 (`(,edges . ,plain) (org-glance--links-partition links)))
+      (list :relations   edges
+            :links       plain
+            :linked      (and links t)
+            :propertized (org-glance-headline--buffer-propertized?)
+            :encrypted   (org-glance-headline--buffer-encrypted?)
+            :range       (org-glance-headline--buffer-range)
+            :hash        (org-glance-headline--buffer-hash)
+            :closed      closed
+            :category    category))))
 
 (cl-defun org-glance-headline--buffer-range ()
   "Return the body's first active range as bracketed (FROM TO), or nil.
@@ -261,9 +266,25 @@ blocks hide theirs (invariant 14)."
         ;; Runs AFTER `at-point' captured CONTENTS -- the hash pass mutates.
         ;; Exact equality: computing here equals a fresh CONTENTS-only buffer.
         (if (equal parsed (buffer-substring-no-properties (point-min) (point-max)))
-            (org-glance-headline--copy headline
-              :-facts (cons raw (org-glance-headline--buffer-content-facts)))
+            (let* ((properties (org-entry-properties nil 'standard))
+                   (facts (org-glance-headline--buffer-content-facts)))
+              (org-glance-headline--copy headline
+                :-facts (cons raw facts)
+                :-hash (thunk-delay (plist-get facts :hash))
+                :-encrypted? (thunk-delay (plist-get facts :encrypted))
+                :-node-properties (thunk-delay properties)))
           headline)))))
+
+(defun org-glance-headline--content-tags (contents)
+  "Return the first headline's canonical collection tags in CONTENTS."
+  (save-match-data
+    (let ((text (replace-regexp-in-string "\r\n" "\n" contents t t)))
+      (when (string-match org-heading-regexp text)
+        (let ((heading (match-string 0 text)))
+          (when (string-match org-tag-group-re heading)
+            (cl-remove (org-glance-tag:from-string org-archive-tag)
+                       (mapcar #'org-glance-tag:from-string
+                               (split-string (match-string 2 heading) ":" t)))))))))
 
 (defun org-glance-headline--source-offset (source offset)
   "Map LF analysis OFFSET back into exact SOURCE containing CRLF."

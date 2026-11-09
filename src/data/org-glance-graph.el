@@ -17,6 +17,20 @@
 (defvar org-glance-graph:list (make-hash-table :test #'equal)
   "Registered instances of `org-glance-graph' in current session.")
 
+(defvar org-glance-graph--parsed-blobs nil
+  "Exact content analyses shared within one write operation.")
+
+(defmacro org-glance-graph--with-source-context (&rest body)
+  "Run BODY with operation-local family, payload and parsing observations."
+  (declare (indent 0))
+  `(let ((org-glance-graph--parsed-blobs
+          (or org-glance-graph--parsed-blobs (make-hash-table :test #'equal)))
+         (org-glance-version--observations
+          (or org-glance-version--observations (make-hash-table :test #'equal)))
+         (org-glance-version--payloads
+          (or org-glance-version--payloads (make-hash-table :test #'equal))))
+     ,@body))
+
 ;; invariant 7: single user, no mutex / locking.
 (declare-function org-glance-config:current "org-glance-config")
 (declare-function org-glance-config:local-tags-p "org-glance-config")
@@ -260,7 +274,8 @@ heal their own git conflicts here.  Errors are demoted (invariant 9).")
   (declare (indent 1))
   (cl-check-type meta list)
   (cl-check-type (car meta) (or list org-glance-headline-metadata))
-  (org-glance-graph--append graph meta))
+  (org-glance-graph--with-source-context
+    (org-glance-graph--append graph meta)))
 
 ;;; Segmented (LSM-lite) metadata store
 
@@ -756,7 +771,7 @@ SOURCE-VERSION and SOURCE-DIGEST identify the editing source."
          (settings (org-glance-config:current graph)))
     (unless (and (equal id (org-glance-headline-metadata:id metadata))
                  (equal id (org-glance-headline:id
-                            (org-glance-headline--from-string contents))))
+                            (org-glance-graph--parse-blob graph contents))))
       (error "Publication content and metadata must identify the logical headline"))
     (unless (stringp (json-serialize (org-glance-headline-metadata:serialize metadata)))
       (error "Invalid publication metadata"))
@@ -775,48 +790,49 @@ SOURCE-VERSION and SOURCE-DIGEST identify the editing source."
 (cl-defun org-glance-graph:publish-edit (receipt)
   "Publish or complete RECEIPT's exact event and return RECEIPT.
 Errors and quits leave RECEIPT retryable, including after event rename."
-  (unless (eq 'projection-committed (org-glance-publication:phase receipt))
-    (let* ((graph (org-glance-publication:graph receipt))
-           (id (org-glance-publication:id receipt))
-           (version (org-glance-publication:version receipt))
-           (final (org-glance-version:directory version))
-           (dir (org-glance-graph:headline-data-path graph id)))
-      (if (file-exists-p final)
-          (unless (and
-                   (equal (f-read-text (f-join final "meta.json") 'utf-8-unix)
-                          (concat (json-serialize
-                                   (org-glance-version--plist version)) "\n"))
-                   (equal (secure-hash
-                           'sha256 (f-read-text (f-join final "data.org") 'utf-8-unix))
-                          (org-glance-version:content-sha256 version)))
-            (error "Published event %s failed recovery verification"
-                   (org-glance-version:id version)))
-        (let* ((history (org-glance-version-observation:history
-                         (org-glance-version:observe dir id)))
-               (frontier (sort (mapcar #'org-glance-version:id
-                                       (org-glance-version:leaves history))
-                               #'string<))
-               (source (cl-find (org-glance-publication:source-version receipt)
-                                history :key #'org-glance-version:id :test #'equal)))
-          (unless (and (equal frontier (org-glance-version:parents version))
-                       source (org-glance-version:valid source)
-                       (equal (org-glance-publication:source-digest receipt)
-                              (org-glance-version:content-sha256 source)))
-            (user-error "Headline %s changed; save refused" id))
-          (when (cl-find "legacy" history :key #'org-glance-version:producer :test #'equal)
-            (org-glance-version:migrate-legacy dir id))
-          (org-glance-version--publish
-           version (org-glance-publication:contents receipt))))
-      (setf (org-glance-publication:phase receipt) 'event-published)
-      (let ((org-glance-graph--edit-publication receipt))
-        (org-glance-graph:insert graph (list (org-glance-publication:metadata receipt))))
-      (let ((state (org-glance-cache:material-state graph id)))
-        (unless (plist-get state :verified)
-          (error "Headline %s was published; family projection needs recovery" id))
-        (setf (org-glance-publication:frontier receipt) (plist-get state :frontier)
-              (org-glance-publication:phase receipt) 'projection-committed
-              (org-glance-publication:contents receipt) nil))))
-  receipt)
+  (org-glance-graph--with-source-context
+    (unless (eq 'projection-committed (org-glance-publication:phase receipt))
+      (let* ((graph (org-glance-publication:graph receipt))
+             (id (org-glance-publication:id receipt))
+             (version (org-glance-publication:version receipt))
+             (final (org-glance-version:directory version))
+             (dir (org-glance-graph:headline-data-path graph id)))
+        (if (file-exists-p final)
+            (unless (and
+                     (equal (f-read-text (f-join final "meta.json") 'utf-8-unix)
+                            (concat (json-serialize
+                                     (org-glance-version--plist version)) "\n"))
+                     (equal (secure-hash
+                             'sha256 (f-read-text (f-join final "data.org") 'utf-8-unix))
+                            (org-glance-version:content-sha256 version)))
+              (error "Published event %s failed recovery verification"
+                     (org-glance-version:id version)))
+          (let* ((history (org-glance-version-observation:history
+                           (org-glance-version:observe dir id)))
+                 (frontier (sort (mapcar #'org-glance-version:id
+                                         (org-glance-version:leaves history))
+                                 #'string<))
+                 (source (cl-find (org-glance-publication:source-version receipt)
+                                  history :key #'org-glance-version:id :test #'equal)))
+            (unless (and (equal frontier (org-glance-version:parents version))
+                         source (org-glance-version:valid source)
+                         (equal (org-glance-publication:source-digest receipt)
+                                (org-glance-version:content-sha256 source)))
+              (user-error "Headline %s changed; save refused" id))
+            (when (cl-find "legacy" history :key #'org-glance-version:producer :test #'equal)
+              (org-glance-version:migrate-legacy dir id))
+            (org-glance-version--publish
+             version (org-glance-publication:contents receipt))))
+        (setf (org-glance-publication:phase receipt) 'event-published)
+        (let ((org-glance-graph--edit-publication receipt))
+          (org-glance-graph:insert graph (list (org-glance-publication:metadata receipt))))
+        (let ((state (org-glance-cache:material-state graph id)))
+          (unless (plist-get state :verified)
+            (error "Headline %s was published; family projection needs recovery" id))
+          (setf (org-glance-publication:frontier receipt) (plist-get state :frontier)
+                (org-glance-publication:phase receipt) 'projection-committed
+                (org-glance-publication:contents receipt) nil))))
+    receipt))
 
 (cl-defun org-glance-graph:put-content (graph headline)
   "Persist HEADLINE's contents atomically under GRAPH's store, keyed by its id.
@@ -850,20 +866,28 @@ Return the file path, or nil if HEADLINE has no id."
                        (org-glance-graph--headline-history-depth graph))))
         (f-join (org-glance-version:directory version) "data.org")))))
 
+(cl-defun org-glance-graph--get-payload (graph id)
+  "Return ID's observed payload in GRAPH, including a tombstoned snapshot."
+  (let ((org-glance-version--payloads
+         (or org-glance-version--payloads (make-hash-table :test #'equal))))
+    (cl-check-type graph org-glance-graph)
+    (cl-check-type id string)
+    (let* ((dir (org-glance-graph:headline-data-path graph id))
+           (path (org-glance-graph:content-path graph id))
+           (held
+            (if (f-file? path) path
+              (cl-find-if
+               #'f-file?
+               (mapcar (lambda (version)
+                         (f-join (org-glance-version:directory version) "data.org"))
+                       (reverse (org-glance-version:history dir id)))))))
+      (when held
+        (org-glance-version--read-payload held)))))
+
 (cl-defun org-glance-graph:get-content (graph id)
   "Return ID's stored contents in GRAPH, even if tombstoned, or nil if none."
-  (cl-check-type graph org-glance-graph)
-  (cl-check-type id string)
-  (let* ((dir (org-glance-graph:headline-data-path graph id))
-         (path (org-glance-graph:content-path graph id))
-         (fallback
-          (cl-find-if
-           #'f-file?
-           (mapcar (lambda (version)
-                     (f-join (org-glance-version:directory version) "data.org"))
-                   (reverse (org-glance-version:history dir id)))))
-         (held (if (f-file? path) path fallback)))
-    (when held (f-read-text held 'utf-8))))
+  (when-let* ((payload (org-glance-graph--get-payload graph id)))
+    (copy-sequence (org-glance-version--payload-text payload))))
 
 (cl-defun org-glance-graph:make-id (graph)
   "Return a fresh unallocated ID for GRAPH; writes select its storage root."
@@ -892,20 +916,21 @@ Return the file path, or nil if HEADLINE has no id."
 (cl-defun org-glance-graph:add (graph &rest headlines)
   "Add HEADLINES, each a headline or pre-built metadata, to GRAPH; return GRAPH.
 Full headlines also persist their contents (invariant 5)."
-  (cl-check-type graph org-glance-graph)
-  (when headlines
-    (setq headlines (mapcar (lambda (headline)
-                              (if (org-glance-headline? headline)
-                                  (org-glance-headline--normalized-tags headline)
-                                headline))
-                            headlines))
-    ;; invariant 5: metadata FIRST, so a projection error writes nothing.
-    (let ((specs (mapcar #'org-glance-headline:metadata* headlines)))
-      (dolist (headline headlines)
-        (when (org-glance-headline? headline)
-          (org-glance-graph:put-content graph headline)))
-      (org-glance-graph:insert graph specs)))
-  graph)
+  (org-glance-graph--with-source-context
+    (cl-check-type graph org-glance-graph)
+    (when headlines
+      (setq headlines (mapcar (lambda (headline)
+                                (if (org-glance-headline? headline)
+                                    (org-glance-headline--normalized-tags headline)
+                                  headline))
+                              headlines))
+      ;; invariant 5: metadata FIRST, so a projection error writes nothing.
+      (let ((specs (mapcar #'org-glance-headline:metadata* headlines)))
+        (dolist (headline headlines)
+          (when (org-glance-headline? headline)
+            (org-glance-graph:put-content graph headline)))
+        (org-glance-graph:insert graph specs)))
+    graph))
 
 (declare-function org-glance-cache:family-headline "org-glance-cache" (graph id))
 
@@ -1106,31 +1131,36 @@ With IDS, restrict the fold to those headlines."
   "Re-derive metadata for every live headline in GRAPH from its stored blob.
 Blobs are only read (invariant 5); records append in batches, compacting once
 at the end.  Return the number of headlines re-indexed."
-  (cl-check-type graph org-glance-graph)
-  (let* ((metas (org-glance-graph:headlines graph))
-         (reporter (and metas (make-progress-reporter "org-glance: re-indexing... " 0 (length metas))))
-         (org-glance-graph-compact-segment-count most-positive-fixnum)
-         (batch nil) (fill 0) (n 0))
-    (cl-flet ((flush ()
-                (when batch
-                  (org-glance-graph:insert graph (nreverse batch))
-                  (setq batch nil fill 0))))
-      (cl-loop for meta in metas
-               for i from 1
-               for id = (org-glance-headline-metadata:id meta)
-               for contents = (org-glance-graph:get-content graph id)
-               when contents
-               do (push (org-glance-headline:metadata*
-                         (org-glance-graph--reparse-blob graph meta contents))
-                        batch)
-                  (cl-incf n)
-                  (when (= org-glance-graph--reindex-batch (cl-incf fill)) (flush))
-               end
-               do (when reporter (progress-reporter-update reporter i))
-               finally (flush)))
-    (org-glance-graph:compact graph)
-    (when reporter (progress-reporter-done reporter))
-    n))
+  (org-glance-graph--with-source-context
+    (cl-check-type graph org-glance-graph)
+    (let* ((metas (org-glance-graph:headlines graph))
+           (reporter (and metas (make-progress-reporter "org-glance: re-indexing... " 0 (length metas))))
+           (org-glance-graph-compact-segment-count most-positive-fixnum)
+           (batch nil) (fill 0) (n 0))
+      (cl-flet ((flush ()
+                  (when batch
+                    (org-glance-graph:insert graph (nreverse batch))
+                    (clrhash org-glance-graph--parsed-blobs)
+                    (clrhash org-glance-version--observations)
+                    (clrhash org-glance-version--payloads)
+                    (setq batch nil fill 0))))
+        (cl-loop for meta in metas
+                 for i from 1
+                 for id = (org-glance-headline-metadata:id meta)
+                 for source = (org-glance-graph--get-payload graph id)
+                 for contents = (and source (org-glance-version--payload-contents source))
+                 when contents
+                 do (push (org-glance-headline:metadata*
+                           (org-glance-graph--parse-blob graph contents))
+                          batch)
+                 (cl-incf n)
+                 (when (= org-glance-graph--reindex-batch (cl-incf fill)) (flush))
+                 end
+                 do (when reporter (progress-reporter-update reporter i))
+                 finally (flush)))
+      (org-glance-graph:compact graph)
+      (when reporter (progress-reporter-done reporter))
+      n)))
 
 ;;; External writers: `meta/EXTERNAL.jsonl' -- invariants 33-34, hazards H2-H3
 
@@ -1461,22 +1491,35 @@ move to the next generation (invariant 34)."
 (declare-function org-glance-tag-config:cycle-for-filter "org-glance-tag-config")
 (declare-function org-glance-tag-config:cycle->keywords-or "org-glance-tag-config")
 (declare-function org-glance-config:org-context "org-glance-config")
+(declare-function org-glance-config:cache-key "org-glance-config")
 (defvar org-glance-config--pending-context)
 
+(cl-defun org-glance-graph--parse-blob (graph contents)
+  "Parse CONTENTS in GRAPH using its authored collection tags."
+  (org-glance-graph--reparse-blob
+   graph (make-org-glance-headline-metadata
+          :tags (org-glance-headline--content-tags contents)) contents))
+
 (cl-defun org-glance-graph--reparse-blob (graph meta contents)
-  "Parse CONTENTS as META's headline in GRAPH, with its tag's todo cycle in scope.
-Mirrors `org-glance-material:sync'; else a custom state folds into the title."
-  (let ((org-glance-config--pending-context
-         (org-glance-config:org-context
-          graph (append (org-glance-headline-metadata:tags meta) nil)))
-        (org-todo-keywords
-         (if (fboundp 'org-glance-tag-config:cycle-for-filter)
-             (org-glance-tag-config:cycle->keywords-or
-              (org-glance-tag-config:cycle-for-filter
-               graph (list :tags (append (org-glance-headline-metadata:tags meta) nil)))
-              org-todo-keywords)
-           org-todo-keywords)))
-    (org-glance-headline--from-string contents)))
+  "Parse CONTENTS as META's headline in GRAPH, sharing exact write analyses."
+  (let* ((tags (org-glance-headline-metadata:tag-strings meta))
+         (org-glance-config--pending-context (org-glance-config:org-context graph tags))
+         (org-todo-keywords
+          (if (fboundp 'org-glance-tag-config:cycle-for-filter)
+              (org-glance-tag-config:cycle->keywords-or
+               (org-glance-tag-config:cycle-for-filter graph (list :tags tags))
+               org-todo-keywords)
+            org-todo-keywords))
+         (key (and org-glance-graph--parsed-blobs
+                   (list (org-glance-graph:directory graph)
+                         (org-glance-config:cache-key graph) tags (copy-tree org-todo-keywords)
+                         (copy-sequence org-glance-headline:hash-ignore-properties)
+                         (org-glance-headline--hash-log-drawers) contents)))
+         (held (and key (gethash key org-glance-graph--parsed-blobs))))
+    (or held
+        (let ((headline (org-glance-headline--from-string contents)))
+          (when key (puthash key headline org-glance-graph--parsed-blobs))
+          headline))))
 
 (cl-defun org-glance-graph:refresh-external (&optional (graph (org-glance-ensure-init))
                                                        survey)

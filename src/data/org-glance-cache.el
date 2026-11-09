@@ -217,6 +217,8 @@ CONFIGURATION-INDEPENDENT bypasses dependency checks for maintenance reads."
   "Read connections in most-recently-used order.")
 (defvar org-glance-cache--active-readers nil
   "Connections currently leased by a read transaction.")
+(defvar org-glance-cache--retain-new-readers t
+  "Retain newly opened UI readers; maintenance binds nil.")
 (defconst org-glance-cache--reader-limit 16
   "Maximum number of retained read connections.")
 
@@ -269,14 +271,15 @@ An active reader closes when its current operation returns."
             (progn
               (sqlite-execute db "PRAGMA busy_timeout=50")
               (sqlite-execute db "PRAGMA query_only=ON")
-              (unless (or org-glance-cache--staging-path existing)
+              (when (and org-glance-cache--retain-new-readers
+                         (not org-glance-cache--staging-path) (not existing))
                 (when (>= (length org-glance-cache--readers)
                           org-glance-cache--reader-limit)
                   (when-let* ((idle (cl-find-if
-                                    (lambda (entry)
-                                      (not (memq (org-glance-cache--reader-db entry)
-                                                 org-glance-cache--active-readers)))
-                                    (reverse org-glance-cache--readers))))
+                                     (lambda (entry)
+                                       (not (memq (org-glance-cache--reader-db entry)
+                                                  org-glance-cache--active-readers)))
+                                     (reverse org-glance-cache--readers))))
                     (org-glance-cache--retire-reader idle)))
                 (when (< (length org-glance-cache--readers)
                          org-glance-cache--reader-limit)
@@ -357,11 +360,6 @@ Reuse an idle connection; retry one file replacement before invoking FN."
   (when-let* ((priority (org-glance-headline-metadata:priority metadata)))
     (char-to-string priority)))
 
-(cl-defun org-glance-cache--entry-value (headline property &optional inherit)
-  "Return HEADLINE's Org entry PROPERTY, optionally with INHERIT semantics."
-  (org-glance-headline:with-contents headline
-    (org-entry-get nil property inherit)))
-
 (cl-defun org-glance-cache--row-id (id path)
   "Return the Row identity for logical ID stored at PATH."
   (if (org-glance-version:file-p path)
@@ -382,17 +380,20 @@ Reuse an idle connection; retry one file replacement before invoking FN."
          (path (if version (f-join (org-glance-version:directory version) "data.org")
                  (org-glance-graph:content-path graph id)))
          (row-id (org-glance-cache--row-id id path))
+         (source (when (and (not receipt) (f-file? path))
+                   (org-glance-version--read-payload path)))
          (contents (if receipt (org-glance-publication:contents receipt)
-                     (org-glance-graph:get-content graph id)))
-         (headline (and contents (org-glance-headline--from-string contents)))
+                     (and source (org-glance-version--payload-contents source))))
+         (headline (and contents (org-glance-graph--parse-blob graph contents)))
+         (facts (and headline (org-glance-headline--content-facts headline)))
          (digest (and contents (if version (org-glance-version:content-sha256 version)
-                                 (org-glance-cache--file-digest path))))
+                                 (org-glance-version--payload-digest source))))
          (content-hash (and headline (org-glance-headline:hash headline)))
          (record (plist-put
                   (org-glance-headline-metadata:serialize metadata)
                   :hash content-hash))
          (payload (and record contents (decode-coding-string
-                               (org-glance-cache--context-record record contents) 'utf-8 t))))
+                                        (org-glance-cache--context-record record contents) 'utf-8 t))))
     (when (and contents headline digest)
       (list
        (list
@@ -408,8 +409,8 @@ Reuse an idle connection; retry one file replacement before invoking FN."
                 (org-glance-cache--tags metadata)
                 (org-glance-headline-metadata:schedule metadata)
                 (org-glance-headline-metadata:deadline metadata)
-                (org-glance-cache--entry-value headline "CLOSED")
-                (or (org-glance-cache--entry-value headline "CATEGORY" t) "")
+                (plist-get facts :closed)
+                (or (plist-get facts :category) "")
                 (org-glance-headline:node-property
                  "ORG_GLANCE_CREATION_TIME" headline)
                 "org-glance"))
@@ -465,30 +466,56 @@ Reuse an idle connection; retry one file replacement before invoking FN."
     (concat (json-serialize (append identity shape tail)) "\n")))
 
 (cl-defun org-glance-cache--version-metadata (graph id version contents)
-  "Parse VERSION's available Snapshot bytes in DIR as family ID metadata."
+  "Parse VERSION's CONTENTS in GRAPH as logical ID metadata; return nil on error."
   (when (eq 'snapshot (org-glance-version:kind version))
     (condition-case nil
-        (let* ((seed (org-glance-graph--reparse-blob
-                      graph (make-org-glance-headline-metadata :tags []) contents))
-               (basis (org-glance-headline:metadata* seed))
-               (metadata (org-glance-headline:metadata*
-                          (org-glance-graph--reparse-blob graph basis contents)))
+        (let* ((metadata (org-glance-headline:metadata*
+                          (org-glance-graph--parse-blob graph contents)))
                (record (org-glance-headline-metadata:serialize metadata)))
           (org-glance-headline-metadata:deserialize (plist-put record :id id)))
       (error nil))))
 
-(cl-defun org-glance-cache--payload-observation (graph id version payload)
-  "Return VERSION's payload state in GRAPH and any parsed metadata."
+(defvar org-glance-cache--known-payloads nil
+  "Digest-guarded available payload states from a compatible cache snapshot.")
+
+(defun org-glance-cache--read-known-payloads (graph ids)
+  "Return available payload digests for IDS in GRAPH's current parser context."
+  (let ((known (make-hash-table :test #'equal))
+        (org-glance-cache--retain-new-readers nil))
+    (condition-case nil
+        (org-glance-cache--read-db
+         graph
+         (lambda (db)
+           (when (org-glance-cache--configuration-current-on-db graph db)
+             (dolist (row (sqlite-select
+                           db
+                           "SELECT p.logical_id,p.event_id,p.observed_digest FROM headline_payload_observation p JOIN headline_family f USING(logical_id) WHERE f.verified=1 AND p.payload_state='available' AND p.observed_digest IS NOT NULL AND p.logical_id IN (SELECT value FROM json_each(?))"
+                           (vector (json-serialize (vconcat ids)))))
+               (puthash (cons (car row) (cadr row)) (nth 2 row) known))))
+         t)
+      (error nil))
+    known))
+
+(cl-defun org-glance-cache--payload-observation
+    (graph id version payload &optional (metadata-needed t))
+  "Return VERSION's PAYLOAD state for ID in GRAPH and any needed metadata.
+METADATA-NEEDED permits digest-guarded reuse for unchanged historical nodes."
   (let ((present (car payload))
         (contents (cdr payload)))
     (if (not present)
         (cons "missing" nil)
-      (let ((metadata (org-glance-cache--version-metadata
-                       graph id version contents)))
-        (cond
-         ((not metadata) (cons "unparseable" nil))
-         ((org-glance-version:valid version) (cons "available" metadata))
-         (t (cons "mismatch" metadata)))))))
+      (if (and (not metadata-needed) (org-glance-version:valid version)
+               org-glance-cache--known-payloads
+               (equal (org-glance-version:content-sha256 version)
+                      (gethash (cons id (org-glance-version:id version))
+                               org-glance-cache--known-payloads)))
+          (cons "available" nil)
+        (let ((metadata (org-glance-cache--version-metadata
+                         graph id version contents)))
+          (cond
+           ((not metadata) (cons "unparseable" nil))
+           ((org-glance-version:valid version) (cons "available" metadata))
+           (t (cons "mismatch" metadata))))))))
 
 (cl-defun org-glance-cache--inventory-event-ids (dir)
   "Return every event-directory name currently observable below DIR."
@@ -527,7 +554,10 @@ Reuse an idle connection; retry one file replacement before invoking FN."
 (cl-defun org-glance-cache--prepare-family
     (graph id &optional (inventory nil inventory-supplied-p))
   "Prepare ID's folded projection from GRAPH and optional INVENTORY."
-  (let* ((dir (org-glance-graph:headline-data-path graph id))
+  (let* ((org-glance-cache--known-payloads
+          (or org-glance-cache--known-payloads
+              (org-glance-cache--read-known-payloads graph (list id))))
+         (dir (org-glance-graph:headline-data-path graph id))
          (observation (if inventory-supplied-p
                           (org-glance-version:observe dir id inventory)
                         (org-glance-version:observe dir id)))
@@ -592,7 +622,7 @@ Reuse an idle connection; retry one file replacement before invoking FN."
             (when (eq 'snapshot (org-glance-version:kind version))
               (let ((observation
                      (org-glance-cache--payload-observation
-                      graph id version (gethash event payloads))))
+                      graph id version (gethash event payloads) (member event leaf-ids))))
                 (when (member event leaf-ids)
                   (puthash event observation payload-observations))
                 (emit
@@ -701,29 +731,34 @@ Reuse an idle connection; retry one file replacement before invoking FN."
   (org-glance-graph--wal-headlines graph))
 
 (cl-defun org-glance-cache--family-ids (graph)
-  "Return every immutable family ID in GRAPH's portable and local roots."
+  "Return immutable family IDs in GRAPH's canonical one- or two-level layout."
   (let ((seen (make-hash-table :test #'equal)) ids)
     (cl-labels
-        ((walk (data dir)
-          (org-glance-cache--observe-inventory-directory
-           dir
-           (lambda ()
-             (cl-loop
-              for path in (directory-files dir t directory-files-no-dot-files-regexp)
-              when (and (file-directory-p path) (not (file-symlink-p path)))
-              if (file-directory-p (f-join path "versions"))
-              collect (mapconcat #'identity
-                                 (split-string (file-relative-name path data) "/" t)
-                                 "")
-              else append (walk data path))))))
+        ((children (directory)
+           (org-glance-cache--observe-inventory-directory
+            directory
+            (lambda ()
+              (cl-remove-if-not
+               (lambda (path) (and (file-directory-p path) (not (file-symlink-p path))))
+               (directory-files directory t directory-files-no-dot-files-regexp)))))
+         (family-p (directory) (file-directory-p (f-join directory "versions")))
+         (admit (id)
+           (when (gethash id seen)
+             (error "org-glance: family %s exists in portable and local storage" id))
+           (puthash id t seen)
+           (push id ids)))
       (dolist (data (org-glance-graph:data-paths graph))
         (when (file-directory-p data)
-          (dolist (id (walk data data))
-            (when (gethash id seen)
-              (error "org-glance: family %s exists in portable and local storage" id))
-            (puthash id t seen)
-            (push id ids))))
-      (sort ids #'string<))))
+          (dolist (path (children data))
+            (let* ((prefix (file-name-nondirectory path))
+                   (short (and (<= (length prefix) 2) (family-p path))))
+              (when short (admit prefix))
+              (when (= (length prefix) 2)
+                (dolist (leaf (children path))
+                  (unless (and short (equal "versions" (file-name-nondirectory leaf)))
+                    (when (family-p leaf)
+                      (admit (concat prefix (file-name-nondirectory leaf))))))))))))
+    (sort ids #'string<)))
 
 (defvar org-glance-cache--inventory-directory-proofs
   (make-hash-table :test #'eq :weakness 'key)
@@ -1195,29 +1230,34 @@ COMPLETED and TOTAL count UNIT values."
 
 (cl-defun org-glance-cache--after-append (graph specs)
   "Apply GRAPH's appended SPECS to the private cache."
-  (let* ((headlines (org-glance-cache--headlines graph))
-         (touched (mapcar (lambda (spec)
-                            (if (org-glance-headline-metadata? spec)
-                                (org-glance-headline-metadata:id spec)
-                              (plist-get spec :id)))
-                          specs))
-         (families (mapcar (apply-partially #'org-glance-cache--prepare-family graph)
-                           (delete-dups (copy-sequence touched))))
-         (prepared (make-hash-table :test #'equal)))
-    (dolist (metadata headlines)
-      (when (member (org-glance-headline-metadata:id metadata) touched)
-        (puthash (org-glance-headline-metadata:id metadata)
-                 (org-glance-cache--prepare-headline graph metadata) prepared)))
-    (org-glance-cache--with-db
-     graph
-     (lambda (db)
-       (org-glance-cache--transaction
-        db
-        (lambda ()
-          (org-glance-cache--project-compatibility-changes
-           db graph touched headlines prepared)
-          (dolist (family families)
-            (org-glance-cache--apply-family db family))))))))
+  (org-glance-graph--with-source-context
+    (let* ((headlines (org-glance-cache--headlines graph))
+           (touched (mapcar (lambda (spec)
+                              (if (org-glance-headline-metadata? spec)
+                                  (org-glance-headline-metadata:id spec)
+                                (plist-get spec :id)))
+                            specs))
+           (org-glance-cache--known-payloads
+            (org-glance-cache--read-known-payloads graph touched))
+           (families (mapcar (apply-partially #'org-glance-cache--prepare-family graph)
+                             (delete-dups (copy-sequence touched))))
+           (prepared (make-hash-table :test #'equal))
+           (touched-ids (make-hash-table :test #'equal)))
+      (dolist (id touched) (puthash id t touched-ids))
+      (dolist (metadata headlines)
+        (when (gethash (org-glance-headline-metadata:id metadata) touched-ids)
+          (puthash (org-glance-headline-metadata:id metadata)
+                   (org-glance-cache--prepare-headline graph metadata) prepared)))
+      (org-glance-cache--with-db
+       graph
+       (lambda (db)
+         (org-glance-cache--transaction
+          db
+          (lambda ()
+            (org-glance-cache--project-compatibility-changes
+             db graph touched headlines prepared)
+            (dolist (family families)
+              (org-glance-cache--apply-family db family)))))))))
 
 (cl-defun org-glance-cache--project-compatibility-changes
     (db graph ids &optional headlines prepared)
@@ -1225,19 +1265,22 @@ COMPLETED and TOTAL count UNIT values."
 HEADLINES defaults to GRAPH's live compatibility-WAL metadata.
 PREPARED holds compatibility statements already computed for each changed ID."
   (let ((live (or headlines (org-glance-cache--headlines graph)))
-        (changed (delete-dups (copy-sequence ids))))
+        (changed (delete-dups (copy-sequence ids)))
+        (by-id (make-hash-table :test #'equal))
+        (changed-ids (make-hash-table :test #'equal)))
+    (dolist (id changed) (puthash id t changed-ids))
+    (dolist (metadata live)
+      (let ((id (org-glance-headline-metadata:id metadata)))
+        (unless (gethash id by-id) (puthash id metadata by-id))))
     (dolist (id changed)
-      (if-let* ((metadata
-                 (cl-find id live
-                          :key #'org-glance-headline-metadata:id
-                          :test #'equal)))
+      (if-let* ((metadata (gethash id by-id)))
           (if prepared
               (org-glance-cache--apply-statements db (gethash id prepared))
             (org-glance-cache--project db graph metadata))
         (org-glance-cache--delete db graph id)))
     (dolist (metadata live)
-      (when (or (member (org-glance-headline-metadata:id metadata) changed)
-                (cl-some (lambda (target) (member target changed))
+      (when (or (gethash (org-glance-headline-metadata:id metadata) changed-ids)
+                (cl-some (lambda (target) (gethash target changed-ids))
                          (org-glance-headline-metadata:relation-targets metadata)))
         (org-glance-cache--project-edges db metadata)))))
 
@@ -1329,117 +1372,119 @@ PREPARED holds compatibility statements already computed for each changed ID."
 
 (cl-defun org-glance-cache--refresh-in-stage (graph)
   "Reconcile GRAPH's live headlines into the private cache."
-  (let ((started (float-time)))
-    (if (org-glance-cache--inventory-proof-current-p graph)
-        (message "org-glance: cache proof current (0 families rebuilt, %s)"
+  (org-glance-graph--with-source-context
+    (let ((started (float-time)))
+      (if (org-glance-cache--inventory-proof-current-p graph)
+          (message "org-glance: cache proof current (0 families rebuilt, %s)"
+                   (org-glance-cache--elapsed started))
+        (message "org-glance: cache rebuild: census (0/? families, %s)"
                  (org-glance-cache--elapsed started))
-      (message "org-glance: cache rebuild: census (0/? families, %s)"
-               (org-glance-cache--elapsed started))
-      (org-glance-cache--record-complete-inventory
-       graph
-       (lambda ()
-         (let* ((headlines (org-glance-cache--headlines graph))
-                (families
-                 (delete-dups
-                  (append (mapcar #'org-glance-headline-metadata:id headlines)
-                          (org-glance-cache--family-ids graph))))
-                (total (length families))
-                (headline-total (length headlines))
-                observed
-                (rebuilt 0))
-           (org-glance-cache--report-progress started "census" 0 total)
-           (cl-loop for id in families
-                    for completed from 1
-                    do (push
-                        (cons id (org-glance-cache--inventory-event-ids
-                                  (org-glance-graph:headline-data-path graph id)))
-                        observed)
-                    when (org-glance-cache--progress-point-p completed total)
-                    do (org-glance-cache--report-progress
-                        started "census" completed total))
-           (unless families
-             (org-glance-cache--report-progress started "census" 0 0))
-           (setq observed (nreverse observed))
-           (org-glance-cache--with-db
-            graph
-            (lambda (db)
-              (let* ((held
-                      (sqlite-select
-                       db
-                       "SELECT logical_id,reconciled_epoch,verified FROM headline_family"))
-                     (changed
-                      (if (not (org-glance-cache--configuration-current-on-db graph db)) observed
-                        (cl-remove-if
-                       (lambda (family)
-                         (org-glance-cache--inventory-current-p held family))
-                       observed)))
-                     (changed-total (length changed)))
-                (org-glance-cache--report-progress
-                 started "families" 0 changed-total)
-                (org-glance-cache--transaction
-                 db
-                 (lambda ()
-                   (let ((live (mapcar #'org-glance-headline-metadata:id headlines)))
-                     (dolist (row (sqlite-select db "SELECT headline.org_id,org_headline.path FROM org_headline JOIN headline USING(id)"))
-                       (unless (member (car row) live)
-                         (sqlite-execute db "DELETE FROM source WHERE path=?"
-                                         (vector (cadr row))))))
-                   (dolist (family changed)
-                     (org-glance-cache--project-family
-                      db graph (car family) (cdr family))
-                     (cl-incf rebuilt)
-                     (when (org-glance-cache--progress-point-p
-                            rebuilt changed-total)
-                       (org-glance-cache--report-progress
-                        started "families" rebuilt changed-total)))
-                   (org-glance-cache--report-progress
-                    started "headlines" 0 headline-total "headlines")
-                   (cl-loop for metadata in headlines
-                            for completed from 1
-                            do
-                            (let* ((id (org-glance-headline-metadata:id metadata))
-                                   (state
-                                    (caar
-                                     (sqlite-select
-                                      db
-                                      "SELECT state FROM headline_family WHERE logical_id=?"
-                                      (vector id)))))
-                              (when (or (null state)
-                                        (member state '("live" "damaged")))
-                                (org-glance-cache--project db graph metadata)))
-                            when (org-glance-cache--progress-point-p
-                                  completed headline-total)
-                            do (org-glance-cache--report-progress
-                                started "headlines" completed
-                                headline-total "headlines"))
-                   (org-glance-cache--report-progress
-                    started "relations" 0 headline-total "headlines")
-                   (cl-loop for metadata in headlines
-                            for completed from 1
-                            do (org-glance-cache--project-edges db metadata)
-                            when (org-glance-cache--progress-point-p
-                                  completed headline-total)
-                            do (org-glance-cache--report-progress
-                                started "relations" completed
-                                headline-total "headlines"))
-                   (sqlite-execute
-                    db
-                    "DELETE FROM source WHERE NOT EXISTS (SELECT 1 FROM headline WHERE headline.path=source.path)"))))))
-           (org-glance-cache--report-complete started rebuilt total)))))))
+        (org-glance-cache--record-complete-inventory
+         graph
+         (lambda ()
+           (let* ((headlines (org-glance-cache--headlines graph))
+                  (families
+                   (delete-dups
+                    (append (mapcar #'org-glance-headline-metadata:id headlines)
+                            (org-glance-cache--family-ids graph))))
+                  (total (length families))
+                  (headline-total (length headlines))
+                  observed
+                  (rebuilt 0))
+             (org-glance-cache--report-progress started "census" 0 total)
+             (cl-loop for id in families
+                      for completed from 1
+                      do (push
+                          (cons id (org-glance-cache--inventory-event-ids
+                                    (org-glance-graph:headline-data-path graph id)))
+                          observed)
+                      when (org-glance-cache--progress-point-p completed total)
+                      do (org-glance-cache--report-progress
+                          started "census" completed total))
+             (unless families
+               (org-glance-cache--report-progress started "census" 0 0))
+             (setq observed (nreverse observed))
+             (org-glance-cache--with-db
+              graph
+              (lambda (db)
+                (let* ((held
+                        (sqlite-select
+                         db
+                         "SELECT logical_id,reconciled_epoch,verified FROM headline_family"))
+                       (changed
+                        (if (not (org-glance-cache--configuration-current-on-db graph db)) observed
+                          (cl-remove-if
+                           (lambda (family)
+                             (org-glance-cache--inventory-current-p held family))
+                           observed)))
+                       (changed-total (length changed)))
+                  (org-glance-cache--report-progress
+                   started "families" 0 changed-total)
+                  (org-glance-cache--transaction
+                   db
+                   (lambda ()
+                     (let ((live (mapcar #'org-glance-headline-metadata:id headlines)))
+                       (dolist (row (sqlite-select db "SELECT headline.org_id,org_headline.path FROM org_headline JOIN headline USING(id)"))
+                         (unless (member (car row) live)
+                           (sqlite-execute db "DELETE FROM source WHERE path=?"
+                                           (vector (cadr row))))))
+                     (dolist (family changed)
+                       (org-glance-cache--project-family
+                        db graph (car family) (cdr family))
+                       (cl-incf rebuilt)
+                       (when (org-glance-cache--progress-point-p
+                              rebuilt changed-total)
+                         (org-glance-cache--report-progress
+                          started "families" rebuilt changed-total)))
+                     (org-glance-cache--report-progress
+                      started "headlines" 0 headline-total "headlines")
+                     (cl-loop for metadata in headlines
+                              for completed from 1
+                              do
+                              (let* ((id (org-glance-headline-metadata:id metadata))
+                                     (state
+                                      (caar
+                                       (sqlite-select
+                                        db
+                                        "SELECT state FROM headline_family WHERE logical_id=?"
+                                        (vector id)))))
+                                (when (or (null state)
+                                          (member state '("live" "damaged")))
+                                  (org-glance-cache--project db graph metadata)))
+                              when (org-glance-cache--progress-point-p
+                                    completed headline-total)
+                              do (org-glance-cache--report-progress
+                                  started "headlines" completed
+                                  headline-total "headlines"))
+                     (org-glance-cache--report-progress
+                      started "relations" 0 headline-total "headlines")
+                     (cl-loop for metadata in headlines
+                              for completed from 1
+                              do (org-glance-cache--project-edges db metadata)
+                              when (org-glance-cache--progress-point-p
+                                    completed headline-total)
+                              do (org-glance-cache--report-progress
+                                  started "relations" completed
+                                  headline-total "headlines"))
+                     (sqlite-execute
+                      db
+                      "DELETE FROM source WHERE NOT EXISTS (SELECT 1 FROM headline WHERE headline.path=source.path)"))))))
+             (org-glance-cache--report-complete started rebuilt total))))))))
 
 (cl-defun org-glance-cache:reconcile-families (graph ids)
   "Reconcile immutable family IDS into GRAPH's private projection."
-  (let ((families (mapcar
-                   (apply-partially #'org-glance-cache--prepare-family graph)
-                   (delete-dups (copy-sequence ids)))))
-    (org-glance-cache--with-db
-     graph
-     (lambda (db)
-       (org-glance-cache--transaction
-        db
-        (lambda ()
-          (dolist (family families)
-            (org-glance-cache--apply-family db family))))))))
+  (org-glance-graph--with-source-context
+    (let ((families (mapcar
+                     (apply-partially #'org-glance-cache--prepare-family graph)
+                     (delete-dups (copy-sequence ids)))))
+      (org-glance-cache--with-db
+       graph
+       (lambda (db)
+         (org-glance-cache--transaction
+          db
+          (lambda ()
+            (dolist (family families)
+              (org-glance-cache--apply-family db family)))))))))
 
 (cl-defun org-glance-cache:reconcile-inventory (graph &optional complete)
   "Reconcile GRAPH's family inventory in a staged generation.
@@ -1451,58 +1496,59 @@ COMPLETE forces observation of every family.  Return the folded family count."
   "Reconcile immutable families whose inventory checkpoint changed in GRAPH.
 COMPLETE forces a census when the local projection cannot trust a Git delta.
 Return the number of families folded."
-  (setq complete (or complete (not (org-glance-cache--configuration-current-p graph))))
-  (if-let* ((delta (and (not complete)
-                        (org-glance-cache--clean-git-family-delta graph))))
-      (let ((ids (plist-get delta :ids)))
-        (message "org-glance: cache reconcile: clean Git delta (%d families)"
-                 (length ids))
-        (org-glance-cache:reconcile-families graph ids)
-        (when org-glance-cache--staging-path
-          (let ((proof (plist-get delta :proof)))
-            (setq org-glance-cache--publication-check
-                  (lambda ()
-                    (unless (equal proof (org-glance-cache--clean-git-proof graph))
-                      (error "org-glance: source Git proof changed before publication"))))))
-        (unless org-glance-cache--staging-path
-          (org-glance-graph:cache-write
-           graph org-glance-cache--git-proof-name (plist-get delta :proof)))
-        (length ids))
-    (message "org-glance: cache reconcile: complete census (no safe clean Git transition)")
-    (org-glance-cache--record-complete-inventory
-     graph
-     (lambda ()
-       (let ((current (org-glance-cache--family-ids graph)))
-         (org-glance-cache--with-db
-          graph
-          (lambda (db)
-            (let* ((held (sqlite-select
-                          db
-                          "SELECT logical_id,reconciled_epoch,verified FROM headline_family"))
-                   (ids (sort (delete-dups
-                               (append current (mapcar #'car held))) #'string<))
-                   (observed
-                    (mapcar
-                     (lambda (id)
-                       (cons id (org-glance-cache--inventory-event-ids
-                                 (org-glance-graph:headline-data-path graph id))))
-                     ids))
-                   (changed
-                    (if complete
-                        observed
-                      (cl-remove-if-not
-                       (lambda (family)
-                         (not (org-glance-cache--inventory-current-p held family)))
-                       observed))))
-              (org-glance-cache--transaction
-               db
-               (lambda ()
-                 (dolist (family changed)
-                   (org-glance-cache--project-family
-                    db graph (car family) (cdr family)))
-                 (org-glance-cache--project-family-compatibility-changes
-                  db graph (mapcar #'car changed))))
-              (length changed)))))))))
+  (org-glance-graph--with-source-context
+    (setq complete (or complete (not (org-glance-cache--configuration-current-p graph))))
+    (if-let* ((delta (and (not complete)
+                          (org-glance-cache--clean-git-family-delta graph))))
+        (let ((ids (plist-get delta :ids)))
+          (message "org-glance: cache reconcile: clean Git delta (%d families)"
+                   (length ids))
+          (org-glance-cache:reconcile-families graph ids)
+          (when org-glance-cache--staging-path
+            (let ((proof (plist-get delta :proof)))
+              (setq org-glance-cache--publication-check
+                    (lambda ()
+                      (unless (equal proof (org-glance-cache--clean-git-proof graph))
+                        (error "org-glance: source Git proof changed before publication"))))))
+          (unless org-glance-cache--staging-path
+            (org-glance-graph:cache-write
+             graph org-glance-cache--git-proof-name (plist-get delta :proof)))
+          (length ids))
+      (message "org-glance: cache reconcile: complete census (no safe clean Git transition)")
+      (org-glance-cache--record-complete-inventory
+       graph
+       (lambda ()
+         (let ((current (org-glance-cache--family-ids graph)))
+           (org-glance-cache--with-db
+            graph
+            (lambda (db)
+              (let* ((held (sqlite-select
+                            db
+                            "SELECT logical_id,reconciled_epoch,verified FROM headline_family"))
+                     (ids (sort (delete-dups
+                                 (append current (mapcar #'car held))) #'string<))
+                     (observed
+                      (mapcar
+                       (lambda (id)
+                         (cons id (org-glance-cache--inventory-event-ids
+                                   (org-glance-graph:headline-data-path graph id))))
+                       ids))
+                     (changed
+                      (if complete
+                          observed
+                        (cl-remove-if-not
+                         (lambda (family)
+                           (not (org-glance-cache--inventory-current-p held family)))
+                         observed))))
+                (org-glance-cache--transaction
+                 db
+                 (lambda ()
+                   (dolist (family changed)
+                     (org-glance-cache--project-family
+                      db graph (car family) (cdr family)))
+                   (org-glance-cache--project-family-compatibility-changes
+                    db graph (mapcar #'car changed))))
+                (length changed))))))))))
 
 (defvar org-glance-cache--inventory-timer nil
   "Timer that reconciles immutable inventories for open graphs.")
