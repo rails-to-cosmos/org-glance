@@ -75,7 +75,7 @@ Mark each one whose library is not loaded (the loader is demoted, invariant 9)."
                          org-glance-plugins ", ")
             "none")))
 
-;;;###autoload
+;;;###autoload (autoload (quote org-glance-transient) "org-glance-ui" nil t)
 (transient-define-prefix org-glance-transient ()
   "Perform action on selected view/headlines"
   [:description (lambda (&rest _) (format "Filter: %s" (org-glance-filter:describe org-glance-filter-spec)))

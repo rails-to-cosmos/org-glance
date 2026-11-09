@@ -5,6 +5,8 @@ Notable user-facing changes.  Versions date-based
 
 * Unreleased
 
+* 1.61.0.0.20261109.0
+
 ** Added
 
 - =meta/SCHEMA= versions the canonical store layout; private SQLite schema 12 records ordered migrations in =cache_migration=.
@@ -21,6 +23,7 @@ Notable user-facing changes.  Versions date-based
 - Cache family discovery includes short IDs beside sharded siblings and skips deep session trees.
 - =org-glance-graph:get-headline= hides conflict/rejected-only logical IDs consistently with cache readers.
 - =make bench-graph= samples and fingerprints all workloads; =tools/bench.py= reports uncertainty across process pairs.
+- =org-glance-transient= autoloads as a stub that loads =org-glance-ui= before opening the menu.
 
 * 1.57.6.0.20261108.0
 

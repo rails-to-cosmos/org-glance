@@ -39,5 +39,34 @@ It flips between table and org-text view and maps a legacy value to canonical."
     (org-glance-transient:toggle-view)
     (should (eq 'org-glance-table org-glance-overview-default-view))))
 
+(ert-deftest org-glance-test:ui-autoloads-stub-transient-prefixes ()
+  "Generated autoloads stub every transient prefix instead of copying it.
+A copied `transient-define-prefix' defines the menu without loading its
+suffixes, so opening it signals \"Suffix command ... is not defined\"."
+  (let* ((src (expand-file-name
+               "src" (locate-dominating-file
+                      (locate-library "org-glance-ui") "org-glance.el")))
+         (dir (make-temp-file "org-glance-autoloads-" t))
+         (out (expand-file-name "autoloads.el" dir))
+         forms)
+    (unwind-protect
+        (progn
+          (let ((inhibit-message t))
+            (loaddefs-generate (list (expand-file-name "data" src)
+                                     (expand-file-name "view" src))
+                               out))
+          (with-temp-buffer
+            (insert-file-contents out)
+            (condition-case nil
+                (while t (push (read (current-buffer)) forms))
+              (end-of-file nil))))
+      (delete-directory dir t))
+    (should-not (seq-find (lambda (form)
+                            (string-prefix-p "transient-define-"
+                                             (symbol-name (car-safe form))))
+                          forms))
+    (should (member '(autoload 'org-glance-transient "org-glance-ui" nil t)
+                    forms))))
+
 (provide 'test-ui)
 ;;; test-ui.el ends here
