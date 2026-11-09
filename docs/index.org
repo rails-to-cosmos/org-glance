@@ -130,6 +130,9 @@ Newest first.
 Each is part of the [[file:proposals/2026-07-06-performance-audit.org][performance audit]].
 
 
+- [[file:proposals/2026-11-08-write-path-storage-audit.org][Write path and storage audit]] — the write path reparses each
+  headline four times and the store spends 76,050 inodes on 72.1 MB; eight
+  ranked wins, four out-of-bounds ideas.
 - [[file:proposals/2026-07-06-lazy-property-columns.proposed.org][Lazy value-fn for custom property columns]] — parse only visible rows for a
   displayed property column.
 - [[file:proposals/2026-07-06-table-paging.proposed.org][Table paging / windowing]] — render a screen-sized page at a time.

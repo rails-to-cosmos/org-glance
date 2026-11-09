@@ -1,0 +1,149 @@
+#+TITLE: Write path and storage audit — org-glance
+#+DATE: 2026-11-08
+
+Status: *audit* · companion to [[file:2026-07-06-performance-audit.org][the 2026-07-06 performance audit]]
+
+Every audit so far has measured reads.  Reads are now fast: the point read is
+0.21 ms and flat ([[file:2026-11-08-performance-gate-measures-the-live-path.done.org][the performance gate]]).  This one measures the WRITE path and
+the STORE, where the remaining cost sits.  Measured on Linux, Emacs 31.1.90,
+synthetic stores from =org-glance-test:with-graph=, plus the real 7,119-headline
+=~/sync/views= store read-only.
+
+* Two numbers that frame it
+
+| Path                      | Cost            | Real store at 7,157 |
+|---------------------------+-----------------+---------------------|
+| =graph:add=, N=200        | 14.9 ms/headline | —                  |
+| =graph:reindex=, N=300    | 23.2 ms/headline | ≈ 165 s            |
+
+Canonical payload on the real store is 72.1 MB.  The store is 2.1 GB across
+76,050 inodes.
+
+* Theme 1 — the write path reparses each headline four times
+
+=elp= over =graph:add=, 200 headlines in two batches:
+
+| Function                        | Calls | Per headline |  Elapsed |
+|---------------------------------+-------+--------------+----------|
+| =graph:add=                     |     2 |              | 2.989 s  |
+| =cache--after-append=           |     2 |              | 2.481 s  |
+| =headline--from-string=         |   800 |          4.0 | 1.536 s  |
+| =cache--prepare-headline=       |   200 |          1.0 | 1.462 s  |
+| =graph--reparse-blob=           |   400 |          2.0 | 0.666 s  |
+| =graph:get-content=             |   200 |          1.0 | 0.317 s  |
+| =version--observe-directories=  |  1000 |          5.0 | 0.162 s  |
+
+The same shape, worse, under =reindex= at N=300: =--from-string= 1,200 calls
+(4.0), =--reparse-blob= 900 (3.0), =get-content= 600 (2.0),
+=version--observe-directories= 1,800 (6.0).
+
+Three facts follow.  The synchronous family projection is 83% of an insert and
+74% of a reindex.  The writer reads back and reparses the blob it just wrote.
+The 2026-07-06 audit's item D collapsed "4 thunk reparses → one
+=--content-facts= pass" on the read side; the write side carries the multiplier
+today.
+
+* Theme 2 — directory inventories are the hot path, over a polluted tree
+
+Invariant 41 makes immutable family directories the search authority, so
+freshness costs a =readdir= pass.  The write profile shows five to six
+=version--observe-directories= calls per headline.  What they walk, on the real
+store:
+
+| Component                                  |   Size |  Inodes |
+|--------------------------------------------+--------+---------|
+| Headline payload (=data.org= + =meta.json=) | 72.1 MB |  30,452 |
+| =.agent-home= provider caches (23 dirs)     |  1.3 GB |  12,377 |
+| =sessions/= in total                        |      —  |  14,043 |
+| =cache/= (git-ignored)                      |  219 MB |       9 |
+| =archive/=                                  |  126 MB |      —  |
+| Whole store                                 |  2.1 GB |  76,050 |
+
+A headline-version costs five inodes: =versions/<uuidv7>/= plus =data.org= plus
+=meta.json=, under three nested directories.  The deepest family holds 514
+versions, so one headline owns over a thousand inodes.  The =.agent-home= trees
+are plugin-local provider caches living inside =data/=; they are git-ignored, so
+they cost no sync, and every inventory walk still traverses them.
+
+The =inventory_directory= table already exists in the cache, so the checkpoint
+side of this is built.
+
+* Theme 3 — one headline, four representations
+
+A 118-byte headline, one version:
+
+| Representation                     | Bytes | Derived | In git |
+|------------------------------------+-------+---------+--------|
+| =data.org=                         |   118 | no      | yes    |
+| =meta.json=                        |   262 | no      | yes    |
+| =meta/seg-*.jsonl= record          |   331 | yes     | yes    |
+| =cache/org-glance.sqlite3= share   | ~3900 | yes     | no     |
+| =cache/property-index.eld= share   |   128 | yes     | no     |
+
+Git-tracked: 711 B for 118 B of content.  On disk with 4 KiB blocks and five
+inodes: ≈ 12 KiB.
+
+=meta.json= is 2.2× the content it describes, and =version=, =event=,
+=producer= and an empty =parents= account for roughly 90 of its 262 bytes.  The
+WAL record is derived in full (invariant 5) yet git-tracked, and invariant 35
+already schedules its retirement at the stage-5 cutover.
+
+Real =cache/= holds three databases: =org-glance.sqlite3= 48 MB (6.7 KB per
+headline against 3 MB of total projection payload), =glance-index.sqlite3= 62 MB
+beside a 61 MB un-checkpointed WAL, and =glance.sqlite3= 42 MB untouched since
+2026-10-19 — the former shared cache invariant 35 imports without modifying and
+nothing retires.
+
+* Where the wins are
+
+Ranked by measured payoff against risk.
+
+1. *One parse per headline on the write path.*  Carry one =--content-facts= pass
+   from =graph:add= through metadata, blob write and family projection.  Target
+   15 → 4 ms insert, 23 → 6 ms reindex, ≈ 165 → 45 s on the real store.  The
+   pattern is already proven by audit item D.
+2. *Never read back what was just written.*  =get-content= plus =--reparse-blob=
+   during insert and reindex re-derive what the caller holds.
+3. *Batch the family projection per insert batch.*  =--prepare-headline=,
+   =--prepare-family=, =--payload-observation= and =--version-metadata= run once
+   per headline inside one transaction; one pass over the batch replaces N.
+4. *Demote the directory walk to the repair path.*  A generation counter per
+   family directory, checked against =inventory_directory=, lets a read skip
+   =readdir= entirely and keeps the walk for repair.  Restates invariant 41.
+5. *One file per version.*  Fold =meta.json= into a header on =data.org=, or
+   append both to a per-headline log.  Saves ≈ 30,000 inodes on the real store.
+   Touches invariants 39–41 and the Glance interop contract.
+6. *Move provider session homes out of =data/=.*  Plugin-side, into
+   =XDG_CACHE_HOME=: 1.3 GB and 12,377 inodes leave the store and every
+   inventory walk.
+7. *Cache hygiene.*  Retire =glance.sqlite3= after import, checkpoint
+   =glance-index.sqlite3-wal=, and account for 6.7 KB per headline across a
+   15-column =headline= and a 10-column =headline_event=.
+8. *Retire the WAL at stage-5.*  331 B per headline of derived data leaves git,
+   and compaction stops minting a multi-MB git object per run.
+
+* Out of bounds
+
+- *Content-addressed blobs.*  =meta.json= already carries =contentSha256=.  Store
+  blobs by digest in a sharded CAS and let versions reference it.  Identical
+  content across versions dedupes, and the 514-version family stops paying 514
+  copies of near-identical text.  The single largest structural storage idea
+  here.
+- *Pack cold versions.*  Git's own answer: fold cold families into one
+  append-only pack plus an index, leaving loose files at the recent frontier.
+  Fits invariant 40's append-only history and removes the inode problem without
+  touching semantics.
+- *SQLite as authority.*  The end state invariant 35 points at: blobs plus one
+  committed database, with the third representation gone.
+- *Incremental reindex.*  Skip families whose content hash is unchanged, making
+  reindex O(changed) rather than O(N).
+
+* Method
+
+=elp-instrument-package= over =org-glance-graph=, =-headline=, =-cache=,
+=-version=, =-core= and =-property-index=, one batched =graph:add= of 200 and one
+=graph:reindex= of 300 in separate batch processes.  Footprints from =find= and
+=du= on a built 1,000-headline synthetic store and read-only on =~/sync/views=.
+Cache composition from =sqlite3= in =mode=ro= and =PRAGMA page_count=.  Segment
+counts read from =meta/MANIFEST=, whose generation numbers are not a count:
+the real store holds eight live segments.
