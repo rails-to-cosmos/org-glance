@@ -10,6 +10,7 @@
 (require 'org-glance-utils)
 (require 'org-glance-headline)
 (require 'org-glance-version)
+(require 'org-glance-storage)
 
 (declare-function org-glance-cache:headline "org-glance-cache")
 (declare-function org-glance-cache:material-state "org-glance-cache")
@@ -20,6 +21,9 @@
 (defvar org-glance-graph--parsed-blobs nil
   "Exact content analyses shared within one write operation.")
 
+(defvar org-glance-graph--checked-storage nil
+  "Graphs whose canonical formats were checked for the current operation.")
+
 (defmacro org-glance-graph--with-source-context (&rest body)
   "Run BODY with operation-local family, payload and parsing observations."
   (declare (indent 0))
@@ -28,7 +32,9 @@
          (org-glance-version--observations
           (or org-glance-version--observations (make-hash-table :test #'equal)))
          (org-glance-version--payloads
-          (or org-glance-version--payloads (make-hash-table :test #'equal))))
+          (or org-glance-version--payloads (make-hash-table :test #'equal)))
+         (org-glance-graph--checked-storage
+          (or org-glance-graph--checked-storage (make-hash-table :test #'eq))))
      ,@body))
 
 ;; invariant 7: single user, no mutex / locking.
@@ -247,10 +253,21 @@ Store paths depend only on the read-only `directory' slot."
 Runs at the end of `org-glance-graph', after caching the instance; side indexes
 heal their own git conflicts here.  Errors are demoted (invariant 9).")
 
+(defun org-glance-graph--check-storage (graph)
+  "Refuse unsupported canonical formats once per GRAPH write operation."
+  (unless (and org-glance-graph--checked-storage
+               (gethash graph org-glance-graph--checked-storage))
+    (org-glance-storage:check (org-glance-graph:meta-path graph))
+    (org-glance-graph--sealed-segments graph)
+    (when org-glance-graph--checked-storage
+      (puthash graph t org-glance-graph--checked-storage))))
+
 (cl-defun org-glance-graph (&optional (directory org-glance-directory))
   (cl-check-type directory string)
   (let* ((directory (-> directory (file-truename) (f-full)))
          (graph (gethash directory org-glance-graph:list)))
+    (org-glance-graph--check-storage
+     (or graph (make-org-glance-graph :directory directory)))
     (unless graph
       (setq graph (make-org-glance-graph :directory directory))
       (f-mkdir-full-path directory)
@@ -265,6 +282,7 @@ heal their own git conflicts here.  Errors are demoted (invariant 9).")
       (org-glance-graph--migrate-maybe graph)      ; bootstrap MANIFEST / adopt legacy file
       (org-glance-graph--reconcile-manifest graph) ; rebuild a git-mangled MANIFEST
       (org-glance-graph--heal graph)               ; recover seal, derive seq, reap orphans
+      (org-glance-storage:migrate (org-glance-graph:meta-path graph))
       (puthash directory graph org-glance-graph:list)
       (with-demoted-errors "org-glance: after-open hook: %S"
         (run-hook-with-args 'org-glance-graph-after-open-functions graph)))
@@ -312,16 +330,19 @@ heal their own git conflicts here.  Errors are demoted (invariant 9).")
 An absent or unparseable MANIFEST reads as none."
   (let ((path (org-glance-graph--manifest-path graph)))
     (when (f-exists? path)
-      (condition-case nil
-          (-> (f-read-text path 'utf-8)
-              (json-parse-string :object-type 'plist)
-              (plist-get :segments)
-              (append nil))
+      (condition-case err
+          (let ((record (org-glance-storage--read-record path)))
+            (when (plist-member record :version)
+              (org-glance-storage:require-version 'manifest (plist-get record :version)))
+            (append (plist-get record :segments) nil))
+        (org-glance-storage-unsupported
+         (signal (car err) (cdr err)))
         (error nil)))))
 
 (cl-defun org-glance-graph--write-manifest (graph segments)
   "Atomically write SEGMENTS, basenames oldest first, as GRAPH's MANIFEST.
 This swap commits the live sealed-segment set (invariant 2)."
+  (org-glance-graph--check-storage graph)
   (org-glance--atomic-write
    (org-glance-graph--manifest-path graph)
    (concat (json-serialize (list :version 2 :segments (apply #'vector segments))) "\n")))
@@ -578,6 +599,7 @@ Registering the same CALLBACK for GRAPH more than once has no effect."
 (cl-defun org-glance-graph--append (graph specs)
   "Append SPECS to GRAPH's open segment, then maybe seal and compact.
 SPECS are metadata structs or bare plists; each gets a fresh monotonic `seq'."
+  (org-glance-graph--check-storage graph)
   (with-demoted-errors "org-glance: before-append hook: %S"
     (run-hook-with-args 'org-glance-graph-before-append-functions graph specs))
   (let ((open (org-glance-graph--open-segment-path graph))
@@ -767,6 +789,7 @@ Signal a `user-error' when ID has concurrent leaves of either kind."
   "Prepare GRAPH's publication receipt for ID without publishing an event.
 Capture sealed CONTENTS, METADATA, EXPECTED-FRONTIER and authored REVISION.
 SOURCE-VERSION and SOURCE-DIGEST identify the editing source."
+  (org-glance-graph--check-storage graph)
   (let* ((dir (org-glance-graph:headline-data-path graph id))
          (settings (org-glance-config:current graph)))
     (unless (and (equal id (org-glance-headline-metadata:id metadata))
@@ -791,6 +814,7 @@ SOURCE-VERSION and SOURCE-DIGEST identify the editing source."
   "Publish or complete RECEIPT's exact event and return RECEIPT.
 Errors and quits leave RECEIPT retryable, including after event rename."
   (org-glance-graph--with-source-context
+    (org-glance-graph--check-storage (org-glance-publication:graph receipt))
     (unless (eq 'projection-committed (org-glance-publication:phase receipt))
       (let* ((graph (org-glance-publication:graph receipt))
              (id (org-glance-publication:id receipt))
@@ -837,6 +861,7 @@ Errors and quits leave RECEIPT retryable, including after event rename."
 (cl-defun org-glance-graph:put-content (graph headline)
   "Persist HEADLINE's contents atomically under GRAPH's store, keyed by its id.
 Return the file path, or nil if HEADLINE has no id."
+  (org-glance-graph--check-storage graph)
   (cl-check-type graph org-glance-graph)
   (cl-check-type headline org-glance-headline)
   (when-let* ((id (org-glance-headline:id headline)))
@@ -900,6 +925,7 @@ Return the file path, or nil if HEADLINE has no id."
 
 (cl-defun org-glance-graph:migrate-versions (graph)
   "Migrate every legacy headline blob in GRAPH; return the migrated count."
+  (org-glance-graph--check-storage graph)
   (let ((count 0))
     (dolist (data (org-glance-graph:data-paths graph))
       (when (file-directory-p data)
@@ -989,6 +1015,7 @@ The guard `org-glance-graph:delete' shares with the fold (invariant 30)."
 
 (cl-defun org-glance-graph:delete (graph id)
   "Append a tombstone for ID to GRAPH unless ID is absent or already deleted."
+  (org-glance-graph--check-storage graph)
   (cl-check-type graph org-glance-graph)
   (cl-check-type id string)
   (when-let* ((spec (org-glance-graph--tombstone-spec graph id)))
@@ -1143,6 +1170,7 @@ at the end.  Return the number of headlines re-indexed."
                     (clrhash org-glance-graph--parsed-blobs)
                     (clrhash org-glance-version--observations)
                     (clrhash org-glance-version--payloads)
+                    (clrhash org-glance-graph--checked-storage)
                     (setq batch nil fill 0))))
         (cl-loop for meta in metas
                  for i from 1
@@ -1673,9 +1701,13 @@ Broken is nil, blank, conflict-marked, unparseable or lacking `:segments'."
   (or (null text)
       (string-empty-p (string-trim text))
       (org-glance--conflict-marked? text)
-      (condition-case nil
-          (not (vectorp (plist-get (json-parse-string text :object-type 'plist)
-                                   :segments)))
+      (condition-case err
+          (let ((record (json-parse-string text :object-type 'plist)))
+            (when (plist-member record :version)
+              (org-glance-storage:require-version 'manifest (plist-get record :version)))
+            (not (vectorp (plist-get record :segments))))
+        (org-glance-storage-unsupported
+         (signal (car err) (cdr err)))
         (error t))))
 
 (cl-defun org-glance-graph--reconcile-manifest (graph)
@@ -1793,40 +1825,42 @@ them (invariant 1).  Reap other orphans; idempotent."
 Also GC the blobs of deleted ids.  The MANIFEST swap commits before the open
 segment empties (invariant 2); a compact store is left alone.  Return the live
 record count."
-  (cl-check-type graph org-glance-graph)
-  (let* ((sealed-names (org-glance-graph--sealed-segments graph))
-         (open (org-glance-graph--open-segment-path graph))
-         (open-empty (org-glance-graph--open-empty? graph))
-         (fold (org-glance-graph--latest-records graph))
-         (total (cdr fold))
-         (committed nil))
-    (let (emit dead-ids)
-      (dolist (record (car fold))
-        (if (plist-get record :tombstone)
-            (push (plist-get record :id) dead-ids) ; globally dead -> drop the id, GC its blob
-          (push record emit)))
-      (setq emit (nreverse emit))
-      (unless (and (<= (length sealed-names) 1) open-empty
-                   (null dead-ids) (= total (length emit)))
-        (let (new-names)
-          (when emit
-            (let* ((gen (org-glance-graph--next-generation graph))
-                   (newseg (org-glance-graph--segment-path graph gen)))
-              (org-glance--atomic-write
-               newseg (concat (s-join "\n" (mapcar #'json-serialize emit)) "\n") nil)
-              (setq new-names (list (file-name-nondirectory newseg)))))
-          ;; invariant 2: commit BEFORE truncating the open segment.
-          (org-glance-graph--write-manifest graph new-names)
-          (org-glance--atomic-write open "")
-          (setq committed t)))
-      (dolist (id dead-ids)
-        (let ((dir (ignore-errors (org-glance-graph:headline-data-path graph id))))
-          (when (and dir (f-exists? dir)) (ignore-errors (f-delete dir t)))))
-      (org-glance-graph--gc-orphans graph)
-      (org-glance-graph--invalidate-cache graph)
-      (when committed
-        (org-glance-graph--notify-commit graph :structural))
-      (length emit))))
+  (org-glance-graph--with-source-context
+    (org-glance-graph--check-storage graph)
+    (cl-check-type graph org-glance-graph)
+    (let* ((sealed-names (org-glance-graph--sealed-segments graph))
+           (open (org-glance-graph--open-segment-path graph))
+           (open-empty (org-glance-graph--open-empty? graph))
+           (fold (org-glance-graph--latest-records graph))
+           (total (cdr fold))
+           (committed nil))
+      (let (emit dead-ids)
+        (dolist (record (car fold))
+          (if (plist-get record :tombstone)
+              (push (plist-get record :id) dead-ids) ; globally dead -> drop the id, GC its blob
+            (push record emit)))
+        (setq emit (nreverse emit))
+        (unless (and (<= (length sealed-names) 1) open-empty
+                     (null dead-ids) (= total (length emit)))
+          (let (new-names)
+            (when emit
+              (let* ((gen (org-glance-graph--next-generation graph))
+                     (newseg (org-glance-graph--segment-path graph gen)))
+                (org-glance--atomic-write
+                 newseg (concat (s-join "\n" (mapcar #'json-serialize emit)) "\n") nil)
+                (setq new-names (list (file-name-nondirectory newseg)))))
+            ;; invariant 2: commit BEFORE truncating the open segment.
+            (org-glance-graph--write-manifest graph new-names)
+            (org-glance--atomic-write open "")
+            (setq committed t)))
+        (dolist (id dead-ids)
+          (let ((dir (ignore-errors (org-glance-graph:headline-data-path graph id))))
+            (when (and dir (f-exists? dir)) (ignore-errors (f-delete dir t)))))
+        (org-glance-graph--gc-orphans graph)
+        (org-glance-graph--invalidate-cache graph)
+        (when committed
+          (org-glance-graph--notify-commit graph :structural))
+        (length emit)))))
 
 (cl-defun org-glance-graph:capture-buffer (&optional (buffer (current-buffer)))
   "Return a list of `org-glance-headline' parsed from BUFFER."

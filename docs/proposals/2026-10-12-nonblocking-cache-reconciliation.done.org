@@ -16,9 +16,11 @@ Startup and the session timer queue one cache refresh in an isolated batch
 Emacs process. One graph has at most one active process, and automatic
 steady-state requests are limited to one per minute.  Startup work leaves the
 first post-open request due, allowing a Git update that lands immediately after
-startup to queue its own reconciliation. Cache-backed UI reads continue from
-the last committed SQLite projection while reconciliation runs. They never
-request a census, History fold, or cache transaction.
+startup to queue its own reconciliation. Nonempty cache-backed UI reads continue from the last committed SQLite
+projection while reconciliation runs. Empty searchable results wait for pending
+reconciliation, verify canonical inventory and automatically repair a stale
+index before reporting emptiness. Unsupported future schemas require an updated
+reader.
 
 Each launched worker announces its visible progress buffer. A failure displays
 that buffer with one concise error and delays every automatic retry until the

@@ -25,10 +25,16 @@
 (define-error 'org-glance-cache-configuration-stale
   "Cached rows require configuration reconciliation")
 
+(define-error 'org-glance-cache-schema-stale
+  "Cached rows require schema migration")
+
 (defvar org-glance-cache--configuration-repairs nil
   "Graphs whose configuration dependencies are being repaired synchronously.")
 
-(defconst org-glance-cache:version 11
+(defvar org-glance-cache--schema-repairs nil
+  "Graphs whose cache schema is being migrated by the current read.")
+
+(defconst org-glance-cache:version 12
   "Private org-glance cache schema version.")
 
 (defcustom org-glance-cache-progress-step 25
@@ -37,7 +43,8 @@
   :group 'org-glance)
 
 (defconst org-glance-cache--schema
-  '("CREATE TABLE IF NOT EXISTS source (path TEXT PRIMARY KEY, digest TEXT NOT NULL, producer TEXT NOT NULL)"
+  '("CREATE TABLE IF NOT EXISTS cache_migration (from_version INTEGER PRIMARY KEY, to_version INTEGER NOT NULL, strategy TEXT NOT NULL)"
+    "CREATE TABLE IF NOT EXISTS source (path TEXT PRIMARY KEY, digest TEXT NOT NULL, producer TEXT NOT NULL)"
     "CREATE TABLE IF NOT EXISTS headline (id TEXT PRIMARY KEY, path TEXT NOT NULL REFERENCES source(path) ON DELETE CASCADE, digest TEXT NOT NULL, org_id TEXT, org_id_property TEXT, title TEXT NOT NULL, state TEXT, priority TEXT, tags TEXT NOT NULL, scheduled TEXT, deadline TEXT, closed TEXT, category TEXT NOT NULL, created TEXT, producer TEXT NOT NULL)"
     "CREATE INDEX IF NOT EXISTS headline_path ON headline(path)"
     "CREATE INDEX IF NOT EXISTS headline_org_id ON headline(org_id)"
@@ -53,6 +60,16 @@
     "CREATE TABLE IF NOT EXISTS inventory_directory (path TEXT PRIMARY KEY, stamp TEXT NOT NULL)"
     "CREATE TABLE IF NOT EXISTS configuration_dependency (singleton INTEGER PRIMARY KEY CHECK(singleton=1), format INTEGER NOT NULL, fingerprint TEXT NOT NULL)")
   "DDL owned by org-glance.")
+
+(defconst org-glance-cache--schema-object-count-sql
+  (concat "SELECT count(*) FROM sqlite_master WHERE name IN ("
+          (mapconcat
+           (lambda (sql)
+             (unless (string-match "IF NOT EXISTS \\([^ ]+\\)" sql)
+               (error "Cache schema object has no stable name: %s" sql))
+             (concat "'" (match-string 1 sql) "'"))
+           org-glance-cache--schema ",") ")")
+  "Query counting the current schema's named tables and indexes.")
 
 (defvar org-glance-cache--staging-path nil
   "Database selected while constructing a staged generation.")
@@ -117,6 +134,7 @@
                                       (json-serialize
                                        (org-glance-headline-metadata:serialize metadata))
                                       'utf-8 t)))))
+                     (sqlite-execute db "INSERT OR IGNORE INTO cache_migration VALUES(6,12,'import')")
                      (sqlite-execute db "UPDATE headline_family SET verified=0")
                      (sqlite-execute db "DELETE FROM inventory_directory")
                      (sqlite-execute db (format "PRAGMA user_version=%d"
@@ -138,22 +156,76 @@
     (error (ignore-errors (sqlite-rollback db))
            (signal (car err) (cdr err)))))
 
+(defun org-glance-cache--require-supported-version (db)
+  "Return DB's schema version, refusing an unknown future cache."
+  (let ((version (caar (sqlite-select db "PRAGMA user_version"))))
+    (unless (and (integerp version) (<= 0 version org-glance-cache:version))
+      (signal 'org-glance-storage-unsupported
+              (list (format "Cache schema %s exceeds supported schema %s; upgrade org-glance"
+                            version org-glance-cache:version))))
+    version))
+
+(defun org-glance-cache--rebuild-schema (db)
+  "Replace DB's pre-private-cache tables before authoritative reconstruction."
+  (dolist (table (sqlite-select
+                  db
+                  "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY CASE name WHEN 'producer_projection' THEN 0 WHEN 'headline_projection' THEN 1 WHEN 'headline_payload_observation' THEN 2 WHEN 'headline_event' THEN 3 WHEN 'headline_family' THEN 4 WHEN 'edge' THEN 5 WHEN 'org_headline' THEN 6 WHEN 'glance_payload' THEN 7 WHEN 'headline' THEN 8 WHEN 'source' THEN 9 ELSE 10 END"))
+    (sqlite-execute db (format "DROP TABLE IF EXISTS %s"
+                               (org-glance-cache--quote-identifier (car table))))))
+
+(defun org-glance-cache--install-schema-object (db prefix)
+  "Install DB's current schema object selected by its unique SQL PREFIX."
+  (let ((statement (cl-find-if (lambda (sql) (string-prefix-p prefix sql))
+                               org-glance-cache--schema)))
+    (unless statement (error "Unknown cache schema object: %s" prefix))
+    (sqlite-execute db statement)))
+
+(defun org-glance-cache--add-configuration-dependency (db)
+  "Add DB's configuration dependency checkpoint."
+  (org-glance-cache--install-schema-object
+   db "CREATE TABLE IF NOT EXISTS configuration_dependency "))
+
+(defun org-glance-cache--add-projection-index (db)
+  "Add DB's indexed logical projection lookup."
+  (org-glance-cache--install-schema-object
+   db "CREATE INDEX IF NOT EXISTS headline_projection_logical_role "))
+
+(defun org-glance-cache--add-migration-ledger (db)
+  "Add DB's schema migration ledger while preserving all admitted evidence."
+  (org-glance-cache--install-schema-object
+   db "CREATE TABLE IF NOT EXISTS cache_migration "))
+
+(defconst org-glance-cache--schema-migrations
+  '((0 11 org-glance-cache--rebuild-schema "bootstrap")
+    (1 11 org-glance-cache--rebuild-schema "rebuild")
+    (2 11 org-glance-cache--rebuild-schema "rebuild")
+    (3 11 org-glance-cache--rebuild-schema "rebuild")
+    (4 11 org-glance-cache--rebuild-schema "rebuild")
+    (5 11 org-glance-cache--rebuild-schema "rebuild")
+    (6 11 org-glance-cache--rebuild-schema "rebuild")
+    (7 10 org-glance-cache--add-configuration-dependency "upgrade")
+    (10 11 org-glance-cache--add-projection-index "upgrade")
+    (11 12 org-glance-cache--add-migration-ledger "upgrade"))
+  "Known (FROM TO FUNCTION STRATEGY) private cache migration steps.")
+
 (cl-defun org-glance-cache--initialise (db)
-  "Build DB's private schema, replacing an incompatible version."
-  (let* ((version (caar (sqlite-select db "PRAGMA user_version")))
-         (reset? (/= version org-glance-cache:version)))
-    (when reset?
-      (dolist (table (sqlite-select
-                      db
-                      "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY CASE name WHEN 'producer_projection' THEN 0 WHEN 'headline_projection' THEN 1 WHEN 'headline_payload_observation' THEN 2 WHEN 'headline_event' THEN 3 WHEN 'headline_family' THEN 4 WHEN 'edge' THEN 5 WHEN 'org_headline' THEN 6 WHEN 'glance_payload' THEN 7 WHEN 'headline' THEN 8 WHEN 'source' THEN 9 ELSE 10 END"))
-        (sqlite-execute db
-                        (format "DROP TABLE IF EXISTS %s"
-                                (org-glance-cache--quote-identifier (car table))))))
-    (dolist (statement org-glance-cache--schema)
-      (sqlite-execute db statement))
-    (when reset?
-      (sqlite-execute db (format "PRAGMA user_version=%d"
-                                 org-glance-cache:version)))))
+  "Apply DB's ordered migrations inside the caller's staging transaction."
+  (let ((version (org-glance-cache--require-supported-version db)))
+    (while (< version org-glance-cache:version)
+      (let* ((step (assq version org-glance-cache--schema-migrations))
+             (next (cadr step)))
+        (unless (and step (> next version) (<= next org-glance-cache:version))
+          (error "Missing private cache migration from %s" version))
+        (funcall (nth 2 step) db)
+        (org-glance-cache--add-migration-ledger db)
+        (sqlite-execute db "INSERT OR IGNORE INTO cache_migration VALUES(?,?,?)"
+                        (vector version next (nth 3 step)))
+        (sqlite-execute db (format "PRAGMA user_version=%d" next))
+        (setq version next)))
+    (unless (= (length org-glance-cache--schema)
+               (caar (sqlite-select db org-glance-cache--schema-object-count-sql)))
+      (dolist (statement org-glance-cache--schema)
+        (sqlite-execute db statement)))))
 
 (cl-defun org-glance-cache--prepare (db)
   "Configure DB for concurrent org-glance processes."
@@ -168,15 +240,14 @@
     (org-glance-cache--migrate graph)
     (let ((db (sqlite-open (org-glance-cache:path graph))))
       (unwind-protect
-          (progn
+          (let ((version (org-glance-cache--require-supported-version db)))
             (org-glance-cache--prepare db)
             (if (and (not org-glance-cache--staging-path)
-                     (/= org-glance-cache:version
-                         (caar (sqlite-select db "PRAGMA user_version"))))
+                     (/= org-glance-cache:version version))
                 (progn
                   (sqlite-close db)
                   (setq db nil)
-                  (org-glance-cache:recover graph)
+                  (org-glance-cache:upgrade graph)
                   (org-glance-cache--with-db graph fn))
               (org-glance-cache--transaction
                db (lambda () (org-glance-cache--initialise db)))
@@ -184,11 +255,24 @@
         (when db (sqlite-close db))))))
 
 (cl-defun org-glance-cache--read-db (graph fn &optional configuration-independent)
-  "Call FN against GRAPH's committed cache, repairing stale configuration once.
+  "Call FN against GRAPH's cache, migrating stale schemas or settings once.
 Close the stale read before repair and retry in a fresh pinned snapshot.
-CONFIGURATION-INDEPENDENT bypasses dependency checks for maintenance reads."
+CONFIGURATION-INDEPENDENT keeps maintenance reads from initiating repairs."
   (condition-case nil
       (org-glance-cache--read-db-once graph fn configuration-independent)
+    (org-glance-cache-schema-stale
+     (when (memq graph org-glance-cache--schema-repairs)
+       (user-error "Cache schema remained incompatible after automatic migration"))
+     (let ((org-glance-cache--schema-repairs (cons graph org-glance-cache--schema-repairs)))
+       (message "org-glance: preparing headline index; waiting for reconciliation...")
+       (org-glance-cache--wait-for-refresh graph)
+       (condition-case err
+           (progn
+             (org-glance-cache:upgrade graph)
+             (org-glance-cache--read-db graph fn configuration-independent))
+         (org-glance-storage-unsupported (signal (car err) (cdr err)))
+         (error (user-error "Automatic cache schema migration failed: %s"
+                            (error-message-string err))))))
     (org-glance-cache-configuration-stale
      (when (or org-glance-cache--staging-path
                (memq graph org-glance-cache--configuration-repairs))
@@ -301,6 +385,10 @@ An active reader closes when its current operation returns."
           (prog1
               (let ((compatible (= org-glance-cache:version
                                    (caar (sqlite-select db "PRAGMA user_version")))))
+                (unless compatible
+                  (org-glance-cache--require-supported-version db)
+                  (unless (or configuration-independent org-glance-cache--staging-path)
+                    (signal 'org-glance-cache-schema-stale nil)))
                 (unless (equal (org-glance-cache--reader-identity reader)
                                (org-glance-cache--file-identity
                                 (org-glance-cache--reader-path reader)))
@@ -332,6 +420,8 @@ Reuse an idle connection; retry one file replacement before invoking FN."
                 invoked)
             (unless identity
               (org-glance-cache:close-readers graph)
+              (unless (or configuration-independent org-glance-cache--staging-path)
+                (signal 'org-glance-cache-schema-stale nil))
               (cl-return nil))
             (condition-case err
                 (cl-return
@@ -730,8 +820,9 @@ METADATA-NEEDED permits digest-guarded reuse for unchanged historical nodes."
   "Return GRAPH's live compatibility-WAL metadata."
   (org-glance-graph--wal-headlines graph))
 
-(cl-defun org-glance-cache--family-ids (graph)
-  "Return immutable family IDs in GRAPH's canonical one- or two-level layout."
+(cl-defun org-glance-cache--family-ids (graph &optional include-legacy)
+  "Return family IDs in GRAPH's canonical one- or two-level layout.
+Include legacy data.org roots when INCLUDE-LEGACY is non-nil."
   (let ((seen (make-hash-table :test #'equal)) ids)
     (cl-labels
         ((children (directory)
@@ -741,7 +832,9 @@ METADATA-NEEDED permits digest-guarded reuse for unchanged historical nodes."
               (cl-remove-if-not
                (lambda (path) (and (file-directory-p path) (not (file-symlink-p path))))
                (directory-files directory t directory-files-no-dot-files-regexp)))))
-         (family-p (directory) (file-directory-p (f-join directory "versions")))
+         (family-p (directory)
+           (or (file-directory-p (f-join directory "versions"))
+               (and include-legacy (file-regular-p (f-join directory "data.org")))))
          (admit (id)
            (when (gethash id seen)
              (error "org-glance: family %s exists in portable and local storage" id))
@@ -889,10 +982,7 @@ METADATA-NEEDED permits digest-guarded reuse for unchanged historical nodes."
 
 (cl-defun org-glance-cache--repair-configuration (graph)
   "Wait for GRAPH's active worker, refresh settings and repair stale rows."
-  (let ((active (gethash graph org-glance-cache--refresh-processes)))
-    (when (processp active)
-      (while (process-live-p active)
-        (accept-process-output active 0.1))))
+  (org-glance-cache--wait-for-refresh graph)
   (org-glance-config:refresh graph)
   (unless (org-glance-cache--configuration-current-p graph)
     (condition-case err
@@ -900,6 +990,13 @@ METADATA-NEEDED permits digest-guarded reuse for unchanged historical nodes."
       (error
        (unless (org-glance-cache--configuration-current-p graph)
          (signal (car err) (cdr err)))))))
+
+(defun org-glance-cache--wait-for-refresh (graph)
+  "Wait for GRAPH's current reconciliation worker to exit."
+  (let ((active (gethash graph org-glance-cache--refresh-processes)))
+    (when (processp active)
+      (while (process-live-p active)
+        (accept-process-output active 0.1)))))
 
 (cl-defun org-glance-cache--inventory-proof-current-p (graph)
   "Return non-nil when GRAPH's last directory-entry proof remains current."
@@ -1009,6 +1106,7 @@ METADATA-NEEDED permits digest-guarded reuse for unchanged historical nodes."
 
 (cl-defun org-glance-cache--publish-on-connection (db stage version hook)
   "Publish STAGE on DB if its observed VERSION is unchanged, calling HOOK."
+  (org-glance-cache--require-supported-version db)
   (org-glance-cache--validate-stage stage)
   (when hook (funcall hook))
   (unless (equal version (caar (sqlite-select db "PRAGMA data_version")))
@@ -1056,6 +1154,7 @@ Call HOOK after validation and before publication when non-nil."
   (let ((db (sqlite-open live)))
     (unwind-protect
         (progn
+          (org-glance-cache--require-supported-version db)
           (org-glance-cache--prepare db)
           (org-glance-cache--publish-on-connection
            db stage (caar (sqlite-select db "PRAGMA data_version")) hook))
@@ -1080,6 +1179,7 @@ Call HOOK after validation and before publication when non-nil."
       (unwind-protect
           (progn
             (setq db (sqlite-open live))
+            (org-glance-cache--require-supported-version db)
             (org-glance-cache--prepare db)
             (let ((org-glance-cache--publication-check nil)
                   (version
@@ -1120,6 +1220,22 @@ Call HOOK after validation and before publication when non-nil."
         (sqlite-execute db "DELETE FROM source")
         (sqlite-execute db "UPDATE headline_family SET verified=0")
         (sqlite-execute db "DELETE FROM inventory_directory"))))))
+
+(defun org-glance-cache:upgrade (graph)
+  "Migrate GRAPH's known cache schema through an atomic staged generation.
+Preserve admitted evidence; reconstruct pre-configuration projections."
+  (let* ((path (org-glance-cache:path graph))
+         (version
+          (when (file-exists-p path)
+            (let ((db (sqlite-open path)))
+              (unwind-protect
+                  (org-glance-cache--require-supported-version db)
+                (sqlite-close db))))))
+    (cond
+     ((or (null version) (< version 10)) (org-glance-cache:recover graph))
+     ((< version org-glance-cache:version)
+      (org-glance-cache--with-staged-generation
+       graph (lambda () (org-glance-cache--with-db graph #'ignore)))))))
 
 (cl-defun org-glance-cache:recover (graph)
   "Rebuild GRAPH into a separate generation and publish it atomically."
@@ -1173,6 +1289,8 @@ Paths are sorted, distinct, relative to GRAPH, and exclude local cache state."
      (let ((paths
             (append
              (list (org-glance-graph--manifest-path graph))
+             (let ((schema (expand-file-name "SCHEMA" (org-glance-graph:meta-path graph))))
+               (when (file-regular-p schema) (list schema)))
              (org-glance-graph--live-segments graph)
              (let ((configuration (org-glance-config-file:path
                                    (org-glance-graph:directory graph))))
@@ -1586,16 +1704,19 @@ Return the number of families folded."
 
 (cl-defun org-glance-cache--reconcile-now (graph)
   "Bring GRAPH's cache generation current from authoritative families."
-  (org-glance-cache--migrate graph)
-  (if (file-exists-p (org-glance-cache:path graph))
-      (let ((proof-current
-             (org-glance-cache--inventory-proof-current-p graph))
-            (coherent (org-glance-cache--projection-coherent-p graph)))
-        (unless (and proof-current coherent)
-          (if coherent
-              (org-glance-cache:reconcile-inventory graph)
-            (org-glance-cache:reconcile-inventory graph t))))
-    (org-glance-cache:recover graph)))
+  (let ((org-glance-cache--retain-new-readers nil))
+    (org-glance-cache--migrate graph)
+    (if (file-exists-p (org-glance-cache:path graph))
+        (progn
+          (org-glance-cache:upgrade graph)
+          (let ((proof-current
+                 (org-glance-cache--inventory-proof-current-p graph))
+                (coherent (org-glance-cache--projection-coherent-p graph)))
+            (unless (and proof-current coherent)
+              (if coherent
+                  (org-glance-cache:reconcile-inventory graph)
+                (org-glance-cache:reconcile-inventory graph t)))))
+      (org-glance-cache:recover graph))))
 
 (cl-defun org-glance-cache:refresh-batch (directory)
   "Reconcile DIRECTORY once in the current noninteractive Emacs."
@@ -1650,6 +1771,7 @@ INITIAL queues startup work without consuming the first post-open refresh."
   (let ((active (gethash graph org-glance-cache--refresh-processes))
         (now (float-time)))
     (unless (or (memq graph org-glance-cache--configuration-repairs)
+                (memq graph org-glance-cache--schema-repairs)
                 (and (processp active) (process-live-p active))
                 (< (- now
                       (gethash graph org-glance-cache--refresh-failed-at
@@ -1706,7 +1828,8 @@ INITIAL queues startup work without consuming the first post-open refresh."
   (maphash
    (lambda (_directory graph)
      (condition-case err
-         (when (and (not (memq graph org-glance-cache--configuration-repairs))
+         (when (and (not (or (memq graph org-glance-cache--configuration-repairs)
+                             (memq graph org-glance-cache--schema-repairs)))
                     (file-directory-p (org-glance-graph:directory graph)))
            (org-glance-config:refresh graph)
            (org-glance-cache:refresh-async
@@ -1799,8 +1922,60 @@ Keep the first stored row, matching the ordinary point-read policy."
       projected))))
 
 (cl-defun org-glance-cache:headlines (graph)
-  "Return GRAPH's complete last committed searchable metadata projection."
-  (org-glance-cache--read-db graph #'org-glance-cache--read-projection))
+  "Return GRAPH's searchable metadata, repairing an unverified empty index.
+Wait for pending reconciliation before confirming an empty graph."
+  (or (org-glance-cache--read-searchable-once graph #'org-glance-cache--read-projection)
+      (unless org-glance-cache--staging-path
+        (org-glance-cache--resolve-empty-projection graph))))
+
+(defun org-glance-cache--read-searchable-once (graph select)
+  "Read SELECT from GRAPH, treating SQLite failures as a stale projection."
+  (condition-case nil
+      (org-glance-cache--read-db graph select)
+    (sqlite-error nil)))
+
+(defun org-glance-cache--empty-projection-current-p (graph)
+  "Return non-nil when GRAPH's empty projection agrees with its sources."
+  (condition-case nil
+      (and (org-glance-cache--inventory-proof-current-p graph)
+           (org-glance-cache--projection-coherent-p graph)
+           (let ((by-id (make-hash-table :test #'equal))
+                 (held (org-glance-cache--read-db
+                        graph
+                        (lambda (db)
+                          (sqlite-select db "SELECT logical_id,reconciled_epoch,verified,state FROM headline_family ORDER BY logical_id")))))
+             (dolist (family held) (puthash (car family) family by-id))
+             (and (cl-every (lambda (family) (member (nth 3 family) '("empty" "deleted"))) held)
+                  (cl-every
+                   (lambda (id)
+                     (when-let* ((family (gethash id by-id)))
+                       (org-glance-cache--inventory-current-p
+                        (list family) (cons id (org-glance-cache--inventory-event-ids
+                                               (org-glance-graph:headline-data-path graph id))))))
+                   (org-glance-cache--family-ids graph t)))))
+    (sqlite-error nil)))
+
+(defun org-glance-cache--resolve-empty-projection (graph)
+  "Return GRAPH's rows after verifying or rebuilding an empty projection."
+  (unless (sqlite-available-p)
+    (user-error "Headline search requires SQLite support in Emacs"))
+  (message "org-glance: checking headline index; waiting for reconciliation...")
+  (org-glance-cache--wait-for-refresh graph)
+  (or (org-glance-cache--read-searchable-once graph #'org-glance-cache--read-projection)
+      (unless (org-glance-cache--empty-projection-current-p graph)
+        (message "org-glance: rebuilding stale headline index...")
+        (condition-case err
+            (progn
+              (org-glance-cache:upgrade graph)
+              (or (org-glance-cache--read-db graph #'org-glance-cache--read-projection)
+                  (unless (org-glance-cache--empty-projection-current-p graph)
+                    (org-glance-cache:recover graph)
+                    (or (org-glance-cache--read-db graph #'org-glance-cache--read-projection)
+                        (unless (org-glance-cache--empty-projection-current-p graph)
+                          (error "Rebuilt index could not verify its source families"))))))
+          (error
+           (user-error "Automatic headline index repair failed: %s"
+                       (error-message-string err)))))))
 
 (cl-defun org-glance-cache--tag-candidates (db tags)
   "Return committed metadata carrying every member of TAGS from DB."
@@ -1862,24 +2037,29 @@ WHERE lower(json_each.value)=?)")
          (tags (org-glance-filter:tags spec))
          (candidates
           (if tags
-              (org-glance-cache--read-db
-               graph (lambda (db) (org-glance-cache--tag-candidates db tags)))
+              (or (org-glance-cache--read-searchable-once
+                   graph (lambda (db) (org-glance-cache--tag-candidates db tags)))
+                  (org-glance-cache:headlines graph))
             (org-glance-cache:headlines graph))))
     (cl-remove-if-not (org-glance-filter:predicate spec) candidates)))
 
 (defun org-glance-cache--overview-observe (graph select)
   "Return SELECT's Rows and source declarations from one admitted GRAPH snapshot."
-  (let ((org-glance-cache--context-receipts (make-hash-table :test #'eq)))
-    (org-glance-cache--read-db
-     graph
-     (lambda (db)
-       (mapcar (lambda (metadata)
-                 (let ((declarations (gethash metadata org-glance-cache--context-receipts :missing)))
-                   (when (eq declarations :missing)
-                     (error "Overview context requires a complete cache census for %s"
-                            (org-glance-headline-metadata:id metadata)))
-                   (cons metadata declarations)))
-               (funcall select db))))))
+  (let* ((org-glance-cache--context-receipts (make-hash-table :test #'eq))
+         (read-rows
+          (lambda (db)
+            (mapcar (lambda (metadata)
+                      (let ((declarations (gethash metadata org-glance-cache--context-receipts :missing)))
+                        (when (eq declarations :missing)
+                          (error "Overview context requires a complete cache census for %s"
+                                 (org-glance-headline-metadata:id metadata)))
+                        (cons metadata declarations)))
+                    (funcall select db)))))
+    (or (org-glance-cache--read-searchable-once graph read-rows)
+        (unless org-glance-cache--staging-path
+          (org-glance-cache:headlines graph)
+          (clrhash org-glance-cache--context-receipts)
+          (org-glance-cache--read-db graph read-rows)))))
 
 (defun org-glance-cache:overview-rows (graph filter)
   "Return (METADATA . DECLARATIONS) candidates in one committed GRAPH frame.

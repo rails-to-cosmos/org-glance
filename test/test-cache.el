@@ -198,12 +198,10 @@
     (let ((portable (f-join (org-glance-graph:meta-path graph) "projections"))
           (cache (org-glance-cache:path graph)))
       (should-not (file-exists-p portable))
-      (dolist (suffix '("" "-shm" "-wal"))
-        (ignore-errors (delete-file (concat cache suffix))))
-      (should-not (org-glance-cache:metadata graph "a"))
       (make-directory portable t)
       (org-glance--atomic-write (f-join portable "legacy.jsonl") "legacy\n")
-      (org-glance-cache:refresh graph)
+      (dolist (suffix '("" "-shm" "-wal"))
+        (ignore-errors (delete-file (concat cache suffix))))
       (should (equal "Alpha"
                      (org-glance-headline-metadata:title
                       (org-glance-cache:metadata graph "a"))))
@@ -955,6 +953,7 @@
         (sort
          (list
           (funcall relative (org-glance-graph--manifest-path graph))
+          (funcall relative (expand-file-name "SCHEMA" (org-glance-graph:meta-path graph)))
           (funcall relative (org-glance-graph:headline-meta-path graph))
           (funcall relative
                    (f-join family "versions" event "meta.json"))
@@ -1746,8 +1745,8 @@
                            (sqlite-select writer "SELECT title FROM headline"))))
         (sqlite-close writer)))))
 
-(ert-deftest org-glance-test:incompatible-schema-migrates-as-a-complete-generation ()
-  "Migration preserves pinned old Rows and publishes rebuilt Rows together."
+(ert-deftest org-glance-test:additive-schema-migrates-as-a-complete-generation ()
+  "Migration preserves Rows and publishes the new schema atomically."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
                           (org-glance-test:headline "migrate" "* Authoritative"))
@@ -1755,6 +1754,7 @@
       (unwind-protect
           (progn
             (sqlite-execute reader "UPDATE headline SET title='Retained'")
+            (sqlite-execute reader "DROP TABLE cache_migration")
             (sqlite-execute
              reader (format "PRAGMA user_version=%d" (1- org-glance-cache:version)))
             (sqlite-execute reader "BEGIN")
@@ -1766,8 +1766,10 @@
             (should (= (1- org-glance-cache:version)
                        (caar (sqlite-select reader "PRAGMA user_version"))))
             (sqlite-commit reader)
-            (should (equal '(("Authoritative"))
+            (should (equal '(("Retained"))
                            (sqlite-select reader "SELECT title FROM headline")))
+            (should (equal '((11 12 "upgrade"))
+                           (sqlite-select reader "SELECT * FROM cache_migration")))
             (should (= org-glance-cache:version
                        (caar (sqlite-select reader "PRAGMA user_version")))))
         (sqlite-close reader)))))

@@ -114,9 +114,10 @@ drift, ambiguity and publication failure refuse the artifact without replacing
 the live cache. Normal edits write no tracked checkpoint state.
 
 ** DONE Keep transient read entrypoints on the committed cache
-Materialize, Open link and Overview no longer cross the WAL census or cache
-writer boundary. Exact and list reads use transaction-free SQLite readers while
-reconciliation runs in the background. On the 6,780-Row reference projection,
+Nonempty Materialize, Open link and Overview reads use the committed cache
+while reconciliation runs in the background. Empty searchable results verify
+source inventory and automatically repair a stale index before reporting
+emptiness. Exact reads retain pinned SQLite snapshots. On the 6,780-Row reference projection,
 their p50 model-read times are 513.9, 269.9 and 96.3 ms respectively, with
 zero full censuses and zero maintenance transactions. Opening a selected
 Material Row now uses indexed relation and exact Row reads, reducing its p50

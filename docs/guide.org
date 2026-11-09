@@ -311,6 +311,50 @@ library failed to load:
 
 * Maintenance
 
+UI reads automatically migrate missing or older indexes. An empty headline
+picker, table or overview checks the index against the stored
+families. It waits for pending startup reconciliation and repairs a missing or
+stale empty index automatically. A verified empty graph offers capture guidance;
+an empty filter offers filter guidance. Repair failures report their cause.
+A newer unsupported schema requires an updated package in the running Emacs.
+
+** Storage schema versions
+
+Canonical layout and derived SQLite schemas evolve independently:
+
+| Component | Current version | Version record |
+|-----------+-----------------+----------------|
+| Canonical store layout | 1 | =.org-glance/meta/SCHEMA= |
+| WAL segment manifest | 2 | =meta/MANIFEST=, =version= |
+| Immutable headline events | 1 and 2 | =versions/<id>/meta.json=, =version= |
+| Compatibility WAL records | 1 | =meta/SCHEMA=, =wal= |
+| Private SQLite projection | 12 | =PRAGMA user_version= and =cache_migration= |
+
+Opening an unversioned store adopts layout 1 after legacy MANIFEST recovery;
+its immutable events retain their exact bytes. Layout migration steps commit
+=SCHEMA= atomically after success under a shared mkdir lock and repeat safely
+after interruption. Write operations preflight canonical formats once; cached
+format records revalidate file identity and mutation stamps. Legacy
+=data.org= roots continue to migrate before their next write. Unknown future
+store, MANIFEST and event versions refuse access before canonical writes.
+
+Private cache migrations prepare and validate a staged generation, then publish
+schema and rows in one transaction. Schemas 7→10 add configuration dependencies,
+10→11 add the projection index, and 11→12 add the migration ledger. The latter
+two upgrades preserve rows without parsing payloads. Earlier private projections
+reconcile against canonical families while retaining admitted event evidence;
+the former shared schema-6 cache is imported read-only. A failed stage leaves
+the live generation available for retry. Unknown future cache schemas refuse
+reads and migration. The migration ledger stays local to its cache.
+
+Layout 1 describes the existing Glance-compatible MANIFEST, event and WAL
+formats. Older Glance writers can continue producing those same formats;
+future canonical format migrations must quiesce active writers and require
+version guards in every writer before any format version increases. Canonical checkpoint inventories include
+=SCHEMA= and bind the store and cache versions separately.
+
+** Repair commands
+
 Everything derived rebuilds from the org files, so these are safe to run at any time:
 
 | Command                                    | What it does                                     |

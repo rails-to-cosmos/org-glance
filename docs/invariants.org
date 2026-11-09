@@ -696,7 +696,7 @@ today, up from 50.
 
 * Private cache
 
-35. *The private cache carries two distinct hashes.*  Schema version 7 at
+35. *The private cache carries two distinct hashes.*  Schema version 12 at
     =cache/org-glance.sqlite3= stores the raw file SHA-256 in =source.digest=,
     =headline.digest= and =org_headline.digest=.  The org-glance projection
     keeps its normalized content SHA-1 in =org_headline.content_hash=.
@@ -1076,3 +1076,23 @@ three saves per fixture. Baseline:
 - The same comparison measures cold property fill 470.312→431.922 ms, plain save 22.129→8.890 ms and crypt save 23.411→8.999 ms; paired 95% intervals resolve improvements for these five workloads and include zero for every remaining non-improving workload.
 - Physical payload reads at N=100 fall 300→100 for cold property fill and 900→100 for reindex; semantic result/work counters remain equal.
 - Write-path validation runs 770 ERT tests: 764 passes, six fixture/platform skips, zero failures; 32 production files compile warning-free, lint retains existing checkdoc diagnostics and relint warnings in unchanged config/utils files.
+
+* Storage migrations and empty search contracts
+
+49. Canonical layout versions use =meta/SCHEMA=; private cache versions use SQLite =user_version=; ordered migrations commit after success, preserve immutable event bytes and admitted evidence, and refuse unsupported future schemas.
+50. Empty searchable projections await pending reconciliation and verify canonical inventory before reporting emptiness; stale indexes repair automatically, while empty graphs, filter misses and failed repairs have distinct messages.
+
+- =storage-adoption-is-idempotent-and-preserves-canonical-bytes= verifies layout 0→1, missing-step refusal, retry and unchanged MANIFEST/event bytes.
+- =storage-refuses-future-canonical-formats= refuses newer store markers, MANIFESTs and event envelopes before canonical publication.
+- =cache-schema-upgrade-preserves-evidence-and-retries-atomically= verifies failed-stage rollback and a successful 11→12 retry with unchanged admitted event envelopes.
+- =cache-historical-private-migrations-preserve-evidence= covers schemas 7, 10 and 11; additive 10/11 upgrades forbid payload parsing; =additive-schema-migrates-as-a-complete-generation= verifies pinned-reader visibility.
+- =cache-refuses-future-schema-without-rebuilding= preserves newer cache rows/version across read and recovery attempts.
+- =material-picker-repairs-an-empty-stale-index= covers missing, older and emptied indexes; =material-picker-distinguishes-empty-filter-and-repair-failure= separates the three outcomes; =material-picker-waits-for-the-startup-worker= requires completion before duplicate recovery.
+- A read-only session probe found cache schema 10 loaded from =org-glance-1.57.0.0.20261104.0= against schema 11 with 7,167 indexed rows in =~/sync/views=; the older reader returned nil for the incompatible schema.
+- =empty-filtered-views-repair-missing-indexes= requires tag-list and overview recovery; =verified-deleted-graph-stays-empty= covers tombstones before and after compaction without repeated rebuilds.
+- Empty-search verification includes legacy data.org roots and tolerates retained tombstone evidence after canonical directory GC.
+- =storage-format-checks-are-per-operation= requires one preflight per batched mutation; =cache-current-schema-skips-creation-work= forbids DDL in healthy writes and restores missing derived tables.
+- =cache-read-migrates-schema-and-configuration-together= requires a point read to complete both repairs before returning metadata.
+- Final correctness validation runs 783 ERT tests: 777 passes, six fixture/platform skips, zero failures; 33 production files compile warning-free.
+- Five alternating compiled process pairs against =113814b= at N=100 and five samples retain equal fingerprints and semantic work; compatibility lookups measure 20.006→17.777 ms per 100 and materialize measures 5.149→5.151 ms.
+- The same comparison measures compaction 2.677→2.814 ms (paired 95% delta interval +0.032…+0.244 ms) and plain editor open 2.078→2.150 ms (+0.008…+0.101 ms); warm editor lookups increase below one microsecond; the user accepted these latency costs on 2026-11-09.

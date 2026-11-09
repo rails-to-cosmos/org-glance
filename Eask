@@ -68,6 +68,7 @@
   (load "test/test-headline.el")
   (load "test/test-graph.el")
   (load "test/test-version.el")
+  (load "test/test-storage.el")
   (load "test/test-cache.el")
   (load "test/test-cache-readers.el")
   (load "test/test-checkpoint.el")

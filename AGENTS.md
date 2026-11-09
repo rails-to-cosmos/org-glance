@@ -221,6 +221,9 @@ evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
 
 48. Material editors are keyed by canonical graph directory and logical ID, have no visited file, adopt exact publication receipts without reloading, preserve dirty drafts, and treat pending publication as outstanding work independently of the modified flag; durable incomplete events retry under their original identities.
 
+49. Canonical layout versions live in `meta/SCHEMA`; cache versions use SQLite `user_version`; ordered migrations commit their version after success, preserve immutable events and admitted evidence, and refuse unsupported future formats.
+50. Empty searchable projections wait for pending reconciliation and verify canonical inventory before reporting emptiness; stale indexes repair automatically, and repair failures remain distinct from empty graphs and filtered results.
+
 ## Known hazards
 
 Costs the code ships WITH; a letter is never reused, each pinned by a case in

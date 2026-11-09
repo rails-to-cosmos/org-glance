@@ -86,7 +86,7 @@
         (sqlite-close writer)))))
 
 (ert-deftest org-glance-test:cache-reader-reopens-replaced-and-missing-files ()
-  "A renamed replacement reopens cleanly; a missing cache stays absent."
+  "Reopen replacements and repair missing caches before public point reads."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "a" "* Alpha"))
     (let* ((path (org-glance-cache:path graph))
@@ -109,8 +109,11 @@
       (should-error (sqlite-select old "SELECT 1") :type 'error)
       (org-glance-cache:close-readers graph)
       (delete-file path)
-      (should-not (org-glance-cache--read-db graph #'identity))
-      (should-not (file-exists-p path)))))
+      (should-not (org-glance-cache--read-db graph #'identity t))
+      (should-not (file-exists-p path))
+      (should (equal "Alpha" (org-glance-headline-metadata:title
+                               (org-glance-cache:headline graph "a"))))
+      (should (file-exists-p path)))))
 
 (ert-deftest org-glance-test:cache-reader-retirement-defers-active-close ()
   "Explicit retirement preserves an active transaction until it returns."

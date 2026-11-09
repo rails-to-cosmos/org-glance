@@ -2,6 +2,111 @@
 
 (require 'test-helpers)
 
+(ert-deftest org-glance-test:material-picker-repairs-an-empty-stale-index ()
+  "Recover missing, older, emptied and damaged searchable projections."
+  (dolist (damage '(missing older emptied invalid-record legacy-emptied))
+    (org-glance-test:with-graph graph
+      (org-glance-graph:add graph (org-glance-test:headline "a" "* Alpha :x:"))
+      (when (eq damage 'legacy-emptied)
+        (let ((dir (org-glance-graph:headline-data-path graph "a"))
+              (contents (org-glance-graph:get-content graph "a")))
+          (org-glance-test:write (expand-file-name "data.org" dir) contents)
+          (delete-directory (expand-file-name "versions" dir) t)))
+      (org-glance-cache:refresh graph)
+      (org-glance-cache:close-readers graph)
+      (if (eq damage 'missing)
+          (delete-file (org-glance-cache:path graph))
+        (let ((db (sqlite-open (org-glance-cache:path graph))))
+          (unwind-protect
+              (progn
+                (sqlite-execute db "PRAGMA foreign_keys=ON")
+                (cond
+                 ((eq damage 'older) (sqlite-execute db "PRAGMA user_version=10"))
+                 ((eq damage 'invalid-record)
+                  (sqlite-execute db "UPDATE org_headline SET record='broken' ")
+                  (sqlite-execute db "UPDATE headline_projection SET record_payload='broken'"))
+                 (t
+                (sqlite-execute db "DELETE FROM org_headline")
+                (sqlite-execute db "DELETE FROM headline")
+                (sqlite-execute db "DELETE FROM headline_projection")
+                  (sqlite-execute db "DELETE FROM headline_family"))))
+            (sqlite-close db))))
+      (org-glance-test:offering (offered (caar offered))
+        (should (equal "a" (org-glance-headline-metadata:id
+                            (org-glance-material:completing-read graph))))))))
+
+(ert-deftest org-glance-test:material-picker-distinguishes-empty-filter-and-repair-failure ()
+  "Report verified emptiness, filtering and failed repairs separately."
+  (org-glance-test:with-graph graph
+    (cl-letf (((symbol-function 'org-glance-cache:recover)
+               (lambda (&rest _) (ert-fail "verified empty graph rebuilt"))))
+      (let ((err (should-error (org-glance-material:completing-read graph)
+                               :type 'user-error)))
+        (should (string-match-p "no searchable headlines" (error-message-string err)))
+        (should-not (string-match-p "reindex" (error-message-string err)))))
+    (org-glance-graph:add graph (org-glance-test:headline "a" "* Alpha"))
+    (cl-letf (((symbol-function 'org-glance-cache:recover)
+               (lambda (&rest _) (ert-fail "filtered graph rebuilt"))))
+      (let ((err (should-error
+                  (org-glance-material:completing-read graph :filter #'ignore)
+                  :type 'user-error)))
+        (should (string-match-p "no headlines match" (error-message-string err)))))
+    (org-glance-cache:close-readers graph)
+    (delete-file (org-glance-cache:path graph))
+    (cl-letf (((symbol-function 'org-glance-cache:recover)
+               (lambda (&rest _) (error "source unavailable"))))
+      (let ((err (should-error (org-glance-material:completing-read graph)
+                               :type 'user-error)))
+        (should (string-match-p "Automatic .* failed.*source unavailable"
+                                (error-message-string err)))))))
+
+(ert-deftest org-glance-test:material-picker-waits-for-the-startup-worker ()
+  "Use the worker's completed projection before deciding on recovery."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "a" "* Alpha"))
+    (org-glance-cache:close-readers graph)
+    (delete-file (org-glance-cache:path graph))
+    (let ((recover (symbol-function 'org-glance-cache:recover))
+          (waits 0))
+      (cl-letf (((symbol-function 'org-glance-cache--wait-for-refresh)
+                 (lambda (requested)
+                   (cl-incf waits)
+                   (funcall recover requested)))
+                ((symbol-function 'org-glance-cache:recover)
+                 (lambda (&rest _) (ert-fail "completed worker was rebuilt"))))
+        (org-glance-test:offering (offered (caar offered))
+          (should (equal "a" (org-glance-headline-metadata:id
+                              (org-glance-material:completing-read graph)))))
+        (should (= 1 waits))))))
+
+(ert-deftest org-glance-test:empty-filtered-views-repair-missing-indexes ()
+  "Recover the shared index before tag-list and overview queries return empty."
+  (dolist (read (list (lambda (graph)
+                       (org-glance-cache:headlines-for-filter graph '(:tags ("x"))))
+                     (lambda (graph)
+                       (mapcar #'car (org-glance-cache:overview-rows graph '(:tags ("x")))))))
+    (org-glance-test:with-graph graph
+      (org-glance-graph:add graph (org-glance-test:headline "a" "* Alpha :x:"))
+      (org-glance-cache:close-readers graph)
+      (delete-file (org-glance-cache:path graph))
+      (should (equal '("a") (mapcar #'org-glance-headline-metadata:id
+                                    (funcall read graph)))))))
+
+(ert-deftest org-glance-test:verified-deleted-graph-stays-empty ()
+  "Keep tombstoned families empty without rebuilding or resurrecting content."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "a" "* Alpha"))
+    (org-glance-graph:delete graph "a")
+    (org-glance-cache:refresh graph)
+    (cl-letf (((symbol-function 'org-glance-cache:recover)
+               (lambda (&rest _) (ert-fail "verified deleted graph rebuilt"))))
+      (should-not (org-glance-cache:headlines graph)))
+    (org-glance-graph:compact graph)
+    (should-not (org-glance-cache:headlines graph))
+    (cl-letf (((symbol-function 'org-glance-cache:recover)
+               (lambda (&rest _) (ert-fail "compacted deleted graph rebuilt again"))))
+      (should-not (org-glance-cache:headlines graph)))))
+
 (ert-deftest org-glance-test:material-completing-read ()
   "Selection lists live graph headlines and resolves the chosen metadata."
   (org-glance-test:with-graph graph

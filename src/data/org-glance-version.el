@@ -6,6 +6,7 @@
 (require 'f)
 (require 'json)
 (require 'subr-x)
+(require 'org-glance-storage)
 
 (cl-defstruct (org-glance-version (:predicate org-glance-version?)
                                   (:conc-name org-glance-version:))
@@ -182,6 +183,9 @@
 
 (cl-defun org-glance-version--candidate (dir headline raw payload)
   "Decode structurally local RAW metadata at DIR for HEADLINE."
+  (when (and (listp raw) (integerp (plist-get raw :version))
+             (> (plist-get raw :version) 2))
+    (org-glance-storage:require-version 'headline-event (plist-get raw :version)))
   (condition-case nil
       (let* ((schema (plist-get raw :version))
              (id (plist-get raw :id))

@@ -5,11 +5,18 @@ Notable user-facing changes.  Versions date-based
 
 * Unreleased
 
+** Added
+
+- =meta/SCHEMA= versions the canonical store layout; private SQLite schema 12 records ordered migrations in =cache_migration=.
+
 ** Changed
 
 - =org-glance-graph:add=, =org-glance-graph:reindex= and material saves reuse guarded source analysis and publication bytes.
 
 ** Fixed
+
+- =org-glance-cache= automatically migrates missing or older indexes for UI reads and repairs stale empty picker/list/overview projections.
+- Canonical storage and private cache readers refuse unsupported future versions without downgrading them.
 
 - Cache family discovery includes short IDs beside sharded siblings and skips deep session trees.
 - =org-glance-graph:get-headline= hides conflict/rejected-only logical IDs consistently with cache readers.

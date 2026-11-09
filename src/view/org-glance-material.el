@@ -85,9 +85,9 @@ FILTER, if non-nil, is a predicate on the metadata."
             (dir (org-glance-graph:directory graph)))
         (user-error
          (if (zerop total)
-             (format "org-glance: no headlines in the graph at `%s' -- capture some, or run `M-x org-glance-reindex' if you upgraded"
+             (format "org-glance: no searchable headlines in the graph at `%s'; capture a headline to get started"
                      dir)
-           (format "org-glance: no headlines match the active filter `%s' (of %d in the graph at `%s') -- clear it with `c' in `org-glance-transient', or run `M-x org-glance-reindex' if you upgraded"
+           (format "org-glance: no headlines match the active filter `%s' (of %d in the graph at `%s'); clear it with `c' in `org-glance-transient'"
                    (org-glance-filter:describe org-glance-filter-spec) total dir)))))
     (cdr (assoc (completing-read prompt candidates nil t) candidates))))
 

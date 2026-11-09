@@ -32,7 +32,7 @@
    #'car
    (sqlite-select
     db
-    "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name!='inventory_directory' ORDER BY name")))
+    "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT IN ('inventory_directory','cache_migration') ORDER BY name")))
 
 (cl-defun org-glance-checkpoint--columns (db table)
   "Return TABLE's columns in schema order."
@@ -119,6 +119,8 @@ LOCALIZE translates a portable path back into GRAPH."
          (paths
           (append
            (list (org-glance-graph--manifest-path graph))
+           (let ((schema (expand-file-name "SCHEMA" (org-glance-graph:meta-path graph))))
+             (when (file-regular-p schema) (list schema)))
            (org-glance-graph--live-segments graph)
            (when (file-regular-p configuration) (list configuration))
            (when (file-directory-p data)
@@ -155,7 +157,8 @@ LOCALIZE translates a portable path back into GRAPH."
             (propertyInheritance . ,(prin1-to-string org-use-property-inheritance))
             (tagInheritanceExclusions
              . ,(prin1-to-string org-tags-exclude-from-inheritance)))))
-    `((cacheSchema . ,org-glance-cache:version)
+    `((storeSchema . ,(org-glance-storage:check (org-glance-graph:meta-path graph)))
+      (cacheSchema . ,org-glance-cache:version)
       (parser . ,(format "emacs-%s-org-%s" emacs-major-version (org-version)))
       (producer . ,org-glance-checkpoint:producer)
       (configurationSha256
