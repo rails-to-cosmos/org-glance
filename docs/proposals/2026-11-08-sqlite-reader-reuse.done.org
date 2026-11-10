@@ -71,3 +71,22 @@ The [[file:2026-11-08-performance-gate-measures-the-live-path.done.org][producti
 baseline arms with named synthetic workloads and compiled Git comparisons.
 The measurements above describe the earlier experiment; current commands and
 measurement boundaries are documented in [[file:../guide.org::*Benchmark commands and tiers][the guide]].
+
+* Searchable projection reuse
+
+Overview tag selection and the Materialize/Open pickers reuse the complete
+searchable projection on each retained reader. The reader compares SQLite's
+=PRAGMA data_version= inside the pinned transaction; peer commits invalidate
+reuse. Reader retirement and file replacement discard the projection. Each
+caller receives a fresh list spine of read-only metadata structs. Overview
+reads requiring source declaration receipts compute their projection afresh.
+
+Overview tag preparation uses the same temporary 64 MiB allocation budget as
+the material picker and restores the caller's policy before input. The
+interactive harness measures each command through entry to =completing-read=;
+its existing full materialize measurement still includes editor creation.
+
+Baseline: [[https://github.com/rails-to-cosmos/org-glance/commit/2f97cfa][2f97cfa]],
+=src/data/org-glance-cache.el= line 1878 and
+=src/view/org-glance-view.el= line 47. Work and timing evidence lives in
+[[file:../invariants.org::*Warm interactive measurement contracts][the interactive contracts]].

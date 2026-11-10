@@ -1002,7 +1002,15 @@ three saves per fixture. Baseline:
 
 * Warm interactive measurement contracts
 
-- =cache-decodes-equal-payloads-once-per-snapshot= bounds one ordinary/family payload to one deserialization per committed read and verifies fresh content on the next read.
+- Searchable metadata projections reuse a retained reader's pinned =PRAGMA data_version=; file replacement, retirement and peer commits invalidate reuse; overview declaration receipts compute afresh.
+- =picker-projection-reuses-unchanged-snapshots= bounds repeated tag and material candidate preparation to zero projection scans and deserializations; result list spines remain fresh.
+- =picker-projection-keeps-pinned-snapshots= verifies an in-read peer commit preserves the pinned result and invalidates the next snapshot.
+- =overview-selection-restores-gc-before-prompt= checks Overview's temporary 64 MiB allocation budget and caller-policy restoration before input.
+- Three alternating compiled pairs against [[https://github.com/rails-to-cosmos/org-glance/commit/2f97cfa][2f97cfa]] (=python3 tools/bench.py interactive --baseline 2f97cfa --quick --sizes 1000 --samples 5 --pairs 3=) measure warm pre-prompt Overview 19.777→1.306 ms, Materialize 22.408→3.598 ms and Open 22.557→3.601 ms; fingerprints match and each preparation drops 1,000 deserializations to zero.
+- The same three-pair interactive comparison at N=10,000 (=--sizes 10000=) measures Overview 199.053→11.401 ms, Materialize 221.261→31.298 ms and Open 222.342→31.435 ms; fingerprints match and each preparation drops 10,000 deserializations to zero; frontend rendering is outside the measurement.
+- Projection-reuse validation: Emacs 31.1.90 passes 781 tests with six environment skips and zero failures; compilation is warning-free; reader and material comparisons retain work counters with latency differences spanning zero; three-pair graph comparisons at N=1,000 preserve all fingerprints and show no latency regression outside paired uncertainty.
+
+- =cache-decodes-equal-payloads-once-per-snapshot= bounds one ordinary/family payload to one deserialization across unchanged searchable snapshots and verifies fresh content after a write.
 - =material-candidates-linear-label-counting= bounds 1,000 candidate labels to 2,000 hash lookups and preserves duplicate disambiguation and filtered order.
 - =material-selection-restores-gc-before-prompt= checks the temporary 64 MiB picker allocation budget, restoration before input and preservation of larger caller budgets.
 - The retired embedded interactive A/B experiment ran seven warm baseline/current pairs on 7,157 =~/sync/views= Rows: median metadata 241.61 → 169.82 ms, labels 69.49 → 10.75 ms, total 308.36 → 180.01 ms, deserializations 14,308 → 7,385; complete picker fingerprints match.

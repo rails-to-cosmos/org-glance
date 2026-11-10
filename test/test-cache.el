@@ -1966,7 +1966,7 @@
 ;;; test-cache.el ends here
 
 (ert-deftest org-glance-test:cache-decodes-equal-payloads-once-per-snapshot ()
-  "Equal payloads share decoding within a read and refresh on the next read."
+  "Equal payloads share decoding within a snapshot and refresh after a write."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
       (org-glance-test:headline "decode" "* TODO Decode :work:" "body"))
@@ -1974,11 +1974,11 @@
           (decode (symbol-function 'org-glance-headline-metadata:deserialize)))
       (cl-letf (((symbol-function 'org-glance-headline-metadata:deserialize)
                  (lambda (record) (cl-incf decoded) (funcall decode record))))
-        (dotimes (_ 2)
+        (dotimes (iteration 2)
           (let ((before decoded))
             (should (equal "Decode" (org-glance-headline-metadata:title
                                       (car (org-glance-cache:headlines graph)))))
-            (should (= 1 (- decoded before)))))))
+            (should (= (if (zerop iteration) 1 0) (- decoded before)))))))
     (org-glance-graph:add graph
       (org-glance-test:headline "decode" "* TODO Updated :work:" "new body"))
     (should (equal "Updated" (org-glance-headline-metadata:title

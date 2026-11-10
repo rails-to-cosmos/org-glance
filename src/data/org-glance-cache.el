@@ -295,7 +295,10 @@ CONFIGURATION-INDEPENDENT keeps maintenance reads from initiating repairs."
 
 (cl-defstruct (org-glance-cache--reader
                (:constructor org-glance-cache--make-reader))
-  path identity db)
+  path identity db projection-version projection)
+
+(defvar org-glance-cache--current-reader nil
+  "Reader leased by the current committed transaction.")
 
 (defvar org-glance-cache--readers nil
   "Read connections in most-recently-used order.")
@@ -376,6 +379,7 @@ An active reader closes when its current operation returns."
 (defun org-glance-cache--call-reader (graph reader fn configuration-independent)
   "Call FN in READER's fresh GRAPH snapshot with CONFIGURATION-INDEPENDENT."
   (let* ((db (org-glance-cache--reader-db reader))
+         (org-glance-cache--current-reader reader)
          (org-glance-cache--active-readers (cons db org-glance-cache--active-readers))
          (org-glance-cache--decoded-records (make-hash-table :test #'equal))
          complete)
@@ -1876,7 +1880,23 @@ Keep the first stored row, matching the ordinary point-read policy."
      collect (progn (puthash (car row) t seen) row))))
 
 (cl-defun org-glance-cache--read-projection (db)
-  "Return the complete committed live metadata projection from DB."
+  "Return DB's searchable metadata with a fresh list of read-only structs.
+Reuse the leased reader's projection until another connection commits."
+  (let ((reader org-glance-cache--current-reader))
+    (if (or (null reader) org-glance-cache--context-receipts)
+        (org-glance-cache--compute-projection db)
+      (let ((version (caar (sqlite-select db "PRAGMA data_version"))))
+        (unless (equal version
+                       (org-glance-cache--reader-projection-version reader))
+          (setf (org-glance-cache--reader-projection-version reader) nil
+                (org-glance-cache--reader-projection reader) nil)
+          (let ((projection (org-glance-cache--compute-projection db)))
+            (setf (org-glance-cache--reader-projection reader) projection
+                  (org-glance-cache--reader-projection-version reader) version)))
+        (copy-sequence (org-glance-cache--reader-projection reader))))))
+
+(cl-defun org-glance-cache--compute-projection (db)
+  "Compute the complete committed live metadata projection from DB."
   (let* ((ordinary
           (delq nil
                 (mapcar (lambda (row)
@@ -1923,7 +1943,8 @@ Keep the first stored row, matching the ordinary point-read policy."
 
 (cl-defun org-glance-cache:headlines (graph)
   "Return GRAPH's searchable metadata, repairing an unverified empty index.
-Wait for pending reconciliation before confirming an empty graph."
+Return a fresh list of read-only structs.  Wait for pending reconciliation
+before confirming an empty graph."
   (or (org-glance-cache--read-searchable-once graph #'org-glance-cache--read-projection)
       (unless org-glance-cache--staging-path
         (org-glance-cache--resolve-empty-projection graph))))

@@ -5,6 +5,16 @@ Notable user-facing changes.  Versions date-based
 
 * Unreleased
 
+* 1.61.1.0.20261110.0
+
+** Added
+
+- =make bench-interactive= measures Overview, Materialize and Open through entry to =completing-read=; the commit gate checks matching candidate fingerprints, latency and decode counts.
+
+** Changed
+
+- =org-glance-overview=, =org-glance-materialize= and =org-glance-open= reuse unchanged searchable projections before completion; Overview batches tag-preparation allocations.
+
 * 1.61.0.0.20261109.0
 
 ** Added

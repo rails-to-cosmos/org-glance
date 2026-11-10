@@ -47,10 +47,11 @@ A missing snapshot or PATH counts as stale (invariant 10)."
 (cl-defun org-glance-view:completing-read-tag (&optional (prompt "Tag (empty for all): "))
   "Prompt with PROMPT for a tag from the graph's headlines; empty input = nil."
   (org-glance-ensure-init)
-  (let ((choice (completing-read
-                 prompt
+  (let* ((tags (let ((gc-cons-threshold
+                      (max gc-cons-threshold (* 64 1024 1024))))
                  (org-glance-graph:tags
-                  org-glance-graph (org-glance-cache:headlines org-glance-graph)))))
+                  org-glance-graph (org-glance-cache:headlines org-glance-graph))))
+         (choice (completing-read prompt tags)))
     (unless (string-empty-p choice) choice)))
 
 (defcustom org-glance-view-fill-frame t

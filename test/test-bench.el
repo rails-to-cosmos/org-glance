@@ -54,7 +54,8 @@
                              when (string-prefix-p "OG_BENCH_JSON " line)
                              collect (json-parse-string (substring line 14) :object-type 'plist)))
            (names (delete-dups (mapcar (lambda (record) (plist-get record :harness)) records)))
-           (interactive (cl-find "interactive" records :key (lambda (record) (plist-get record :harness))
+           (interactive (cl-find "org-glance-materialize (automatic selection)" records
+                                 :key (lambda (record) (plist-get record :operation))
                                  :test #'equal))
            (reader (cl-find "readers" records :key (lambda (record) (plist-get record :harness))
                             :test #'equal)))
@@ -87,6 +88,18 @@
                       (lambda (record) (equal "material" (plist-get record :harness))) records))
         (should (= (if (string-prefix-p "save " (plist-get record :operation)) 6 0)
                    (plist-get (aref (plist-get record :work) 0) :family-observations))))
+      (dolist (operation '("org-glance-overview (before prompt)"
+                           "org-glance-materialize (before prompt)"
+                           "org-glance-open (before prompt)"))
+        (let ((record (cl-find operation records
+                               :key (lambda (entry) (plist-get entry :operation))
+                               :test #'equal)))
+          (should record)
+          (mapc (lambda (work)
+                  (should (= (if (string-prefix-p "org-glance-overview" operation) 1 3)
+                             (plist-get work :candidates)))
+                  (should (= 0 (plist-get work :deserializations))))
+                (plist-get record :work))))
       (should (= 3 (plist-get (aref (plist-get interactive :work) 0) :candidates)))
       (should (= 0 (plist-get (aref (plist-get reader :work) 0) :opens)))
       (should (= 100 (plist-get (aref (plist-get reader :work) 0) :deserializations))))))

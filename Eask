@@ -53,7 +53,7 @@
   "Measure plain and encrypted editor lifecycles."
   (org-glance--eask-bench "material"))
 (eask-defcommand bench-interactive
-  "Measure warm materialize command preparation."
+  "Measure Overview/Materialize/Open prompt preparation and full materialize."
   (org-glance--eask-bench "interactive"))
 (eask-defcommand bench-readers
   "Measure warm committed UI point reads."
