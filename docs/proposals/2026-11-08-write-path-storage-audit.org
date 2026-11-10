@@ -253,16 +253,18 @@ zero on insert.  Items 1 and 2 hold as implemented.
    |      128 |         258 |          13.78 |            12.28 |
    |      512 |        1026 |          54.45 |            50.16 |
 
-   Proof size is 2V + 2 and cost is linear.  =~/sync/views= holds one family of
-   514 versions, its runner-up at 33, so that headline pays about 54 ms of
-   =stat= per observation and about 109 ms per save at two observations, growing
-   with each further save.  Reuse still beats re-walking, which read and parsed
-   those same files.  =virtual-save-family-work-contract= exercises depths 1, 8
-   and 32 and asserts call counts, which hold constant in V, so this cost may
-   grow unbounded while the gate stays green; at depth 32 it measures 3.58 ms.
-   Open as [[file:2026-11-09-bound-family-revalidation.proposed.org][Bound family
-   revalidation]].  Item 4's generation counter is the structural answer and now
-   carries a measured ceiling.
+   Proof size was 2V + 2 and reuse cost was linear.  =~/sync/views= holds one
+   family of 514 versions, its runner-up at 33.  The =graph:add= API performs
+   one reuse check when writing a full headline to an existing ID, costing
+   about 49 ms at that depth in the implementation comparison.  Ordinary
+   interactive capture and duplication write fresh IDs and reuse one-version
+   families.  Material open and save perform zero reuse checks; their two
+   fresh observations provide no oracle for reuse work.  The revised
+   =graph-add-family-revalidation-work-contract= requires one successful reuse
+   and four stat calls at depths 1, 8, 32 and 512.
+   Closed 2026-11-10 by [[file:2026-11-09-bound-family-revalidation.done.org][Bound family
+   revalidation]]; ordinary reuse checks root, legacy and structural leaf stamps,
+   with exhaustive proof retained for repair.
 2. *The remaining write cost has moved.*  =cache--after-append= holds 54% of an
    insert and 35% of a reindex, from 83% and 74% in the audit's baseline, and
    stays the largest single block at one call per batch.  =graph:put-content= is

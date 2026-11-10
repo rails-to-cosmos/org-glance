@@ -15,7 +15,10 @@
 
 (cl-defstruct (org-glance-version-observation
                (:conc-name org-glance-version-observation:))
-  inventory history payloads proof)
+  inventory history leaves payloads proof frontier directory (reusable t))
+
+(defvar org-glance-version--exhaustive-revalidation nil
+  "Whether maintenance revalidates every recorded family path.")
 
 (defvar org-glance-version--observations nil
   "Family observations shared within one write operation.")
@@ -25,6 +28,9 @@
 
 (defvar org-glance-version--observed-paths nil
   "Read-time source stamps collected for the current family observation.")
+
+(defvar org-glance-version--observed-symlink nil
+  "Whether the current family observation read a symlink source.")
 
 (defun org-glance-version--record-path (path attributes)
   "Record PATH's read-time ATTRIBUTES in the current observation."
@@ -49,7 +55,11 @@
 
 (defun org-glance-version--payload-attributes-at (path)
   "Return PATH's identity and mutation stamp, excluding access time."
-  (when (not (file-symlink-p path))
+  (if (file-symlink-p path)
+      (progn
+        (when org-glance-version--observed-paths
+          (setq org-glance-version--observed-symlink t))
+        nil)
     (when-let* ((attributes (file-attributes path)))
       (list (file-attribute-size attributes)
             (file-attribute-modification-time attributes)
@@ -86,13 +96,38 @@
           (puthash path payload org-glance-version--payloads))
         payload))))
 
-(defun org-glance-version--observation-current-p (observation)
-  "Return non-nil when OBSERVATION's source stamps still agree."
-  (let ((proof (org-glance-version-observation:proof observation)))
-    (and proof
-         (cl-loop for path being the hash-keys of proof using (hash-values stamp)
-                  always (and (not (file-symlink-p path))
-                              (equal stamp (org-glance-version--payload-attributes-at path)))))))
+(defun org-glance-version--observation-current-p (observation &optional exhaustive)
+  "Return non-nil when OBSERVATION's frontier stamps still agree.
+With EXHAUSTIVE, compare every recorded source stamp."
+  (and (org-glance-version-observation:reusable observation)
+       (let ((proof
+              (if exhaustive
+                  (org-glance-version-observation:proof observation)
+                (or (org-glance-version-observation:frontier observation)
+                    (setf (org-glance-version-observation:frontier observation)
+                          (org-glance-version--frontier-proof observation))))))
+         (and proof
+              (cl-loop for path being the hash-keys of proof
+                       using (hash-values stamp)
+                       always (and (not (file-symlink-p path))
+                                   (equal stamp
+                                          (org-glance-version--payload-attributes-at
+                                           path))))))))
+
+(defun org-glance-version--frontier-proof (observation)
+  "Return OBSERVATION's recorded root, legacy and structural leaf stamps."
+  (let* ((proof (org-glance-version-observation:proof observation))
+         (frontier (make-hash-table :test #'equal))
+         (directory (org-glance-version-observation:directory observation)))
+    (when proof
+      (dolist (path (list (f-join directory "versions")
+                         (f-join directory "data.org")))
+        (puthash path (gethash path proof) frontier))
+      (dolist (version (org-glance-version-observation:leaves observation))
+        (dolist (name '("data.org" "meta.json"))
+          (let ((path (f-join (org-glance-version:directory version) name)))
+            (puthash path (gethash path proof) frontier))))
+      frontier)))
 
 (cl-defun org-glance-version:path (headline-dir version-id)
   "Return VERSION-ID's immutable directory below HEADLINE-DIR."
@@ -330,18 +365,21 @@ Each returned node carries payload integrity in its `valid' slot."
     (org-glance-version:observe headline-dir headline))))
 
 (cl-defun org-glance-version:observe
-    (headline-dir headline &optional (inventory nil inventory-supplied-p))
+    (headline-dir headline &optional (inventory nil inventory-supplied-p)
+                  (exhaustive org-glance-version--exhaustive-revalidation))
   "Observe HEADLINE in HEADLINE-DIR with optional INVENTORY.
-Reuse a current operation snapshot; treat its returned contents as immutable."
+Reuse a current operation snapshot; treat its returned contents as immutable.
+With EXHAUSTIVE, revalidate every source, including historical versions."
   (let* ((key (org-glance-version--observation-key headline-dir headline))
          (held (and org-glance-version--observations
                     (gethash key org-glance-version--observations))))
-    (if (and held (org-glance-version--observation-current-p held)
+    (if (and held (org-glance-version--observation-current-p held exhaustive)
              (or (not inventory-supplied-p)
                  (equal inventory (org-glance-version-observation:inventory held))))
         held
       (let* ((org-glance-version--observed-paths
               (and org-glance-version--observations (make-hash-table :test #'equal)))
+             (org-glance-version--observed-symlink nil)
              (root (f-join headline-dir "versions"))
              (_ (org-glance-version--record-current-path root))
              (inventory (if inventory-supplied-p
@@ -351,7 +389,10 @@ Reuse a current operation snapshot; treat its returned contents as immutable."
              (observation (org-glance-version--observe-directories
                            headline-dir headline inventory directories)))
         (setf (org-glance-version-observation:proof observation)
-              org-glance-version--observed-paths)
+              org-glance-version--observed-paths
+              (org-glance-version-observation:directory observation) headline-dir
+              (org-glance-version-observation:reusable observation)
+              (not org-glance-version--observed-symlink))
         (when org-glance-version--observations
           (puthash key observation org-glance-version--observations))
         observation))))
@@ -434,15 +475,15 @@ Reuse a current operation snapshot; treat its returned contents as immutable."
              (and (org-glance-version--version-event-p event)
                   (not (member (org-glance-version:id event) known))))
            stored))
-    (make-org-glance-version-observation
-     :inventory inventory
-     :payloads payloads
-     :history
-     (if (and legacy
-              (not (cl-find (org-glance-version:id legacy) stored
-                            :key #'org-glance-version:id :test #'equal)))
-         (cons legacy stored)
-       stored))))
+    (let ((history
+           (if (and legacy
+                    (not (cl-find (org-glance-version:id legacy) stored
+                                  :key #'org-glance-version:id :test #'equal)))
+               (cons legacy stored)
+             stored)))
+      (make-org-glance-version-observation
+       :inventory inventory :payloads payloads :history history
+       :leaves (org-glance-version:leaves history)))))
 
 (cl-defun org-glance-version--legacy (headline-dir headline)
   "Return HEADLINE's implicit legacy root below HEADLINE-DIR."
@@ -489,34 +530,42 @@ Reuse a current operation snapshot; treat its returned contents as immutable."
 
 (cl-defun org-glance-version:leaves (versions)
   "Return VERSIONS not named as another version's parent."
-  (let* ((versions (cl-remove-if-not #'org-glance-version--version-event-p
-                                     versions))
-         (parents (cl-loop for version in versions
-                          append (org-glance-version:parents version))))
+  (let ((versions (cl-remove-if-not #'org-glance-version--version-event-p versions))
+        (parents (make-hash-table :test #'equal)))
+    (dolist (version versions)
+      (dolist (parent (org-glance-version:parents version))
+        (puthash parent t parents)))
     (cl-remove-if (lambda (version)
-                    (member (org-glance-version:id version) parents))
+                    (gethash (org-glance-version:id version) parents))
                   versions)))
 
 (cl-defun org-glance-version:current (headline-dir headline)
-  "Return HEADLINE's unrejected structural leaves, including damaged payloads."
-  (org-glance-version:candidates
-   (org-glance-version:history headline-dir headline)))
+  "Return a fresh list of HEADLINE's unrejected structural leaves.
+Include leaves with damaged payloads."
+  (let ((observation (org-glance-version:observe headline-dir headline)))
+    (copy-sequence
+     (org-glance-version:candidates
+      (org-glance-version-observation:history observation)
+      :leaves (org-glance-version-observation:leaves observation)))))
 
-(cl-defun org-glance-version:candidates (history)
-  "Return HISTORY's structural Leaves after admitted rejections."
+(cl-defun org-glance-version:candidates
+    (history &key (leaves (org-glance-version:leaves history)))
+  "Return HISTORY's unrejected candidates from structural LEAVES.
+Derive LEAVES from HISTORY when omitted."
   (let ((rejected (cl-loop for event in history
                            when (eq 'rejection (org-glance-version:kind event))
                            append (org-glance-version:targets event))))
     (cl-remove-if (lambda (version)
                     (member (org-glance-version:id version) rejected))
-                  (org-glance-version:leaves history))))
+                  leaves)))
 
 (cl-defun org-glance-version:prune (headline-dir headline depth)
   "Retain DEPTH generations of HEADLINE history and return removed ids.
 Zero keeps all history.  A family with several structural leaves is unchanged."
   (when (> depth 0)
-    (let* ((history (org-glance-version:history headline-dir headline))
-           (leaves (org-glance-version:leaves history)))
+    (let* ((observation (org-glance-version:observe headline-dir headline))
+           (history (org-glance-version-observation:history observation))
+           (leaves (org-glance-version-observation:leaves observation)))
       (when (= 1 (length leaves))
         (let ((by-id (make-hash-table :test #'equal))
               (kept (make-hash-table :test #'equal))

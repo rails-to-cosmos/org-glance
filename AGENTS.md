@@ -211,7 +211,8 @@ evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
     are wake-up hints. One operation derives History, payload integrity, parsing,
     and projection from one observation and re-observes only after mutation. A
     writer commits its family projection before success. Operation-local receipts
-    revalidate source identity and mutation stamps; symlinks always read afresh.
+    revalidate the selected source's identity and mutation stamps; symlinks always read afresh.
+    Observation reuse checks root, legacy and structural-leaf stamps and trusts unread ancestors under invariant 40; exhaustive repair checks all recorded stamps.
 47. Extraction decrypts scratch content before selection and requires acknowledged
     clipboard publication; Linux locks source payload buffers and enforces
     sleep-inclusive deadlines; X11 sends payloads directly through XCB's raw

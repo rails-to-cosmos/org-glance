@@ -485,11 +485,18 @@
 
 (ert-deftest org-glance-test:virtual-save-family-work-contract ()
   "A save observes its family once before writing and once after mutation."
-  (dolist (depth '(1 8 32))
+  (dolist (depth '(1 8 32 512))
     (org-glance-test:with-graph graph
-      (dotimes (index depth)
-        (org-glance-graph:add graph
-          (org-glance-test:headline "a" (format "* History %d" index))))
+      (let ((dir (org-glance-graph:headline-data-path graph "a")) parents)
+        (dotimes (index depth)
+          (setq parents
+                (list (org-glance-version:id
+                       (org-glance-version:write-snapshot
+                        dir "a" parents "test"
+                        (org-glance-test:org-with-id
+                         (format "* History %d" index) "a"))))))
+        (org-glance-cache:reconcile-families graph '("a"))
+        (should (= depth (length (org-glance-version:inventory dir)))))
       (org-glance-test:with-material (buffer graph "a")
         (let ((observations 0) (parses 0)
               (parse (symbol-function 'org-glance-headline--from-string))

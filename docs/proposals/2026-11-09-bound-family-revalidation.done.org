@@ -1,0 +1,354 @@
+#+TITLE: Bound family revalidation by version count
+#+DATE: 2026-11-09
+
+Status: *done* (2026-11-10) · found by the review in
+[[file:2026-11-08-write-path-storage-audit.org::*Independent review][the write path and storage audit]]
+
+* Problem
+
+Operation-local family observations made write analysis reusable
+([[https://github.com/rails-to-cosmos/org-glance/commit/113814b][113814b]]).  A
+reuse revalidates the observation by re-stating every path it recorded, two per
+version plus the =versions= root and the legacy blob —
+=src/data/org-glance-version.el= line 339 at
+[[https://github.com/rails-to-cosmos/org-glance/commit/e464239][e464239]].  The check is therefore linear in a
+family's version count.
+
+| Versions | Proof paths | =current-p= ms | Observe reuse ms |
+|----------+-------------+----------------+------------------|
+|        8 |          18 |           0.92 |             0.95 |
+|       32 |          66 |           3.58 |             3.49 |
+|      128 |         258 |          13.78 |            12.28 |
+|      512 |        1026 |          54.45 |            50.16 |
+
+=~/sync/views= holds one family of 514 versions against a runner-up of 33.
+The original measurement puts one reuse check at about 54 ms; the implementation
+comparison below measures 49 ms.  =graph:add= performs one such check when
+writing a full headline to an existing ID.  Ordinary interactive capture and
+duplication write fresh IDs and reuse a one-version family.  Deep-family reuse
+is exercised by API callers, including migration of changed existing IDs,
+tests, benchmarks and plugins.  Material open and save
+perform fresh observations and zero reuse checks.
+
+Reuse beats the walk it replaced, which read and parsed the same files.  The gap
+is the gate.  =virtual-save-family-work-contract= exercises depths 1, 8 and 32
+and asserts call counts, which are constant in V, so a revalidation cost linear
+in V stays green.  Depth 32 measures 3.58 ms, an order of magnitude below the
+live store's deepest family, so the ladder's top rung hides it.
+
+* Design
+
+1. *Extend the depth ladder to 512.*  =virtual-save-family-work-contract= gains
+   a 512-version case.  The existing count assertions carry over unchanged.
+2. *Assert the stat count.*  A contract counts =file-attributes= calls inside
+   one =graph:add= reuse and bounds them independently of the version count.  Counting
+   is deterministic, so this is a work-counter oracle in the project's existing
+   style.
+3. *Record the ceiling.*  =docs/invariants.org= gains the measured revalidation
+   table under the write-path contracts, so a later change compares against it.
+4. *Revalidate against the frontier.*  An observation's proof records the
+   =versions= root's own stamps and the entries it listed.  A directory's mtime
+   advances when a child is added or removed, so comparing the root's stamp plus
+   the inventory it yielded detects published and retired versions in constant
+   work.  Per-version stamps then guard only the versions an operation actually
+   read, which for a save is its selected leaf and the structural leaves it
+   publishes against.
+5. *Keep full proof for the repair path.*  A reindex or an integrity pass asks
+   for the exhaustive comparison; a read and a save ask for the frontier one.
+   The exhaustive form stays as the explicit argument.
+
+Item 4 is the behavioral change and needs its own case: a version directory
+rewritten in place without touching the root, which the per-version stamps catch
+today and the frontier check would miss for a version the operation never read.
+Invariant 41 makes directory inventories the search authority, and a version's
+payload is immutable once published (invariant 40), so an in-place rewrite of a
+published version is already outside the contract.  The case belongs in the
+proposal's test set to pin that reading.
+
+The frontier check is weaker than the audit's own item 4, the persistent
+generation counter, and cheaper to adopt: it reads stamps the filesystem already
+maintains, so no independent writer has to participate.
+
+* Files
+
+- =src/data/org-glance-version.el= — frontier revalidation, exhaustive form
+  retained for repair.
+- =test/test-material-virtual.el= — the 512-version save rung.
+- =test/test-graph.el= — the production add stat-count and leaf-scan contracts.
+- =test/test-version.el= — in-place rewrite of an unread published version.
+- =docs/invariants.org= — the measured ceiling under the write-path contracts.
+
+* LOC estimate
+
+Roughly 60 lines of source and 70 of tests.  Items 1 through 3 are about 30
+test lines and 2 documentation lines on their own, and stand alone if item 4 is
+deferred.
+
+* Risk
+
+Items 1 through 3 are measurement and carry none; they turn an unbounded cost
+into a visible one.  Item 4 narrows what a reuse revalidates, so a stale
+observation becomes possible where a published version is mutated in place
+against invariant 40.  Taking items 1 through 3 first makes item 4's effect
+measurable before it ships.
+
+* Method
+
+Depth table built by repeated =graph:add= on one id, timing
+=version--observation-current-p= over 20 iterations and =version:observe= over 5
+within one source context, Linux, Emacs 31.1.90.  Live family counts from =find
+-mindepth 4 -maxdepth 4= over =~/sync/views=, read-only.
+
+* Implementation
+
+Ordinary operation reuse checks the versions directory, legacy source and each
+structural leaf's envelope and payload.  One leaf requires four
+=file-attributes= calls, independently of ancestry depth.  Concurrent leaves
+add two stamps each.  The initial observation records structural leaves with a
+hash index of parent IDs.  Frontier proofs are built from those leaves and
+recorded stamps on first reuse; reuse never walks history.  Supplied inventories still compare with the retained inventory.  Symlink sources force a fresh observation.
+
+The full proof remains available through =version:observe='s explicit
+=exhaustive= argument; =graph:reindex= enables exhaustive revalidation throughout
+its operation.  A fresh observation reads the complete family in either mode.
+Selected source payloads retain their separate identity and digest guards.
+
+The 512-version material fixture publishes immutable snapshots and reconciles
+once before opening the editor.  Its work contract retains one parse and two
+fresh observations per save.  =graph-add-family-revalidation-work-contract=
+requires one successful reuse and four stat calls per add at depths 1, 8, 32
+and 512; the direct reuse contract bounds the same depths.  Historical in-place
+corruption remains visible to exhaustive repair and the next fresh observation.
+
+Publication, content writes, deletion, cache projection, current-version reads
+and pruning consume the observation's stored leaves.  Candidate selection
+accepts those leaves explicitly.  =graph-write-analysis-work-contract= requires
+one leaf computation per fresh observation across insertion and reindex.
+
+Measured baseline and implementation values are recorded in
+[[file:../invariants.org::*Write-path analysis contracts][Write-path analysis contracts]].
+
+* Independent review
+
+A reviewer session checked the 2026-11-10 implementation, uncommitted on
+[[https://github.com/rails-to-cosmos/org-glance/commit/e464239][e464239]].  Line
+numbers below refer to that working tree.  Frontier revalidation is correct:
+reuse stats the =versions= root, the legacy =data.org= and each structural
+leaf's =data.org= and =meta.json=, four calls per linear family at any depth.
+Twenty-five focused contracts (=family-=, =work-contract=,
+=operation-observations=) pass and =eask recompile= is warning-free.
+
+** Reproduced
+
+Reuse checks per production path, counted by advising
+=version--observation-current-p=:
+
+| Path                  | Reuse checks | Result                  |
+|-----------------------+--------------+-------------------------|
+| =graph:add=           |   1 / insert | hit                     |
+| =graph:reindex=       | 2 / headline | hit, exhaustive         |
+| material open + save  |            0 | both observations fresh |
+
+** Findings
+
+1. *The save-path stat assertion is vacuous.*  The 512-version fixture of
+   =virtual-save-family-work-contract= records zero checks and zero stats at
+   depths 1 and 32, so =(<= stats (* 4 checks))= in
+   =test/test-material-virtual.el= line 523 holds as =0 <= 0=.  Pin the
+   four-stat ceiling at depth 512 on the =graph:add= path
+   (=versioned-write-observes-family-once= or
+   =graph-write-analysis-work-contract=) and drop the save assertion.
+   =family-revalidation-work-contract= stands.
+2. *The save premise is wrong.*  Saves perform no reuse check, so the 109 ms per
+   save in [[*Problem][Problem]] never existed and this change leaves saves
+   unchanged.  The gain is about 49 ms per =graph:add= / =graph:insert= on the
+   514-version family.  Correct the save claims in
+   [[file:../invariants.org::*Write-path analysis contracts][Write-path analysis
+   contracts]], in [[*Implementation][Implementation]] and in
+   [[file:2026-11-08-write-path-storage-audit.org::*Findings][the write-path
+   audit's findings]]; the =CHANGELOG.org= bullet names the internal
+   =org-glance-version:observe= and should name adds, captures and table or
+   relation edits on long-history headlines.
+3. *Invariant 41 lacks the narrowed trust rule.*  Reuse trusts unread ancestors
+   through invariant 40's immutability; only reindex compares every stamp.
+   Invariant 41 in [[file:../invariants.org][invariants]] and =CLAUDE.md= still
+   read "revalidate source identity and mutation stamps" and owe one line.
+4. *Leaves are recomputed beside a held observation.*  The observation now
+   stores =leaves=; =src/data/org-glance-graph.el= lines 837, 887 and 1030 and
+   =src/data/org-glance-cache.el= line 662 call =version:leaves= on a history
+   whose observation is in hand and should read
+   =version-observation:leaves=.
+5. *Index placement.*  The new Done bullet in [[file:../index.org][the docs
+   index]] precedes the "Newest first." line.
+6. *Reindex delta accepted as noise.*  The paired delta is +22.6 ms (95% CI
+   +6.5…+39.0 ms); the identical-code control widens it to −6.8…+45.3 ms.
+   Reindex stats are unchanged under exhaustive revalidation, and the new
+   =leaves= pass is O(V), replacing an O(V²) =member= scan.
+
+Findings 1 and 2 block the commit; 3 and 4 belong to the same pass.
+
+** Frontier soundness
+
+- Added and retired event directories change the =versions= root stamp (size,
+  mtime, ctime, inode); the previous proof also relied on that stamp alone for
+  additions.
+- A legacy-root leaf stats an absent =headline-dir/meta.json= and compares nil
+  with nil.
+- The =reusable= flag keeps symlink sources reading fresh at any depth.
+- The memoized frontier is safe because mutation drops the observation.
+
+** Method
+
+Batch probes through =eask emacs --batch= loading =test/test-helpers.el=: a
+linear family built with =version:write-snapshot= and
+=cache:reconcile-families=, then one material save; a 21-version family built
+with =graph:add=, then one add, one reindex and one open-plus-save.  Each probe
+counts =version--observation-current-p= calls, hits and nested
+=file-attributes= calls.
+
+** Resolution
+
+Findings 1–5 are addressed.  The stat ceiling now runs on =graph:add= and
+requires a positive reuse hit at every depth, including 512.  The material save
+contract retains its parse/observation checks.  The problem statement, audit,
+changelog and invariant 41 describe reuse by the =graph:add= API on existing
+IDs and the immutability trust boundary.  The Done entry follows "Newest first."
+
+All production consumers with an observation use its stored leaves, including
+candidate selection, current-version reads and pruning.  The write-analysis
+contract counts leaf computations alongside observations.
+
+The changelog names =graph:add= calls on existing IDs.  Ordinary capture and
+duplication write fresh IDs.  Table title edits route through
+=material--replace-headline= and =save-buffer=; the save-path reuse result also
+applies there.  Relation edits in material buffers publish through the same
+save path.  Finding 2's suggested table/relation benefit remains unclaimed.
+
+The corrected implementation passes all 793 ERT tests: 787 passes, six
+platform/fixture skips and zero failures.  Eight focused contracts pass and
+all 33 production files compile warning-free.
+
+The repeated graph comparison retains equal fingerprints and work; insertion
+measures 943.321→933.064 ms and reindex 555.960→555.390 ms, with both paired
+intervals including zero.  Material work counters also match.  Its encrypted
+save delta is +0.236 ms; an identical-code control spans −0.509…+0.858 ms, and
+the control-adjusted interval includes zero.  Measurements are recorded in
+[[file:../invariants.org::*Family revalidation measurements][Family revalidation measurements]].
+
+** Second review
+
+The reviewer rechecked the corrected working tree on
+[[https://github.com/rails-to-cosmos/org-glance/commit/e464239][e464239]].
+Thirty-six focused contracts pass (=family-=, =work-contract=,
+=operation-observations=, =prune=, =candidates=, =current=) and
+=eask recompile= is warning-free.
+=graph-add-family-revalidation-work-contract= requires one successful
+four-stat reuse at depths 1, 8, 32 and 512.
+
+| Path                            | Reuse checks | Family probed     |
+|---------------------------------+--------------+-------------------|
+| =org-glance-material:duplicate= |            1 | fresh id, depth 1 |
+| =org-glance-graph:delete=       |            0 | 21 versions       |
+| material open + save            |            0 | 21 versions       |
+
+1. *No interactive command reaches a deep-family reuse.*  The production
+   callers of =graph:add= are =graph:capture= (from =org-glance-capture=) and
+   =material:duplicate=; both write a fresh id, so their single reuse check
+   runs on a one-version family.  =graph:insert= writes metadata alone and
+   performs no observation, so the first review's Finding 2 overstated the
+   gain: it applies to =org-glance-graph:add= called on an existing deep id —
+   tests, benchmarks and plugins.  The change's lasting value is the
+   512-version rung and the stat oracle.  The =CHANGELOG.org= bullet naming
+   =org-glance-capture= is false; the change is internal and owes none, or a
+   bullet limited to the =org-glance-graph:add= API for existing ids.  The
+   Resolution's "add/capture benefit" names the API path instead.
+2. *=org-glance-version:current= can return the cached leaves list.*
+   =cl-remove-if= returns its argument when nothing is rejected, so inside a
+   source context a caller that mutates the result corrupts the held
+   observation.  No core caller does; the =sort= in
+   =src/data/org-glance-graph.el= line 835 runs over a fresh =mapcar=.  Copy
+   the result, as =version:history= does, or state the immutability in the
+   docstring.
+3. *Invariant 41 layout.*  The new sentence precedes the invariant's own
+   statement and leaves a dangling line before "The isolated"; move it after
+   the statement and reflow.
+4. *Superseded measurements.*  [[file:../invariants.org::*Family revalidation measurements][Family
+   revalidation measurements]] keeps the first-run validation and comparison
+   bullets beside the post-review ones; keep the final run only.
+5. *Crypt-save delta accepted.*  The raw paired delta is +0.236 ms (95%
+   interval +0.173…+0.339 ms); the control-adjusted interval includes zero,
+   and saves touch the changed code only through the =leaves= pass, which
+   replaces work already done.
+
+Verified: every observation-holding consumer reads stored =leaves= (candidates,
+=version:current=, =prune=, write, delete, recovery, cache reconciliation);
+=prune= and =candidates= treat history and leaves as read-only;
+=graph-write-analysis-work-contract= counts one leaf computation per
+observation; the =(and history …)= guard in =src/data/org-glance-cache.el=
+keeps empty leaves for a family without =versions=; =AGENTS.md= and
+=docs/invariants.org= carry the narrowed invariant 41.
+
+Finding 1 blocks the commit; 2–4 belong to the same pass.
+
+** Second-review resolution
+
+Findings 1–4 are addressed.  The changelog and benefit statements cover the
+=graph:add= API writing existing IDs; ordinary interactive capture and
+duplication write fresh IDs.  Metadata insertion and material publication
+retain their existing observation paths.
+
+=version:current= returns a fresh list.  The caller-owned-values contract now
+mutates that result inside a source context and verifies that the held
+observation remains intact.  The regression failed before the copy was added.
+
+Invariant 41 follows its statement and is reflowed.  The measurements section
+retains the final graph/material comparisons and their applicable control,
+alongside the direct revalidation table.
+
+The second review's blanket interactive-command claim has one exception:
+=org-glance-migrate= ingests changed existing IDs through =graph:add= in
+=org-glance-migrate--ingest-file= (=org-glance.el= lines 220–234 at
+[[https://github.com/rails-to-cosmos/org-glance/commit/e464239][e464239]]).
+The changelog remains scoped to the existing-ID API behavior.
+
+Final validation passes all 793 ERT tests: 787 passes, six platform/fixture
+skips and zero failures.  Nine focused contracts pass and all 33 production
+files compile warning-free.  Graph and material work counters match the
+baseline; graph fingerprints match.  The final five-pair graph comparison
+measures reindex 584.470→580.379 ms with its paired interval including zero;
+positive timing deltas remain within identical-code control variation.  The
+final comparisons and controls replace superseded measurements in
+[[file:../invariants.org::*Family revalidation measurements][Family revalidation measurements]].
+
+** Third review
+
+The reviewer approves the corrected working tree on
+[[https://github.com/rails-to-cosmos/org-glance/commit/e464239][e464239]].
+Thirty-seven focused contracts pass, including
+=source-context-preserves-caller-owned-values=; =eask recompile= is
+warning-free and =git diff --check= is clean.
+
+1. *Changelog and benefit claims* are scoped to =org-glance-graph:add= writing
+   full headlines to existing IDs.  The second review's claim that no
+   interactive command reaches a deep-family reuse was wrong:
+   =org-glance-migrate--ingest-file= (=org-glance.el= line 220 at
+   [[https://github.com/rails-to-cosmos/org-glance/commit/e464239][e464239]])
+   adds changed existing IDs through =graph:add=, as the resolution records.
+2. *=version:current=* returns a =copy-sequence=; the regression test runs
+   =setcar= on the result inside a source context and requires the next call
+   to return the same leaf ids.
+3. *Invariant 41* follows its statement and is reflowed; =AGENTS.md= carries
+   the same rule.
+4. *Measurements* keep the final run and its identical-code controls only.
+
+Insertion carries the weakest timing: paired delta +24.7 ms (95% interval
++2.5…+50.4 ms), control-adjusted interval −46…+42 ms.  Work counters are
+equal, and per insert the code performs one =leaves= pass per observation and
+four stats per depth-1 reuse, as before; the delta is accepted as noise.  The
+changelog bullet may name =org-glance-migrate= as the user-facing command that
+benefits.
+
+The commit gate holds: =graph-write-analysis-work-contract= and
+=virtual-save-family-work-contract= pass, and the graph and material
+benchmarks compare against
+[[https://github.com/rails-to-cosmos/org-glance/commit/e464239][e464239]].

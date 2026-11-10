@@ -5,6 +5,10 @@ Notable user-facing changes.  Versions date-based
 
 * Unreleased
 
+** Changed
+
+- =org-glance-graph:add= bounds revalidation by structural leaves when writing full headlines to existing IDs, including =org-glance-migrate= updates.
+
 * 1.62.0.0.20261110.0
 
 ** Added

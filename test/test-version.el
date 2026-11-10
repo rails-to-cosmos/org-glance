@@ -414,6 +414,86 @@
       (should (= 2 (length (org-glance-version-observation:history
                             (org-glance-version:observe dir "a"))))))))
 
+(ert-deftest org-glance-test:family-revalidation-work-contract ()
+  "Bound a linear family's reuse to four stat calls at every history depth."
+  (dolist (depth '(1 8 32 512))
+    (with-temp-directory dir
+      (let (parent)
+        (dotimes (_ depth)
+          (setq parent
+                (list (org-glance-version:id
+                       (org-glance-version:write-snapshot
+                        dir "a" parent "test" "* Snapshot")))))
+        (let* ((org-glance-version--observations (make-hash-table :test #'equal))
+               (held (org-glance-version:observe dir "a"))
+               (attributes (symbol-function 'file-attributes))
+               (stats 0))
+          (cl-letf (((symbol-function 'file-attributes)
+                     (lambda (&rest args)
+                       (cl-incf stats) (apply attributes args))))
+            (should (eq held (org-glance-version:observe dir "a"))))
+          (should (<= 1 stats 4)))))))
+
+(ert-deftest org-glance-test:family-frontier-builds-only-on-reuse ()
+  "Build a frontier once when an observation is reused."
+  (with-temp-directory dir
+    (org-glance-version:write-snapshot dir "a" nil "test" "* Root")
+    (let ((org-glance-version--observations (make-hash-table :test #'equal))
+          (build (symbol-function 'org-glance-version--frontier-proof))
+          (builds 0))
+      (cl-letf (((symbol-function 'org-glance-version--frontier-proof)
+                 (lambda (&rest args) (cl-incf builds) (apply build args))))
+        (let ((held (org-glance-version:observe dir "a")))
+          (should (= 0 builds))
+          (cl-letf (((symbol-function 'org-glance-version:leaves)
+                     (lambda (&rest _) (ert-fail "Reuse walked family history"))))
+            (dotimes (_ 3)
+              (should (eq held (org-glance-version:observe dir "a")))))
+          (should (= 1 builds)))))))
+
+(ert-deftest org-glance-test:family-frontier-keeps-exhaustive-repair ()
+  "Reuse immutable ancestry; detect historical damage during exhaustive repair."
+  (with-temp-directory dir
+    (let* ((root (org-glance-version:write-snapshot dir "a" nil "test" "* Root"))
+           (_ (org-glance-version:write-snapshot
+               dir "a" (list (org-glance-version:id root)) "test" "* Leaf"))
+           (org-glance-version--observations (make-hash-table :test #'equal))
+           (held (org-glance-version:observe dir "a"))
+           (path (org-glance-version:data-file dir (org-glance-version:id root))))
+      (f-write-text "* Damaged ancestor" 'utf-8-unix path)
+      (should (eq held (org-glance-version:observe dir "a")))
+      (should-not (org-glance-version--observation-current-p held t))
+      (let ((repaired (org-glance-version:observe
+                       dir "a" (org-glance-version-observation:inventory held) t)))
+        (should-not (eq held repaired))
+        (should-not (org-glance-version:valid
+                     (cl-find (org-glance-version:id root)
+                              (org-glance-version-observation:history repaired)
+                              :key #'org-glance-version:id :test #'equal)))))))
+
+(ert-deftest org-glance-test:family-frontier-detects-source-and-inventory-changes ()
+  "Invalidate leaf damage, legacy writes, event retirement and symlink sources."
+  (dolist (change '(envelope payload legacy retire symlink))
+    (with-temp-directory dir
+      (let* ((root (org-glance-version:write-snapshot dir "a" nil "test" "* Root"))
+             (org-glance-version--observations (make-hash-table :test #'equal))
+             (held (org-glance-version:observe dir "a"))
+             (event (org-glance-version:directory root))
+             (data (f-join event "data.org")))
+        (pcase change
+          ('envelope (f-write-text "{}" 'utf-8-unix (f-join event "meta.json")))
+          ('payload (delete-file data))
+          ('legacy (f-write-text "* Legacy" 'utf-8-unix (f-join dir "data.org")))
+          ('retire (delete-directory event t))
+          ('symlink
+           (rename-file data (f-join dir "target.org"))
+           (make-symbolic-link (f-join dir "target.org") data)))
+        (should-not (org-glance-version--observation-current-p held))
+        (let ((changed (org-glance-version:observe dir "a")))
+          (should-not (eq held changed))
+          (when (eq change 'symlink)
+            (should-not (eq changed (org-glance-version:observe dir "a")))))))))
+
 (ert-deftest org-glance-test:publication-receipts-detect-hook-corruption ()
   "Verify source mutations after payload writes and final publication."
   (dolist (at '(after-payload-write after-final-rename))

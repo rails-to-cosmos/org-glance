@@ -259,6 +259,38 @@
          graph (org-glance-test:headline "once" "* Once" "second")))
       (should (= 1 censuses)))))
 
+(ert-deftest org-glance-test:graph-add-family-revalidation-work-contract ()
+  "Require one four-stat reuse per add independently of history depth."
+  (dolist (depth '(1 8 32 512))
+    (org-glance-test:with-graph graph
+      (let ((dir (org-glance-graph:headline-data-path graph "a")) parents)
+        (dotimes (index depth)
+          (setq parents
+                (list (org-glance-version:id
+                       (org-glance-version:write-snapshot
+                        dir "a" parents "test"
+                        (org-glance-test:org-with-id
+                         (format "* History %d" index) "a"))))))
+        (org-glance-cache:reconcile-families graph '("a"))
+        (should (= depth (length (org-glance-version:inventory dir))))
+        (let ((checks 0) (stats 0)
+              (current (symbol-function 'org-glance-version--observation-current-p))
+              (attributes (symbol-function 'file-attributes)))
+          (cl-letf (((symbol-function 'org-glance-version--observation-current-p)
+                     (lambda (observation &optional exhaustive)
+                       (cl-incf checks)
+                       (should-not exhaustive)
+                       (cl-letf (((symbol-function 'file-attributes)
+                                  (lambda (&rest args)
+                                    (cl-incf stats) (apply attributes args))))
+                         (let ((hit (funcall current observation exhaustive)))
+                           (should hit)
+                           hit)))))
+            (org-glance-graph:add graph (org-glance-test:headline "a" "* Added")))
+          (should (= 1 checks))
+          (should (= 4 stats)))
+        (should (= (1+ depth) (length (org-glance-version:inventory dir))))))))
+
 (ert-deftest org-glance-test:graph-unsafe-id-rejected ()
   "Path-unsafe ids are rejected before touching the filesystem."
   (org-glance-test:with-graph graph
@@ -521,8 +553,11 @@ the two paths rather than trusting either."
            (content (symbol-function 'org-glance-graph:get-content))
            (mode (symbol-function 'org-glance--org-mode))
            (read (symbol-function 'insert-file-contents-literally))
-           (parses 0) (observations 0) (contents 0) (payload-reads 0) (modes 0))
-      (cl-letf (((symbol-function 'org-glance-headline--from-string)
+           (leaves (symbol-function 'org-glance-version:leaves))
+           (leaf-scans 0) (parses 0) (observations 0) (contents 0) (payload-reads 0) (modes 0))
+      (cl-letf (((symbol-function 'org-glance-version:leaves)
+                 (lambda (&rest args) (cl-incf leaf-scans) (apply leaves args)))
+                ((symbol-function 'org-glance-headline--from-string)
                  (lambda (&rest args) (cl-incf parses) (apply parse args)))
                 ((symbol-function 'org-glance-version--observe-directories)
                  (lambda (&rest args) (cl-incf observations) (apply observe args)))
@@ -539,28 +574,36 @@ the two paths rather than trusting either."
         (should (= n parses))
         (should (= (* 2 n) modes))
         (should (= (* 2 n) observations))
+        (should (= observations leaf-scans))
         (should (= 0 contents))
         (should (= 0 payload-reads))
-        (setq parses 0 observations 0 contents 0 payload-reads 0 modes 0)
+        (setq parses 0 observations 0 contents 0 payload-reads 0 modes 0 leaf-scans 0)
         (should (= n (org-glance-graph:reindex graph)))
         (should (= n parses))
         (should (= n modes))
         (should (= n observations))
+        (should (= observations leaf-scans))
         (should (= 0 contents))
         (should (= n payload-reads))))))
 
 (ert-deftest org-glance-test:source-context-preserves-caller-owned-values ()
-  "Keep returned content strings and history lists independently mutable."
+  "Keep content strings, history and leaf lists independently mutable."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "owned" "* First"))
     (org-glance-graph:add graph (org-glance-test:headline "owned" "* Second"))
     (org-glance-graph--with-source-context
       (let* ((dir (org-glance-graph:headline-data-path graph "owned"))
              (contents (org-glance-graph:get-content graph "owned"))
-             (history (org-glance-version:history dir "owned")))
+             (history (org-glance-version:history dir "owned"))
+             (current (org-glance-version:current dir "owned"))
+             (leaf-ids (mapcar #'org-glance-version:id current)))
         (aset contents 0 ?#)
         (setcdr history nil)
+        (setcar current nil)
         (should (string-prefix-p "* Second" (org-glance-graph:get-content graph "owned")))
-        (should (= 2 (length (org-glance-version:history dir "owned"))))))))
+        (should (= 2 (length (org-glance-version:history dir "owned"))))
+        (should (equal leaf-ids
+                       (mapcar #'org-glance-version:id
+                               (org-glance-version:current dir "owned"))))))))
 
 (provide 'test-graph)

@@ -771,15 +771,17 @@ today, up from 50.
     are iterative and cycle-safe. Pinned by
     =rejected-snapshot-is-visible-and-an-edit-makes-it-current=.
 
-41. *Immutable family inventory is live search authority.*  The isolated
-    reconciliation worker compares event-directory proofs with its private
-    SQLite checkpoint and folds changed or unverified families. Relay records
-    accelerate compatibility ingestion but do not gate discovery. A
-    family operation obtains one inventory, History, and payload-byte
-    observation; integrity, parsing, projection, and recovery derive from that
-    value. A mutation or freshness request obtains a new observation. Reopening
-    the family per projection multiplies filesystem work and can mix facts from
-    opposite sides of concurrent delivery. Pinned by
+41. *Immutable family inventory is live search authority.*
+    Observation reuse checks root, legacy and structural-leaf stamps and trusts
+    unread ancestors under invariant 40; exhaustive repair checks all recorded
+    stamps. The isolated reconciliation worker compares event-directory proofs
+    with its private SQLite checkpoint and folds changed or unverified
+    families. Relay records accelerate compatibility ingestion but do not gate
+    discovery. A family operation obtains one inventory, History, and
+    payload-byte observation; integrity, parsing, projection, and recovery
+    derive from that value. A mutation or freshness request obtains a new
+    observation. Reopening the family per projection multiplies filesystem work
+    and can mix facts from opposite sides of concurrent delivery. Pinned by
     =family-projection-observes-filesystem-once= and
     =versioned-write-observes-family-once=. A local mutation runs the family
     cache hook outside error demotion; failure
@@ -976,7 +978,7 @@ daemon announced.
 48. *Logical editors follow publication receipts.* Registry keys are canonical graph directory plus logical ID; editors have =buffer-file-name=nil=; own saves preserve text, location, narrowing, folding and undo while advancing the exact base; pending events count as outstanding work independently of the modified flag and retry under their original identities; same-version revert refreshes committed concurrency metadata; dirty external updates preserve the draft; history previews remain pinned.
 
 - =test/test-material-virtual.el= covers lifecycle, failure injection, concurrency, crypt, native save/exit, source editing and work counters.
-- =virtual-save-family-work-contract= requires zero warm-open observations, two observations per save, and zero observations for an unmodified save at history depths 1, 8 and 32.
+- =virtual-save-family-work-contract= requires zero warm-open observations, two observations per save, and zero observations for an unmodified save at history depths 1, 8, 32 and 512.
 - =virtual-save-preserves-editor-state= refuses snapshot reads, file visits and reverts during receipt adoption.
 - =test/bench-material.el= reports editor-absent open, warm lookup and save milliseconds for 10/1, 50/12 and 100/40 graph/history sizes, with plain and encrypted content; collection runs before timed operations and remains disabled during timed saves.
 
@@ -1074,16 +1076,40 @@ three saves per fixture. Baseline:
 
 * Write-path analysis contracts
 
-- =graph-write-analysis-work-contract= requires N canonical parses, zero payload disk reads and 2N family observations for insert; reindex requires N parses, N payload reads and N family observations.
-- =virtual-save-family-work-contract= requires one parse and two family observations per save at history depths 1, 8 and 32.
+- Operation reuse checks versions-root, legacy and structural-leaf stamps; exhaustive repair checks every recorded path; symlink sources reobserve.
+- =family-frontier-builds-only-on-reuse= requires zero frontier builds for a fresh observation, one across repeated reuse and zero history walks during reuse.
+- =family-revalidation-work-contract= bounds reuse to four =file-attributes= calls for one-leaf families at depths 1, 8, 32 and 512; =graph-add-family-revalidation-work-contract= requires one successful four-stat reuse per add at those depths.
+- =family-frontier-keeps-exhaustive-repair= allows operation-local reuse after an immutable ancestor is rewritten in place and requires exhaustive repair to detect it.
+- =family-frontier-detects-source-and-inventory-changes= invalidates leaf envelope/payload changes, legacy writes, event retirement and symlink sources.
+
+- =graph-write-analysis-work-contract= requires N canonical parses, zero payload disk reads and 2N family observations for insert; reindex requires N parses, N payload reads and N family observations; each observation computes structural leaves once.
+- =virtual-save-family-work-contract= requires one parse and two family observations per save at history depths 1, 8, 32 and 512.
 - =compatibility-batch-looks-up-each-id-once= bounds ID access linearly and verifies publication order; =family-inventory-stays-within-the-id-layout= covers short IDs, sharded siblings and deep session trees.
 - =payload-receipts-guard-bytes-and-file-identity=, =operation-observations-detect-external-changes= and =publication-receipts-detect-hook-corruption= require UTF-8/raw-digest correctness, CRLF-compatible reads and invalidation after source changes.
-- =source-context-preserves-caller-owned-values= protects returned strings/lists; =write-analysis-repairs-a-missing-payload-cache= requires source fallback; =write-analysis-keeps-maintenance-readers-temporary= forbids a newly retained maintenance reader.
+- =source-context-preserves-caller-owned-values= protects returned strings, history lists and current-leaf lists; =write-analysis-repairs-a-missing-payload-cache= requires source fallback; =write-analysis-keeps-maintenance-readers-temporary= forbids a newly retained maintenance reader.
 - Graph benchmark payload counters instrument physical =insert-file-contents-literally= calls for =data.org=; reindex and property fill require N reads per sample.
 - Three alternating compiled process pairs against =ef1e388= (=python3 tools/bench.py all --baseline ef1e388 --quick --sizes 100 --samples 3 --pairs 3=) retain equal graph/interactive/reader fingerprints; insert measures 1,650.981→1,016.034 ms and reindex 1,517.642→569.957 ms at N=100.
 - The same comparison measures cold property fill 470.312→431.922 ms, plain save 22.129→8.890 ms and crypt save 23.411→8.999 ms; paired 95% intervals resolve improvements for these five workloads and include zero for every remaining non-improving workload.
 - Physical payload reads at N=100 fall 300→100 for cold property fill and 900→100 for reindex; semantic result/work counters remain equal.
 - Write-path validation runs 770 ERT tests: 764 passes, six fixture/platform skips, zero failures; 32 production files compile warning-free, lint retains existing checkdoc diagnostics and relint warnings in unchanged config/utils files.
+
+** Family revalidation measurements
+
+- 2026-11-10, Linux, Emacs 31.1.90: compiled baseline [[https://github.com/rails-to-cosmos/org-glance/commit/e464239][e464239]] versus implementation; linear immutable families, 20 warm =current-p= checks and five =observe= reuses per depth, fresh reads excluded.
+
+| Versions | Stat calls (base → current) | =current-p= ms (base → current) | Observe reuse ms (base → current) |
+|----------+-----------------------------+--------------------------------+----------------------------------|
+|        8 |                      18 → 4 |                  0.818 → 0.155 |                    0.841 → 0.157 |
+|       32 |                      66 → 4 |                  3.026 → 0.155 |                    3.029 → 0.169 |
+|      128 |                     258 → 4 |                 11.967 → 0.156 |                   11.906 → 0.157 |
+|      512 |                    1026 → 4 |                 49.095 → 0.151 |                   48.293 → 0.158 |
+
+- Validation: 793 ERT tests, 787 passes, six platform/fixture skips, zero failures; nine focused contracts pass; all 33 production files compile warning-free.
+- =python3 tools/bench.py graph --baseline e464239 --quick --sizes 100 --samples 3 --pairs 5= retains equal fingerprints and work; insertion measures 953.318→949.905 ms (paired delta +24.711 ms, 95% interval +2.460…+50.361 ms, control-adjusted interval −45.993…+42.337 ms), and reindex 584.470→580.379 ms (paired interval −13.006…+7.084 ms).
+- Five identical-code graph process pairs compiled from =e464239= yield control-adjusted 95% intervals including zero for every positive raw comparison (10,000 independent process-pair resamples, seed 0).
+- =python3 tools/bench.py material --baseline e464239 --quick --samples 5 --pairs 5= retains equal work; plain save measures 7.771→7.927 ms (paired 95% interval −0.250…+0.423 ms), and crypt save 8.422→8.761 ms (−0.355…+0.958 ms).
+- Five identical-code material pairs compiled from =e464239= yield control-adjusted intervals of −0.778…+0.316 ms for plain editor open and −0.227…+0.402 ms for crypt editor open (10,000 independent process-pair resamples, seed 0).
+- =OG_BENCH_QUICK=1 OG_BENCH_SIZES=100 OG_BENCH_SAMPLES=3 make bench-readers= reports zero opens and 100 deserializations per batch, median 0.128 ms/read.
 
 * Storage migrations and empty search contracts
 

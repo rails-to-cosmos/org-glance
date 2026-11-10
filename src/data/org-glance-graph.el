@@ -766,8 +766,8 @@ Signal a `user-error' when ID has concurrent leaves of either kind."
   (gethash "headlineHistoryDepth"
            (org-glance-settings:tree (org-glance-config:current graph))))
 
-(cl-defun org-glance-graph--version-history-for-write (dir id)
-  "Observe ID in DIR, migrating its legacy root before returning History."
+(cl-defun org-glance-graph--observation-for-write (dir id)
+  "Return ID's observation in DIR after migrating its legacy root."
   (let* ((observation (org-glance-version:observe dir id))
          (history (org-glance-version-observation:history observation))
          (readable (cl-remove-if-not
@@ -779,9 +779,8 @@ Signal a `user-error' when ID has concurrent leaves of either kind."
     (when (cl-find "legacy" readable
                    :key #'org-glance-version:producer :test #'equal)
       (org-glance-version:migrate-legacy dir id)
-      (setq history (org-glance-version-observation:history
-                     (org-glance-version:observe dir id))))
-    history))
+      (setq observation (org-glance-version:observe dir id)))
+    observation))
 
 (cl-defun org-glance-graph:prepare-edit
     (graph &key id contents metadata expected-frontier revision
@@ -831,10 +830,11 @@ Errors and quits leave RECEIPT retryable, including after event rename."
                             (org-glance-version:content-sha256 version)))
               (error "Published event %s failed recovery verification"
                      (org-glance-version:id version)))
-          (let* ((history (org-glance-version-observation:history
-                           (org-glance-version:observe dir id)))
+          (let* ((observation (org-glance-version:observe dir id))
+                 (history (org-glance-version-observation:history observation))
                  (frontier (sort (mapcar #'org-glance-version:id
-                                         (org-glance-version:leaves history))
+                                         (org-glance-version-observation:leaves
+                                          observation))
                                  #'string<))
                  (source (cl-find (org-glance-publication:source-version receipt)
                                   history :key #'org-glance-version:id :test #'equal)))
@@ -877,14 +877,15 @@ Return the file path, or nil if HEADLINE has no id."
                         (f-join (org-glance-graph:local-data-path graph) (substring id 0 2) (substring id 2))
                       (f-join (org-glance-graph:local-data-path graph) id))
                   dir))
-           (history (org-glance-graph--version-history-for-write dir id)))
+           (observation (org-glance-graph--observation-for-write dir id))
+           (history (org-glance-version-observation:history observation))
+           (leaves (org-glance-version-observation:leaves observation)))
       (f-mkdir-full-path dir)
-      (let* ((candidates (org-glance-version:candidates history))
+      (let* ((candidates (org-glance-version:candidates history :leaves leaves))
              (_ (when (> (length candidates) 1)
                   (user-error "Headline %s has %d current variants"
                               id (length candidates))))
-             (parents (mapcar #'org-glance-version:id
-                              (org-glance-version:leaves history)))
+             (parents (mapcar #'org-glance-version:id leaves))
              (version (org-glance-version:write-snapshot
                        dir id parents "org-glance"
                        (org-glance-headline:contents headline)
@@ -1020,14 +1021,15 @@ The guard `org-glance-graph:delete' shares with the fold (invariant 30)."
   (cl-check-type id string)
   (when-let* ((spec (org-glance-graph--tombstone-spec graph id)))
     (let* ((dir (org-glance-graph:headline-data-path graph id))
-           (history (org-glance-graph--version-history-for-write dir id)))
-      (let ((candidates (org-glance-version:candidates history)))
+           (observation (org-glance-graph--observation-for-write dir id))
+           (history (org-glance-version-observation:history observation))
+           (leaves (org-glance-version-observation:leaves observation)))
+      (let ((candidates (org-glance-version:candidates history :leaves leaves)))
         (when (> (length candidates) 1)
           (user-error "Headline %s has %d current variants" id
                       (length candidates)))
         (org-glance-version:write-tombstone
-         dir id (mapcar #'org-glance-version:id
-                        (org-glance-version:leaves history)) "org-glance"
+         dir id (mapcar #'org-glance-version:id leaves) "org-glance"
          (org-glance-graph--headline-history-depth graph))))
     (org-glance-graph:insert graph (list spec))))
 
@@ -1160,7 +1162,8 @@ Blobs are only read (invariant 5); records append in batches, compacting once
 at the end.  Return the number of headlines re-indexed."
   (org-glance-graph--with-source-context
     (cl-check-type graph org-glance-graph)
-    (let* ((metas (org-glance-graph:headlines graph))
+    (let* ((org-glance-version--exhaustive-revalidation t)
+           (metas (org-glance-graph:headlines graph))
            (reporter (and metas (make-progress-reporter "org-glance: re-indexing... " 0 (length metas))))
            (org-glance-graph-compact-segment-count most-positive-fixnum)
            (batch nil) (fill 0) (n 0))
