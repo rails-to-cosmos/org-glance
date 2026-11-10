@@ -5,6 +5,12 @@ Notable user-facing changes.  Versions date-based
 
 * Unreleased
 
+* 1.62.0.0.20261110.0
+
+** Added
+
+- =org-glance-perf-live= streams each =org-glance-perf-mode= stage to =*Messages*= as it returns.
+
 * 1.61.1.0.20261110.0
 
 ** Added

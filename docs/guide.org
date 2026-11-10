@@ -438,6 +438,8 @@ and legacy reader retirement remain part of coordinated cutover.
 Enable =M-x org-glance-perf-mode= and use =org-glance-transient= normally.
 Open =*Messages*= to compare materialize, overview and LLM timings. Toggle the
 mode again to remove its instrumentation.
+Set =org-glance-perf-live= to print each stage as it returns, indented by
+nesting depth; its output time is excluded from the reported timings.
 
 Each numbered command reports inclusive stage times, call counts, synchronous
 elapsed time, minibuffer interaction, work excluding that interaction, and GC

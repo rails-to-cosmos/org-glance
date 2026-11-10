@@ -14,6 +14,9 @@
 (defvar org-glance-perf--advices nil)
 (defvar org-glance-perf--timers nil)
 (defvar org-glance-perf-mode nil)
+(defvar org-glance-perf--current nil)
+(defvar org-glance-perf--depth 0)
+(defvar org-glance-perf--reporting 0.0)
 
 (defun org-glance-perf--clear-advices ()
   "Remove every advice installed by the timing mode."
@@ -59,6 +62,12 @@
   :type '(repeat symbol) :group 'org-glance
   :set #'org-glance-perf--set-functions)
 
+(defcustom org-glance-perf-live nil
+  "Non-nil means `org-glance-perf-mode' reports each stage as it returns.
+Live lines are indented by nesting depth; their output time is excluded
+from enclosing stages and the command total."
+  :type 'boolean :group 'org-glance)
+
 (cl-defun org-glance-perf:register (&key commands stages continuations)
   "Append COMMANDS, STAGES and CONTINUATIONS to the timing configuration.
 Accept function symbols before their libraries load; repeated entries collapse."
@@ -77,14 +86,26 @@ Accept function symbols before their libraries load; repeated entries collapse."
   "Aggregate NAME's FUNCTION called with ARGS in the current trace."
   (if (null org-glance-perf--trace)
       (apply function args)
-    (let ((start (float-time)))
+    (let ((start (float-time))
+          (reported org-glance-perf--reporting))
       (unwind-protect
-          (apply function args)
-        (let ((entry (or (gethash name org-glance-perf--trace)
+          (let ((org-glance-perf--depth (1+ org-glance-perf--depth)))
+            (apply function args))
+        (let ((elapsed (- (float-time) start
+                          (- org-glance-perf--reporting reported)))
+              (entry (or (gethash name org-glance-perf--trace)
                          (list 0 0.0))))
           (cl-incf (car entry))
-          (cl-incf (cadr entry) (- (float-time) start))
-          (puthash name entry org-glance-perf--trace))))))
+          (cl-incf (cadr entry) elapsed)
+          (puthash name entry org-glance-perf--trace)
+          (when org-glance-perf-live
+            (let ((report-start (float-time)))
+              (message "glance-perf #%d live %s%s: %.1f ms"
+                       org-glance-perf--current
+                       (make-string (* 2 org-glance-perf--depth) ?\s)
+                       name (* 1000 elapsed))
+              (cl-incf org-glance-perf--reporting
+                       (- (float-time) report-start)))))))))
 
 (defun org-glance-perf--ready (serial start)
   "Report when trace SERIAL returns to the event loop after START."
@@ -102,6 +123,8 @@ Accept function symbols before their libraries load; repeated entries collapse."
            (gc-start gc-elapsed)
            (gc-count gcs-done)
            (org-glance-perf--trace (make-hash-table :test #'eq))
+           (org-glance-perf--current serial)
+           (org-glance-perf--reporting 0.0)
            (status 'aborted))
       (when (eq name 'org-glance-transient)
         (setq org-glance-perf--origin start))
@@ -110,7 +133,7 @@ Accept function symbols before their libraries load; repeated entries collapse."
         (let* ((end (float-time))
                (gc-seconds (- gc-elapsed gc-start))
                (collections (- gcs-done gc-count))
-               (elapsed (- end start))
+               (elapsed (- end start org-glance-perf--reporting))
                (prompt (cadr (gethash 'read-from-minibuffer
                                      org-glance-perf--trace)))
                entries)

@@ -76,6 +76,32 @@
                               (string-search "GC 100.0 ms / 1" text)))
                        messages)))))
 
+(ert-deftest org-glance-test:perf-live-streams-stages-outside-the-measurement ()
+  "Live mode reports nested stages as they return, excluding its output time."
+  (let ((clock 0.0) (org-glance-perf-live t) messages)
+    (cl-letf (((symbol-function 'float-time) (lambda (&rest _) clock))
+              ((symbol-function 'message)
+               (lambda (format &rest args)
+                 (let ((text (apply #'format format args)))
+                   (when (string-search " live " text) (cl-incf clock 1.0))
+                   (push text messages)))))
+      (org-glance-perf--command
+       'sample
+       (lambda ()
+         (org-glance-perf--stage
+          'outer (lambda ()
+                   (cl-incf clock 0.1)
+                   (org-glance-perf--stage
+                    'inner (lambda () (cl-incf clock 0.2)))))))
+      (let ((live (seq-filter (lambda (text) (string-search " live " text))
+                              (reverse messages))))
+        (should (equal '("live   inner: 200.0 ms" "live outer: 300.0 ms")
+                       (mapcar (lambda (text)
+                                 (substring text (string-search "live" text)))
+                               live))))
+      (should (cl-some (lambda (text) (string-search "returned: 300.0 ms" text))
+                       messages)))))
+
 (ert-deftest org-glance-test:perf-registration-is-idempotent-and-lazy ()
   "Trace a registered command and a stage defined by a subsequently loaded file."
   (let ((org-glance-perf-commands nil) (org-glance-perf-stages nil)
