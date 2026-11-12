@@ -2110,4 +2110,145 @@
       (org-glance-graph:add graph (org-glance-test:headline "writer" "* Write"))
       (should (= before (funcall pooled))))))
 
+(ert-deftest org-glance-test:cache-rebuild-canonical-work-contract ()
+  "Rebuild missing canonical families and legacy roots through a fresh schema."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "known" "* Known"))
+    (org-glance-cache:reconcile-inventory graph t)
+    (let* ((directory (org-glance-graph:headline-data-path graph "glance"))
+           (version (org-glance-version:write-snapshot
+                     directory "glance" nil "peer"
+                     (org-glance-test:org-with-id "* Glance" "glance")))
+           (source (f-read-bytes (f-join (org-glance-version:directory version) "data.org")))
+           (legacy (f-join (org-glance-graph:headline-data-path graph "legacy") "data.org"))
+           (wal (f-read-bytes (org-glance-graph:headline-meta-path graph)))
+           (identity (org-glance-cache--file-identity (org-glance-cache:path graph))))
+      (org-glance-test:write legacy "* Legacy
+body
+")
+      (org-glance-cache--with-db
+       graph (lambda (db) (sqlite-execute db "CREATE TABLE obsolete_cache (value TEXT)")))
+      (let ((observations 0) (parses 0)
+            (observe (symbol-function 'org-glance-version--observe-directories))
+            (parse (symbol-function 'org-glance-headline--from-string)))
+        (cl-letf (((symbol-function 'org-glance-version--observe-directories)
+                   (lambda (&rest args) (cl-incf observations) (apply observe args)))
+                  ((symbol-function 'org-glance-headline--from-string)
+                   (lambda (&rest args) (cl-incf parses) (apply parse args))))
+          (should (= 3 (org-glance-cache:rebuild graph))))
+        (should (= 3 observations))
+        (should (= 3 parses)))
+      (should (equal "Glance" (org-glance-headline-metadata:title
+                               (org-glance-cache:headline graph "glance"))))
+      (should (equal "Legacy" (org-glance-headline-metadata:title
+                               (org-glance-cache:headline graph "legacy"))))
+      (should (equal identity (org-glance-cache--file-identity
+                              (org-glance-cache:path graph))))
+      (should (equal source (f-read-bytes (f-join (org-glance-version:directory version)
+                                                 "data.org"))))
+      (should (file-exists-p legacy))
+      (should (equal wal (f-read-bytes (org-glance-graph:headline-meta-path graph))))
+      (org-glance-cache--with-db
+       graph (lambda (db)
+               (should-not (sqlite-select db "SELECT name FROM sqlite_master WHERE name='obsolete_cache'"))))
+      (should (eq 'current (org-glance-cache-status (org-glance-graph:directory graph)))))))
+
+(ert-deftest org-glance-test:cache-rebuild-keeps-live-state-on-failure-and-evidence ()
+  "Preserve committed rows on failure and retain missing admitted events."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "retained" "* Retained"))
+    (let ((org-glance-cache--recovery-publication-hook
+           (lambda () (error "Injected rebuild failure"))))
+      (should-error (org-glance-cache:rebuild graph)))
+    (should (equal "Retained" (org-glance-headline-metadata:title
+                               (org-glance-cache:headline graph "retained"))))
+    (let* ((dir (org-glance-graph:headline-data-path graph "retained"))
+           (event (car (org-glance-version:inventory dir))))
+      (delete-directory (org-glance-version:path dir event) t)
+      (org-glance-cache:rebuild graph)
+      (org-glance-cache--with-db
+       graph
+       (lambda (db)
+         (should (equal (list (list event))
+                        (sqlite-select db "SELECT event_id FROM headline_event WHERE logical_id='retained'")))
+         (should (equal '((0))
+                        (sqlite-select db "SELECT verified FROM headline_family WHERE logical_id='retained'")))))
+      (should (eq 'projection (org-glance-cache:needs-reconciliation-p graph))))))
+
+(ert-deftest org-glance-test:cache-staleness-detects-preserved-directory-mtime ()
+  "Detect changed inventories even when a synchronizer restores directory mtime."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "stamp" "* Before"))
+    (org-glance-cache:reconcile-inventory graph t)
+    (let* ((dir (org-glance-graph:headline-data-path graph "stamp"))
+           (root (f-join dir "versions"))
+           (mtime (file-attribute-modification-time (file-attributes root)))
+           (parent (car (org-glance-version:inventory dir))))
+      (should-not (org-glance-cache:needs-reconciliation-p graph))
+      (org-glance-version:write-snapshot
+       dir "stamp" (list parent) "peer"
+       (org-glance-test:org-with-id "* After" "stamp"))
+      (set-file-times root mtime)
+      (should (eq 'inventory (org-glance-cache:needs-reconciliation-p graph)))
+      (org-glance-cache--reconcile-now graph)
+      (should (equal "After" (org-glance-headline-metadata:title
+                              (org-glance-cache:headline graph "stamp"))))
+      (should-not (org-glance-cache:needs-reconciliation-p graph)))))
+
+(ert-deftest org-glance-test:cache-staleness-detects-new-local-root ()
+  "Detect ignored local families with Git proofs and missing-root proofs."
+  (dolist (git '(nil t))
+    (when (or (not git) (executable-find "git"))
+      (org-glance-test:with-graph graph
+        (org-glance-graph:add graph (org-glance-test:headline "known" "* Known"))
+        (when git
+          (let ((default-directory (org-glance-graph:directory graph)))
+            (should (= 0 (process-file "git" nil nil nil "init" "-q")))
+            (should (= 0 (process-file "git" nil nil nil "add" "-A")))
+            (should (= 0 (process-file "git" nil nil nil "-c" "user.name=Test"
+                                      "-c" "user.email=test@example.invalid"
+                                      "commit" "-qm" "fixture")))))
+        (org-glance-cache:reconcile-inventory graph t)
+        (should-not (org-glance-cache:needs-reconciliation-p graph))
+        (org-glance-version:write-snapshot
+         (f-join (org-glance-graph:local-data-path graph) "lo" "cal")
+         "local" nil "peer" (org-glance-test:org-with-id "* Local" "local"))
+        (should (eq 'inventory (org-glance-cache:needs-reconciliation-p graph)))
+        (org-glance-cache--reconcile-now graph)
+        (should (org-glance-cache:headline graph "local"))
+        (should-not (org-glance-cache:needs-reconciliation-p graph))))))
+
+(ert-deftest org-glance-test:cache-staleness-detects-replaced-database ()
+  "Reject a Git proof paired with a different nonempty SQLite cache."
+  (skip-unless (executable-find "git"))
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "known" "* Known")
+                          (org-glance-test:headline "glance" "* Glance"))
+    (let ((default-directory (org-glance-graph:directory graph)))
+      (should (= 0 (process-file "git" nil nil nil "init" "-q")))
+      (should (= 0 (process-file "git" nil nil nil "add" "-A")))
+      (should (= 0 (process-file "git" nil nil nil "-c" "user.name=Test"
+                                "-c" "user.email=test@example.invalid"
+                                "commit" "-qm" "fixture"))))
+    (org-glance-cache:reconcile-inventory graph t)
+    (org-glance-cache:close-readers graph)
+    (let* ((path (org-glance-cache:path graph))
+           (copy (concat path ".replacement")))
+      (copy-file path copy)
+      (let ((db (sqlite-open copy)))
+        (unwind-protect
+            (progn
+              (sqlite-execute db "PRAGMA foreign_keys=ON")
+              (sqlite-execute db "DELETE FROM source WHERE path IN (SELECT path FROM headline WHERE org_id='glance')")
+              (sqlite-execute db "DELETE FROM headline_family WHERE logical_id='glance'"))
+          (sqlite-close db)))
+      (rename-file copy path t))
+    (should (org-glance-cache--projection-coherent-p graph))
+    (should (org-glance-cache:headline graph "known"))
+    (should-not (org-glance-cache:headline graph "glance"))
+    (should (eq 'inventory (org-glance-cache-status (org-glance-graph:directory graph))))
+    (org-glance-cache--reconcile-now graph)
+    (should (org-glance-cache:headline graph "glance"))
+    (should (eq 'current (org-glance-cache-status (org-glance-graph:directory graph))))))
+
 (provide 'test-cache)

@@ -360,8 +360,21 @@ Everything derived rebuilds from the org files, so these are safe to run at any 
 | Command                                    | What it does                                     |
 |--------------------------------------------+--------------------------------------------------|
 | =M-x org-glance-reindex=                     | rebuild derived indexes in a background process |
+| =M-x org-glance-cache-status=               | report cache freshness and reconciliation state |
+| =M-x org-glance-rebuild-cache=              | reconstruct the private cache from canonical files |
 | =M-x org-glance-graph:refresh-external=      | fold in edits made by another program right now  |
 | =M-x org-glance-graph:clear-spent-external=  | delete spent notification files to reclaim space |
+
+=org-glance-cache-status= checks source proofs and cache consistency.  It reports
+current, stale, running or failed reconciliation.  The background coordinator
+performs these checks automatically; ordinary lookups use committed snapshots.
+
+=org-glance-rebuild-cache= waits for active reconciliation, then starts a batch
+worker with a fresh private schema.  It scans version families and legacy
+=data.org= roots, regenerates metadata and relations, and replaces the derived
+tables atomically.  It preserves canonical content, unsaved editors and admitted
+recovery evidence.  Progress appears in =*Messages*=; worker failures name their
+diagnostics buffer.  Rebuild requires the canonical files to be present locally.
 
 * Hacking
 

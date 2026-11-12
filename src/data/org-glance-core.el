@@ -49,7 +49,7 @@ in-place package upgrade."
               collect (expand-file-name path)))))
 
 (cl-defun org-glance--batch-worker-command (entry-point args)
-  "Return argv for an isolated batch Emacs calling ENTRY-POINT with ARGS."
+  "Return argv for a batch Emacs calling ENTRY-POINT with literal ARGS."
   (let* ((source (symbol-file entry-point 'defun))
          (library (and source (file-name-base source)))
          (paths (org-glance--batch-worker-load-paths entry-point)))
@@ -60,7 +60,8 @@ in-place package upgrade."
            "--quick" "--batch")
      (cl-loop for path in paths append (list "-L" path))
      (list "-l" library "--eval"
-           (prin1-to-string (cons entry-point args))))))
+           (prin1-to-string
+            (list 'apply (list 'function entry-point) (list 'quote args)))))))
 
 (defcustom org-glance-overview-default-view 'org-glance-table
   "Which view `org-glance-overview' opens by default.

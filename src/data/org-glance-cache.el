@@ -10,6 +10,7 @@
 (declare-function org-glance-config:refresh "org-glance-config")
 (declare-function org-glance-config:snapshot "org-glance-config")
 (declare-function org-glance-config:cache-key "org-glance-config")
+(defvar org-glance--reindex-processes)
 
 (require 'cl-lib)
 (require 'json)
@@ -835,7 +836,8 @@ Include legacy data.org roots when INCLUDE-LEGACY is non-nil."
             (lambda ()
               (cl-remove-if-not
                (lambda (path) (and (file-directory-p path) (not (file-symlink-p path))))
-               (directory-files directory t directory-files-no-dot-files-regexp)))))
+               (when (file-directory-p directory)
+                 (directory-files directory t directory-files-no-dot-files-regexp))))))
          (family-p (directory)
            (or (file-directory-p (f-join directory "versions"))
                (and include-legacy (file-regular-p (f-join directory "data.org")))))
@@ -845,16 +847,15 @@ Include legacy data.org roots when INCLUDE-LEGACY is non-nil."
            (puthash id t seen)
            (push id ids)))
       (dolist (data (org-glance-graph:data-paths graph))
-        (when (file-directory-p data)
-          (dolist (path (children data))
-            (let* ((prefix (file-name-nondirectory path))
-                   (short (and (<= (length prefix) 2) (family-p path))))
-              (when short (admit prefix))
-              (when (= (length prefix) 2)
-                (dolist (leaf (children path))
-                  (unless (and short (equal "versions" (file-name-nondirectory leaf)))
-                    (when (family-p leaf)
-                      (admit (concat prefix (file-name-nondirectory leaf))))))))))))
+        (dolist (path (children data))
+          (let* ((prefix (file-name-nondirectory path))
+                 (short (and (<= (length prefix) 2) (family-p path))))
+            (when short (admit prefix))
+            (when (= (length prefix) 2)
+              (dolist (leaf (children path))
+                (unless (and short (equal "versions" (file-name-nondirectory leaf)))
+                  (when (family-p leaf)
+                    (admit (concat prefix (file-name-nondirectory leaf)))))))))))
     (sort ids #'string<)))
 
 (defvar org-glance-cache--inventory-directory-proofs
@@ -888,6 +889,7 @@ Include legacy data.org roots when INCLUDE-LEGACY is non-nil."
 (cl-defun org-glance-cache--clean-git-proof (graph)
   "Return GRAPH's clean repository identity and HEAD, or nil when uncertain."
   (when-let* ((directory (org-glance-graph:directory graph))
+              ((not (file-directory-p (org-glance-graph:local-data-path graph))))
               (root (org-glance-cache--git-output
                      directory "rev-parse" "--show-toplevel"))
               ((not (string-empty-p root)))
@@ -898,7 +900,9 @@ Include legacy data.org roots when INCLUDE-LEGACY is non-nil."
                        root "status" "--porcelain=v2" "--untracked-files=all"
                        "--" relative))
               ((string-empty-p status)))
-    (list :root (file-truename root) :directory relative :head head)))
+    (list :root (file-truename root) :directory relative :head head
+          :cache (let ((org-glance-cache--staging-path nil))
+                   (org-glance-cache--file-identity (org-glance-cache:path graph))))))
 
 (cl-defun org-glance-cache--git-proof-path (graph)
   "Return GRAPH's machine-local clean-Git proof path."
@@ -933,13 +937,13 @@ Include legacy data.org roots when INCLUDE-LEGACY is non-nil."
 
 (cl-defun org-glance-cache--clean-git-family-delta (graph)
   "Return (:proof PROOF :ids IDS) for a safe clean Git transition, or nil."
-  (unless (file-directory-p (org-glance-graph:local-data-path graph))
-    (when-let* ((held (org-glance-graph:cache-read
+  (when-let* ((held (org-glance-graph:cache-read
                      graph org-glance-cache--git-proof-name))
               (current (org-glance-cache--clean-git-proof graph))
               ((equal (plist-get held :root) (plist-get current :root)))
               ((equal (plist-get held :directory)
                       (plist-get current :directory)))
+              ((equal (plist-get held :cache) (plist-get current :cache)))
               (root (plist-get current :root))
               (data-relative
                (file-relative-name (org-glance-graph:data-path graph) root))
@@ -951,12 +955,16 @@ Include legacy data.org roots when INCLUDE-LEGACY is non-nil."
                         data-relative)
                        (cdr diff))))
       (when (cl-every #'identity ids)
-        (list :proof current :ids (sort (delete-dups ids) #'string<)))))))
+        (list :proof current :ids (sort (delete-dups ids) #'string<))))))
 
 (cl-defun org-glance-cache--directory-stamp (dir)
   "Return DIR's entry-change stamp, or nil when DIR disappeared."
   (when-let* ((attributes (file-attributes dir 'string)))
-    (file-attribute-modification-time attributes)))
+    (append (list (file-attribute-size attributes)
+                  (file-attribute-inode-number attributes)
+                  (file-attribute-device-number attributes))
+            (time-convert (file-attribute-modification-time attributes) 'list)
+            (time-convert (file-attribute-status-change-time attributes) 'list))))
 
 (cl-defun org-glance-cache--observe-inventory-directory (dir thunk)
   "Call THUNK while recording a stable entry stamp for DIR."
@@ -1030,7 +1038,7 @@ Include legacy data.org roots when INCLUDE-LEGACY is non-nil."
          (caar
           (sqlite-select
            db
-           "SELECT NOT EXISTS (SELECT 1 FROM headline LEFT JOIN headline_family ON headline_family.logical_id=headline.org_id WHERE headline.org_id IS NOT NULL AND headline_family.logical_id IS NULL UNION ALL SELECT 1 FROM headline_family WHERE state NOT IN ('deleted','empty') AND NOT EXISTS (SELECT 1 FROM headline_projection WHERE headline_projection.logical_id=headline_family.logical_id AND headline_projection.parser_contract='org-glance:3'))"))) t)
+           "SELECT NOT EXISTS (SELECT 1 FROM headline LEFT JOIN headline_family ON headline_family.logical_id=headline.org_id WHERE headline.org_id IS NOT NULL AND headline.id!=headline.org_id AND headline_family.logical_id IS NULL UNION ALL SELECT 1 FROM headline_family WHERE state NOT IN ('deleted','empty') AND (verified!=1 OR NOT EXISTS (SELECT 1 FROM headline_projection WHERE headline_projection.logical_id=headline_family.logical_id AND headline_projection.parser_contract='org-glance:3')))"))) t)
       0)))
 
 (cl-defun org-glance-cache--directory-proof-current-p (proof)
@@ -1164,8 +1172,31 @@ Call HOOK after validation and before publication when non-nil."
            db stage (caar (sqlite-select db "PRAGMA data_version")) hook))
       (sqlite-close db))))
 
-(cl-defun org-glance-cache--with-staged-generation (graph thunk)
-  "Build GRAPH's next generation with THUNK, then publish it."
+(cl-defun org-glance-cache--seed-rebuild-stage (db stage)
+  "Create fresh STAGE from DB's admitted family recovery evidence."
+  (let ((fresh (sqlite-open stage)))
+    (unwind-protect
+        (progn
+          (org-glance-cache--prepare fresh)
+          (org-glance-cache--transaction
+           fresh (lambda () (org-glance-cache--initialise fresh))))
+      (sqlite-close fresh)))
+  (sqlite-execute db "ATTACH DATABASE ? AS rebuild_stage" (vector stage))
+  (unwind-protect
+      (progn
+        (dolist (table '(headline_family headline_event
+                        headline_payload_observation headline_projection))
+          (when (sqlite-select db "SELECT name FROM main.sqlite_master WHERE type='table' AND name=?"
+                               (vector (symbol-name table)))
+            (sqlite-execute
+             db (format "INSERT INTO rebuild_stage.%s SELECT * FROM main.%s"
+                        table table))))
+        (sqlite-execute db "UPDATE rebuild_stage.headline_family SET verified=0"))
+    (sqlite-execute db "DETACH DATABASE rebuild_stage")))
+
+(cl-defun org-glance-cache--with-staged-generation (graph thunk &key fresh)
+  "Build GRAPH's next generation with THUNK, then publish it.
+With FRESH, retain only admitted family recovery evidence from the old cache."
   (if org-glance-cache--staging-path
       (funcall thunk)
     (let* ((live (org-glance-cache:path graph))
@@ -1188,7 +1219,9 @@ Call HOOK after validation and before publication when non-nil."
             (let ((org-glance-cache--publication-check nil)
                   (version
                    (caar (sqlite-select db "PRAGMA data_version"))))
-              (sqlite-execute db "VACUUM INTO ?" (vector stage))
+              (if fresh
+                  (org-glance-cache--seed-rebuild-stage db stage)
+                (sqlite-execute db "VACUUM INTO ?" (vector stage)))
               (let ((result (let ((org-glance-cache--staging-path stage))
                               (funcall thunk))))
                 (let ((prior org-glance-cache--publication-check))
@@ -1260,6 +1293,31 @@ Preserve admitted evidence; reconstruct pre-configuration projections."
   (when org-glance-cache--recovery-phase-hook
     (funcall org-glance-cache--recovery-phase-hook 'after-publication))
   (org-glance-graph--invalidate-cache graph))
+
+(cl-defun org-glance-cache:rebuild (graph)
+  "Rebuild GRAPH's private cache from canonical files with a fresh schema.
+Retain admitted recovery evidence and publish atomically (invariant 35).
+Return the number of searchable rows; leave the live cache intact on failure."
+  (when org-glance-cache--staging-path
+    (user-error "Cannot rebuild the cache inside a staged publication"))
+  (org-glance-graph--check-storage graph)
+  (org-glance-cache--migrate graph)
+  (org-glance-config:refresh graph)
+  (let ((org-glance-version--observations nil)
+        (org-glance-version--exhaustive-revalidation t)
+        (org-glance-version--payloads nil)
+        (org-glance-graph--parsed-blobs nil)
+        (org-glance-cache--known-payloads (make-hash-table :test #'equal)))
+    (prog1
+        (org-glance-cache--with-staged-generation
+         graph
+         (lambda ()
+           (org-glance-cache--reconcile-in-stage graph t :include-legacy t)
+           (org-glance-cache--with-db
+            graph (lambda (db) (length (org-glance-cache--compute-projection db)))))
+         :fresh t)
+      (org-glance-cache:close-readers graph)
+      (org-glance-graph--invalidate-cache graph))))
 
 (cl-defun org-glance-cache--inventory-current-p (held family)
   "Return non-nil when HELD proves observed FAMILY is already projected."
@@ -1614,9 +1672,21 @@ COMPLETE forces observation of every family.  Return the folded family count."
   (org-glance-cache--with-staged-generation
    graph (lambda () (org-glance-cache--reconcile-in-stage graph complete))))
 
-(cl-defun org-glance-cache--reconcile-in-stage (graph &optional complete)
+(cl-defun org-glance-cache--legacy-metadata (graph id)
+  "Parse GRAPH's canonical legacy root for ID, refusing malformed content."
+  (let* ((path (f-join (org-glance-graph:headline-data-path graph id) "data.org"))
+         (payload (org-glance-version--read-payload path))
+         (metadata (org-glance-headline:metadata*
+                    (org-glance-graph--parse-blob
+                     graph (org-glance-version--payload-contents payload)))))
+    (org-glance-headline-metadata:deserialize
+     (plist-put (org-glance-headline-metadata:serialize metadata) :id id))))
+
+(cl-defun org-glance-cache--reconcile-in-stage
+    (graph &optional complete &key include-legacy)
   "Reconcile immutable families whose inventory checkpoint changed in GRAPH.
 COMPLETE forces a census when the local projection cannot trust a Git delta.
+INCLUDE-LEGACY also reconstructs canonical legacy roots without WAL metadata.
 Return the number of families folded."
   (org-glance-graph--with-source-context
     (setq complete (or complete (not (org-glance-cache--configuration-current-p graph))))
@@ -1640,7 +1710,19 @@ Return the number of families folded."
       (org-glance-cache--record-complete-inventory
        graph
        (lambda ()
-         (let ((current (org-glance-cache--family-ids graph)))
+         (let* ((all (org-glance-cache--family-ids graph include-legacy))
+                (legacy
+                 (when include-legacy
+                   (cl-remove-if
+                    (lambda (id)
+                      (file-directory-p
+                       (f-join (org-glance-graph:headline-data-path graph id)
+                               "versions")))
+                    all)))
+                (current (cl-set-difference all legacy :test #'equal))
+                (legacy-metadata
+                 (mapcar (apply-partially #'org-glance-cache--legacy-metadata graph)
+                         legacy)))
            (org-glance-cache--with-db
             graph
             (lambda (db)
@@ -1668,9 +1750,13 @@ Return the number of families folded."
                    (dolist (family changed)
                      (org-glance-cache--project-family
                       db graph (car family) (cdr family)))
+                   (dolist (metadata legacy-metadata)
+                     (org-glance-cache--project db graph metadata))
                    (org-glance-cache--project-family-compatibility-changes
-                    db graph (mapcar #'car changed))))
-                (length changed))))))))))
+                    db graph (mapcar #'car changed))
+                   (dolist (metadata legacy-metadata)
+                     (org-glance-cache--project-edges db metadata))))
+                (+ (length changed) (length legacy)))))))))))
 
 (defvar org-glance-cache--inventory-timer nil
   "Timer that reconciles immutable inventories for open graphs.")
@@ -1713,14 +1799,20 @@ Return the number of families folded."
     (if (file-exists-p (org-glance-cache:path graph))
         (progn
           (org-glance-cache:upgrade graph)
-          (let ((proof-current
-                 (org-glance-cache--inventory-proof-current-p graph))
-                (coherent (org-glance-cache--projection-coherent-p graph)))
-            (unless (and proof-current coherent)
-              (if coherent
-                  (org-glance-cache:reconcile-inventory graph)
-                (org-glance-cache:reconcile-inventory graph t)))))
+          (when-let* ((reason (org-glance-cache:needs-reconciliation-p graph)))
+            (if (eq reason 'projection)
+                (org-glance-cache:reconcile-inventory graph t)
+              (org-glance-cache:reconcile-inventory graph))))
       (org-glance-cache:recover graph))))
+
+(cl-defun org-glance-cache:needs-reconciliation-p (graph)
+  "Return GRAPH's stale-cache reason, or nil when its proofs are current.
+Return `projection' for unverified rows and `inventory' for stale proofs.
+Use this maintenance check outside ordinary point reads (invariant 42)."
+  (let ((current (org-glance-cache--inventory-proof-current-p graph)))
+    (cond
+     ((not (org-glance-cache--projection-coherent-p graph)) 'projection)
+     ((not current) 'inventory))))
 
 (cl-defun org-glance-cache:refresh-batch (directory)
   "Reconcile DIRECTORY once in the current noninteractive Emacs."
@@ -1773,10 +1865,15 @@ Return the number of families folded."
   "Queue GRAPH's cache reconciliation in a batch Emacs when due.
 INITIAL queues startup work without consuming the first post-open refresh."
   (let ((active (gethash graph org-glance-cache--refresh-processes))
+        (index-worker
+         (and (boundp 'org-glance--reindex-processes)
+              (gethash (org-glance-graph:directory graph)
+                       org-glance--reindex-processes)))
         (now (float-time)))
     (unless (or (memq graph org-glance-cache--configuration-repairs)
                 (memq graph org-glance-cache--schema-repairs)
                 (and (processp active) (process-live-p active))
+                (and (processp index-worker) (process-live-p index-worker))
                 (< (- now
                       (gethash graph org-glance-cache--refresh-failed-at
                                most-negative-fixnum))

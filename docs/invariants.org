@@ -1130,3 +1130,22 @@ three saves per fixture. Baseline:
 - Final correctness validation runs 783 ERT tests: 777 passes, six fixture/platform skips, zero failures; 33 production files compile warning-free.
 - Five alternating compiled process pairs against =113814b= at N=100 and five samples retain equal fingerprints and semantic work; compatibility lookups measure 20.006→17.777 ms per 100 and materialize measures 5.149→5.151 ms.
 - The same comparison measures compaction 2.677→2.814 ms (paired 95% delta interval +0.032…+0.244 ms) and plain editor open 2.078→2.150 ms (+0.008…+0.101 ms); warm editor lookups increase below one microsecond; the user accepted these latency costs on 2026-11-09.
+
+* Explicit cache rebuild and freshness checks
+
+- =org-glance-rebuild-cache= uses a fresh schema and a complete canonical census, preserves admitted event recovery evidence, and publishes into the live SQLite file transactionally.
+- =org-glance-cache-status= reports current, stale inventory, inconsistent or unverified live projection, running maintenance or failed reconciliation; ordinary point reads remain passive.
+- Automatic reconciliation defers while an explicit index worker is active; repeated requests share the same worker and conflicting manual operations refuse overlap.
+- Clean-Git proofs bind the local SQLite file identity and apply only without local data; directory proofs include missing roots, size, device/inode, mtime and ctime.
+- =cache-rebuild-canonical-work-contract= reconstructs three canonical sources with three observations and three parses, removes obsolete tables and retains the live inode and source bytes.
+- =cache-rebuild-keeps-live-state-on-failure-and-evidence= preserves the committed generation on publication failure and retains missing admitted events as unverified evidence.
+- =cache-rebuild-worker-preserves-drafts= exercises a real batch worker, shared repeated requests, cache status and unsaved editor preservation.
+- =cache-staleness-detects-replaced-database= repairs a nonempty, internally coherent cache with a missing canonical family despite an unchanged clean Git checkout.
+- =cache-staleness-detects-new-local-root= covers ignored local data and previously absent roots; =cache-staleness-detects-preserved-directory-mtime= requires detection after restored mtime.
+
+- Validation: 799 ERT tests, 793 passes, six platform/fixture skips and zero failures; 18 focused scheduling/freshness contracts pass; all 33 production files compile warning-free.
+- =python3 tools/bench.py graph --baseline 7c44409 --quick --sizes 100 --samples 3 --pairs 5= retains equal fingerprints and work; insertion measures 881.541→897.911 ms (paired 95% interval +0.350…+22.654 ms), reindex 544.865→533.566 ms (−45.681…−4.031 ms).
+- Five identical-code graph pairs compiled from =7c44409= span −77.954…+46.227 ms for insertion; the control-adjusted 95% interval is −8.689…+72.412 ms (10,000 independent process-pair resamples, seed 0).
+- =python3 tools/bench.py material --baseline 7c44409 --quick --samples 5 --pairs 5= retains equal work; plain save measures 8.372→8.142 ms and crypt save 8.494→8.644 ms; all paired intervals include zero.
+- =python3 tools/bench.py interactive --baseline 7c44409 --quick --sizes 100 --samples 5 --pairs 3= retains equal candidate fingerprints and decode counts; all paired intervals include zero.
+- =OG_BENCH_QUICK=1 OG_BENCH_SIZES=100 OG_BENCH_SAMPLES=3 make bench-readers= reports zero opens and 100 deserializations per batch, median 0.124 ms/read.

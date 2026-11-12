@@ -101,7 +101,7 @@ Reopen prunes a legacy `config/' sidecar; reindex drops `cache/'."
   "Reindex returns immediately and shares one worker per graph."
   (org-glance-test:with-graph graph
     (let ((org-glance--reindex-processes (make-hash-table :test #'equal))
-          process-args)
+          process-args worker)
       (cl-letf (((symbol-function 'make-process)
                  (lambda (&rest args)
                    (setq process-args args)
@@ -110,12 +110,19 @@ Reopen prunes a legacy `config/' sidecar; reindex drops `cache/'."
                  (lambda (process) (eq process 'queued-process)))
                 ((symbol-function 'process-live-p)
                  (lambda (process) (eq process 'queued-process)))
+                ((symbol-function 'process-put)
+                 (lambda (_process _property value) (setq worker value)))
+                ((symbol-function 'process-get)
+                 (lambda (_process _property) worker))
                 ((symbol-function 'org-glance--reindex-now)
                  (lambda (&rest _)
                    (ert-fail "reindex occupied the caller"))))
         (should (eq 'queued-process
                     (org-glance-reindex
                      (org-glance-graph:directory graph))))
+        (should-not (org-glance-cache:refresh-async graph t))
+        (should-error (org-glance-rebuild-cache
+                       (org-glance-graph:directory graph)) :type 'user-error)
         (should (eq 'queued-process
                     (org-glance-reindex
                      (org-glance-graph:directory graph))))
@@ -172,6 +179,35 @@ Reopen prunes a legacy `config/' sidecar; reindex drops `cache/'."
             (should (= 1 (org-glance--reindex-count process)))
             (should (org-glance-test:field graph "worker-reindex" linked?)))
         (when (buffer-live-p buffer) (kill-buffer buffer))))))
+
+(ert-deftest org-glance-test:cache-rebuild-worker-preserves-drafts ()
+  "Rebuild in another Emacs while preserving the caller's dirty material editor."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "known" "* Known"))
+    (org-glance-test:with-material (buffer graph "known")
+      (goto-char (point-max)) (insert "\nUnsaved draft")
+      (org-glance-version:write-snapshot
+       (org-glance-graph:headline-data-path graph "glance") "glance" nil "peer"
+       (org-glance-test:org-with-id "* Glance" "glance"))
+      (cl-letf (((symbol-function 'org-glance-cache:refresh-async) #'ignore))
+        (let* ((process (org-glance-rebuild-cache (org-glance-graph:directory graph)))
+               (diagnostics (process-buffer process)))
+          (unwind-protect
+              (progn
+                (should (eq process (org-glance-rebuild-cache
+                                     (org-glance-graph:directory graph))))
+                (should (eq 'running (org-glance-cache-status
+                                     (org-glance-graph:directory graph))))
+                (while (process-live-p process) (accept-process-output process 0.1))
+                (unless (= 0 (process-exit-status process))
+                  (ert-fail (with-current-buffer diagnostics (buffer-string))))
+                (should (= 2 (org-glance--reindex-count process)))
+                (should (org-glance-cache:headline graph "glance"))
+                (should (eq 'current (org-glance-cache-status
+                                     (org-glance-graph:directory graph))))
+                (should (buffer-modified-p buffer))
+                (should (string-match-p "Unsaved draft" (buffer-string))))
+            (when (buffer-live-p diagnostics) (kill-buffer diagnostics))))))))
 
 (provide 'test-property-index)
 ;;; test-property-index.el ends here

@@ -6,7 +6,7 @@
 
 ;; Author: Dmitry Akatov <dmitry.akatov@protonmail.com>
 ;; Created: 29 September, 2018
-;; Version: 1.62.0.0.20261110.0
+;; Version: 1.63.0.0.20261112.0
 ;; Package-Requires: ((emacs "29.1") (org) (aes) (dash) (f) (s) (transient) (table-view "0"))
 ;; Keywords: org-mode, outlines, data, database, store, projections
 ;; Homepage: https://github.com/rails-to-cosmos/org-glance
@@ -296,10 +296,21 @@ skips no source renames each legacy `*.metadata.el' to `*.metadata.el.bak'."
       (ignore-errors (f-delete dir t)))
     n))
 
-(cl-defun org-glance--reindex-batch (directory)
-  "Reindex DIRECTORY in the current noninteractive Emacs; return the count."
+(cl-defun org-glance--rebuild-cache-now (directory)
+  "Reconstruct DIRECTORY's private cache from canonical files; return its size."
+  (let* ((graph (org-glance-graph directory))
+         (count (org-glance-cache:rebuild graph)))
+    (with-demoted-errors "org-glance: auxiliary cache cleanup failed: %S"
+      (org-glance-property-index:clear graph)
+      (let ((overview (org-glance-overview:cache-path graph)))
+        (when (file-exists-p overview) (delete-directory overview t))))
+    count))
+
+(cl-defun org-glance--reindex-batch
+    (directory &optional (worker #'org-glance--reindex-now))
+  "Run WORKER on DIRECTORY in this batch Emacs and report its headline count."
   (let ((org-glance-graph-after-open-functions nil))
-    (let ((n (org-glance--reindex-now directory)))
+    (let ((n (funcall worker directory)))
       (princ (format "org-glance: re-indexed %d headline(s).\n" n))
       n)))
 
@@ -335,17 +346,16 @@ skips no source renames each legacy `*.metadata.el' to `*.metadata.el.bak'."
                (buffer-name (process-buffer process))
                (string-trim event)))))
 
-(cl-defun org-glance-reindex (&optional (directory org-glance-directory))
-  "Re-derive DIRECTORY's metadata and caches in an isolated batch Emacs.
-Return the active process immediately.  Repeated calls while it runs reuse it."
-  (interactive)
+(cl-defun org-glance--start-index-worker (directory &key worker)
+  "Run WORKER for DIRECTORY in an isolated Emacs, sharing repeated requests."
   (let* ((graph (org-glance-graph directory))
          (directory (org-glance-graph:directory graph))
          (active (gethash directory org-glance--reindex-processes)))
     (if (and (processp active) (process-live-p active))
         (progn
-          (when (called-interactively-p 'any)
-            (message "org-glance: re-index already running"))
+          (unless (eq worker (process-get active 'org-glance-index-worker))
+            (user-error "Another index operation is running; wait for it to finish"))
+          (message "org-glance: index rebuild already running")
           active)
       (condition-case err
           (let* ((buffer
@@ -360,7 +370,7 @@ Return the active process immediately.  Repeated calls while it runs reuse it."
                    :buffer buffer
                    :command
                    (org-glance--batch-worker-command
-                    'org-glance--reindex-batch (list directory))
+                    'org-glance--reindex-batch (list directory worker))
                    :connection-type 'pipe
                    :coding 'utf-8-unix
                    :noquery t
@@ -369,12 +379,56 @@ Return the active process immediately.  Repeated calls while it runs reuse it."
                      (org-glance--reindex-finished
                       directory graph process event)))))
             (puthash directory process org-glance--reindex-processes)
-            (when (called-interactively-p 'any)
-              (message "org-glance: re-index started"))
+            (process-put process 'org-glance-index-worker worker)
+            (message "org-glance: index rebuild started")
             process)
         (error
          (user-error "org-glance: re-index could not start: %s"
                      (error-message-string err)))))))
+
+(cl-defun org-glance-reindex (&optional (directory org-glance-directory))
+  "Re-derive DIRECTORY's metadata and caches in an isolated batch Emacs.
+Return the active process immediately.  Repeated calls while it runs reuse it."
+  (interactive)
+  (org-glance--start-index-worker directory :worker #'org-glance--reindex-now))
+
+(cl-defun org-glance-rebuild-cache (&optional (directory org-glance-directory))
+  "Rebuild DIRECTORY's private cache from canonical files in the background.
+Discard derived tables and proofs, retaining admitted recovery evidence.
+Preserve editor drafts and canonical content.  Return the active process."
+  (interactive)
+  (let ((graph (org-glance-graph directory)))
+    (org-glance-cache--wait-for-refresh graph)
+    (org-glance--start-index-worker directory :worker #'org-glance--rebuild-cache-now)))
+
+(cl-defun org-glance-cache-status (&optional (directory org-glance-directory))
+  "Return DIRECTORY's cache state and report it when called interactively.
+Return `current', `inventory', `projection', `running' or `failed'."
+  (interactive)
+  (let* ((graph (org-glance-graph directory))
+         (active
+          (cl-find-if
+           (lambda (process) (and (processp process) (process-live-p process)))
+           (list (gethash (org-glance-graph:directory graph) org-glance--reindex-processes)
+                 (gethash graph org-glance-cache--refresh-processes))))
+         (state (cond
+                 (active 'running)
+                 (t
+                  (remhash graph org-glance-cache--inventory-directory-proofs)
+                  (let ((reason (org-glance-cache:needs-reconciliation-p graph)))
+                    (if (and reason
+                             (gethash graph org-glance-cache--refresh-failed-at))
+                        'failed
+                      (or reason 'current)))))))
+    (when (called-interactively-p 'any)
+      (message "org-glance: cache %s"
+               (pcase state
+                 ('inventory "is stale: inventory checkpoint no longer matches")
+                 ('projection "is stale: projection is incomplete or unverified")
+                 ('failed "reconciliation failed; see its diagnostics buffer")
+                 ('running "reconciliation is running")
+                 (_ "is current"))))
+    state))
 
 (cl-defun org-glance-graph-compact (&optional (directory org-glance-directory))
   "Compact DIRECTORY's metadata store; a no-op when already compact.

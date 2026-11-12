@@ -744,8 +744,7 @@
                                                                     load-path)))
                                                          (org-glance--batch-worker-command
                                                           'org-glance-test-overview-peer
-                                                          (list root (list 'quote role) (list 'quote filter)
-                                                                (list 'quote kind) serial)))) processes)))
+                                                          (list root role filter kind serial)))) processes)))
                       (let ((deadline (+ (float-time) 20)))
                         (while (cl-some #'process-live-p processes)
                           (when (> (float-time) deadline) (ert-fail "Export peers timed out"))
@@ -807,7 +806,7 @@
 					   (process (make-process :name "interrupted-overview" :buffer buffer :noquery t
 								  :command (org-glance--batch-worker-command
 									    'org-glance-test-overview-interrupt-peer
-									    (list root (list 'quote filter) (list 'quote kind))))))
+									    (list root filter kind)))))
 				      (unwind-protect
 					  (progn
 					    (org-glance-test-overview-wait root "publisher-paused")

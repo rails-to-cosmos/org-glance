@@ -5,9 +5,20 @@ Notable user-facing changes.  Versions date-based
 
 * Unreleased
 
+* 1.63.0.0.20261112.0
+
+** Added
+
+- =org-glance-cache-status= reports cache freshness, running reconciliation and failures.
+- =org-glance-rebuild-cache= reconstructs the private cache from canonical files in a background worker while preserving recovery evidence and editor drafts.
+
 ** Changed
 
 - =org-glance-graph:add= bounds revalidation by structural leaves when writing full headlines to existing IDs, including =org-glance-migrate= updates.
+
+** Fixed
+
+- =org-glance-cache.el= invalidates stale proofs after database replacement, local-data discovery and directory changes with restored mtimes.
 
 * 1.62.0.0.20261110.0
 

@@ -61,6 +61,8 @@ With =straight.el= (also needs recipes for [[https://github.com/rails-to-cosmos/
 
 Newest first.
 
+- [[file:proposals/2026-11-12-cache-rebuild-and-freshness.done.org][Complete cache rebuild and observable freshness]] — explicit reconstruction, cache status and reliable source proofs.
+
 - [[file:proposals/2026-11-09-bound-family-revalidation.done.org][Bound family revalidation]] — operation reuse checks root, legacy and structural leaf stamps; exhaustive repair retains the full proof.
 
 - [[file:proposals/2026-11-08-performance-gate-measures-the-live-path.done.org][The performance gate measures the path the UI runs]] — =get-headline= reads

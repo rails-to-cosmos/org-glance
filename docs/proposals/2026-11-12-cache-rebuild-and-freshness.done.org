@@ -1,0 +1,65 @@
+#+TITLE: Complete cache rebuild and observable freshness
+#+DATE: 2026-11-12
+
+Status: *done*.
+
+* Problem
+
+A laptop omitted a headline from its cache; explicit reconciliation restored
+it.  The remote failure's precise cause is unavailable.  Inspection found
+three reproducible freshness gaps in the baseline at
+[[https://github.com/rails-to-cosmos/org-glance/commit/7c44409][7c44409]]:
+
+- A clean-Git proof identified the checkout without binding the database it
+  described.  A replaced nonempty database could omit an entire family while
+  remaining internally coherent.
+- The Git proof accepted ignored local data even though Git cannot describe
+  changes there.  Directory proofs also omitted roots absent at census time.
+- Directory stamps compared mtimes alone, allowing synchronizers that restore
+  directory mtimes to conceal new events.
+
+The existing reindex command starts from known metadata.  Explicit recovery
+retains the database structure.  A separate full rebuild is useful when the
+index needs reconstruction independently of those old rows and proofs.
+
+* Implementation
+
+=org-glance-cache-status= shares the background coordinator's freshness test.
+It exposes stale inventory, inconsistent projection, running work and failed
+reconciliation.  Git proofs bind the live database identity and require the
+absence of local data.  Canonical directory proofs retain absent roots and
+compare size, mtime, ctime, device and inode.  Existing proofs invalidate
+conservatively on their next maintenance check.
+
+=org-glance-rebuild-cache= shares the index-worker launcher with reindexing.
+It waits for active reconciliation and refuses a conflicting index operation.
+Automatic reconciliation defers while an explicit index worker is active.
+A separate Emacs constructs a fresh schema, scans canonical version families
+and legacy roots, and regenerates compatibility rows and relations.  The new
+generation is validated and published through the existing transactional
+publisher, preserving pinned readers and the live file identity (invariant 35).
+
+Admitted family evidence seeds the new generation with verification cleared.
+Complete families replace it from canonical bytes; incomplete families retain
+recovery evidence.  Old ordinary rows, obsolete tables and freshness proofs
+are discarded.  Canonical content and unsaved editor drafts are preserved.
+Unsupported future layouts are refused.  Rebuild requires readable SQLite
+recovery evidence and locally available canonical files.
+
+The batch command builder now passes literal argument values.  Its existing
+quoted-form test callers pass values directly, and the rebuild worker receives
+its function symbol as data.
+
+* Validation
+
+Work contracts and reproduction cases are recorded in
+[[file:../invariants.org::*Explicit cache rebuild and freshness checks][Explicit cache rebuild and freshness checks]].
+
+The full suite passes 799 tests: 793 passes, six platform/fixture skips and
+zero failures.  Eighteen focused freshness and worker-scheduling contracts
+pass.  All 33 production files compile warning-free.  Graph, material and
+interactive benchmarks retain equal work and fingerprints where recorded;
+readers perform zero source opens.  The insertion timing's positive raw
+interval falls within identical-code control variation; the control-adjusted
+interval includes zero.  Final measurements are recorded in the linked
+invariants section.
